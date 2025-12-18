@@ -1,0 +1,323 @@
+"""Email service for sending emails with all features."""
+
+import asyncio
+import logging
+import os
+from typing import Dict, Any, Optional, List, Callable, Awaitable
+from datetime import datetime, UTC
+from dataclasses import dataclass
+
+from ..engine.async_sender import AsyncEmailSender, EmailResult, BulkSendResult
+from ..engine.rate_limiter import RateLimiter, RateLimiterConfig
+from ..engine.retry_queue import RetryQueue, RetryConfig
+from ..features.template_engine import TemplateEngine
+from ..features.generators import AttachmentGenerator, GeneratorConfig
+from ..features.rotation import RotationManager, RotationStrategy
+from .smtp_service import SMTPService
+from .tracking_service import TrackingService
+from .bounce_service import BounceService
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class EmailConfig:
+    """Email configuration."""
+    subject: str = ""
+    from_email: str = ""
+    from_name: str = ""
+    reply_to: str = ""
+    template_path: Optional[str] = None
+    html_content: Optional[str] = None
+    
+    # Attachments
+    attachment_path: Optional[str] = None
+    attachment_type: Optional[str] = None  # pdf, docx, qr, image
+    
+    # Features
+    enable_qr_code: bool = False
+    send_as_image: bool = False
+    
+    # Tracking
+    enable_tracking: bool = True
+    track_opens: bool = True
+    track_clicks: bool = True
+    tracking_base_url: Optional[str] = None
+    
+    # Bounce handling
+    enable_bounce_filtering: bool = True
+    
+    # Sending options
+    dry_run: bool = False
+    concurrency: int = 50
+    rate_per_minute: int = 0
+    rate_per_hour: int = 0
+    
+    # Rotation
+    subjects: Optional[List[str]] = None
+    from_names: Optional[List[str]] = None
+    templates: Optional[List[str]] = None
+
+
+class EmailService:
+    """Service for composing and sending emails."""
+    
+    def __init__(self, smtp_service: SMTPService):
+        """
+        Initialize email service.
+        
+        Args:
+            smtp_service: SMTP service instance
+        """
+        self.smtp_service = smtp_service
+        self._sender: Optional[AsyncEmailSender] = None
+        self._rate_limiter: Optional[RateLimiter] = None
+        self._retry_queue: Optional[RetryQueue] = None
+        self._template_engine: Optional[TemplateEngine] = None
+        self._rotation_manager: Optional[RotationManager] = None
+        self._attachment_generator: Optional[AttachmentGenerator] = None
+        self._tracking_service: Optional[TrackingService] = None
+        self._bounce_service: Optional[BounceService] = None
+        
+        # Default configuration
+        self.config = EmailConfig()
+    
+    def configure(self, config: EmailConfig):
+        """Configure email service."""
+        self.config = config
+        
+        # Setup rate limiter
+        if config.rate_per_minute > 0 or config.rate_per_hour > 0:
+            self._rate_limiter = RateLimiter(RateLimiterConfig(
+                per_minute=config.rate_per_minute,
+                per_hour=config.rate_per_hour
+            ))
+        
+        # Setup template engine
+        if config.template_path or config.html_content:
+            self._template_engine = TemplateEngine(
+                template_path=config.template_path,
+                html_content=config.html_content
+            )
+            self._template_engine.config.enable_qr_code = config.enable_qr_code
+        
+        # Setup rotation
+        self._rotation_manager = RotationManager()
+        
+        if config.subjects and len(config.subjects) > 1:
+            self._rotation_manager.register('subjects', config.subjects, RotationStrategy.ROUND_ROBIN)
+        
+        if config.from_names and len(config.from_names) > 1:
+            self._rotation_manager.register('from_names', config.from_names, RotationStrategy.ROUND_ROBIN)
+        
+        if config.templates and len(config.templates) > 1:
+            self._rotation_manager.register('templates', config.templates, RotationStrategy.ROUND_ROBIN)
+        
+        # Setup attachment generator
+        self._attachment_generator = AttachmentGenerator(GeneratorConfig())
+        
+        # Setup tracking service
+        if config.enable_tracking:
+            self._tracking_service = TrackingService(
+                base_url=config.tracking_base_url
+            )
+        
+        # Setup bounce service
+        if config.enable_bounce_filtering:
+            self._bounce_service = BounceService()
+    
+    def get_sender(self) -> AsyncEmailSender:
+        """Get or create async email sender."""
+        if self._sender is None:
+            connection_pool = self.smtp_service.get_connection_pool(
+                pool_size_per_server=max(5, self.config.concurrency // 10)
+            )
+            
+            self._sender = AsyncEmailSender(
+                connection_pool=connection_pool,
+                rate_limiter=self._rate_limiter,
+                retry_queue=self._retry_queue,
+                default_from_email=self.config.from_email,
+                default_from_name=self.config.from_name,
+                dry_run=self.config.dry_run
+            )
+        
+        return self._sender
+    
+    async def send_single(
+        self,
+        recipient: str,
+        subject: Optional[str] = None,
+        html_body: Optional[str] = None,
+        from_email: Optional[str] = None,
+        from_name: Optional[str] = None,
+        reply_to: Optional[str] = None,
+        placeholders: Optional[Dict[str, Any]] = None,
+        link: Optional[str] = None,
+        attachments: Optional[List[Dict[str, Any]]] = None
+    ) -> EmailResult:
+        """
+        Send single email with all features.
+        
+        Args:
+            recipient: Recipient email address
+            subject: Email subject (uses rotation if not provided)
+            html_body: HTML content (uses template if not provided)
+            from_email: Sender email
+            from_name: Sender name (uses rotation if not provided)
+            reply_to: Reply-to address
+            placeholders: Custom placeholder values
+            link: Link for QR code and {{link}} placeholder
+            attachments: Pre-prepared attachments
+            
+        Returns:
+            EmailResult with send status
+        """
+        placeholders = placeholders or {}
+        placeholders['email'] = recipient
+        
+        # Get rotating values
+        if subject is None:
+            if self._rotation_manager and self._rotation_manager.is_registered('subjects'):
+                subject = self._rotation_manager.get_next('subjects', self.config.subject)
+            else:
+                subject = self.config.subject
+        
+        if from_name is None:
+            if self._rotation_manager and self._rotation_manager.is_registered('from_names'):
+                from_name = self._rotation_manager.get_next('from_names', self.config.from_name)
+            else:
+                from_name = self.config.from_name
+        
+        # Render template
+        if html_body is None and self._template_engine:
+            # Check for template rotation
+            if self._rotation_manager and self._rotation_manager.is_registered('templates'):
+                template_path = self._rotation_manager.get_next('templates')
+                self._template_engine.load_template(template_path)
+            
+            html_body = self._template_engine.render(
+                recipient=recipient,
+                recipient_data=placeholders,
+                link=link
+            )
+        
+        if not html_body:
+            html_body = f"<p>Email to {recipient}</p>"
+        
+        # Inject tracking if enabled
+        if self._tracking_service and self.config.enable_tracking:
+            email_id = self._tracking_service.generate_email_id(recipient)
+            html_body = self._tracking_service.inject_tracking(
+                html_body,
+                email_id=email_id,
+                recipient=recipient,
+                track_opens=self.config.track_opens,
+                track_clicks=self.config.track_clicks
+            )
+        
+        # Apply placeholders to subject
+        if subject and placeholders:
+            for key, value in placeholders.items():
+                subject = subject.replace(f"{{{{{key}}}}}", str(value))
+        
+        # Generate attachments if configured
+        if attachments is None and self.config.attachment_type:
+            attachment_data, filename, content_type = self._attachment_generator.generate_attachment(
+                attachment_type=self.config.attachment_type,
+                content=html_body,
+                placeholders=placeholders,
+                template_path=self.config.attachment_path,
+                link=link
+            )
+            attachments = [{
+                'data': attachment_data,
+                'filename': filename,
+                'content_type': content_type
+            }]
+        
+        # Convert to image if configured
+        if self.config.send_as_image and self._attachment_generator:
+            image_url = self._attachment_generator.image.generate_data_url(html_body)
+            html_body = f'<img src="{image_url}" alt="Email" style="max-width:100%;" />'
+        
+        # Send email
+        sender = self.get_sender()
+        
+        return await sender.send_email(
+            recipient=recipient,
+            subject=subject,
+            html_body=html_body,
+            from_email=from_email or self.config.from_email,
+            from_name=from_name,
+            reply_to=reply_to or self.config.reply_to,
+            attachments=attachments
+        )
+    
+    async def send_bulk(
+        self,
+        recipients: List[Dict[str, Any]],
+        subject: Optional[str] = None,
+        html_template: Optional[str] = None,
+        progress_callback: Optional[Callable[[Dict[str, Any]], Awaitable[None]]] = None
+    ) -> BulkSendResult:
+        """
+        Send bulk emails to multiple recipients.
+        
+        Args:
+            recipients: List of recipient dicts with 'email' and placeholders
+            subject: Subject template (uses rotation subjects if not provided)
+            html_template: HTML template (uses configured template if not provided)
+            progress_callback: Async callback for progress updates
+            
+        Returns:
+            BulkSendResult with statistics
+        """
+        if subject is None:
+            subject = self.config.subject
+        
+        if html_template is None and self._template_engine:
+            html_template = self._template_engine._template_content
+        
+        if not html_template:
+            html_template = "<p>Email to {{email}}</p>"
+        
+        sender = self.get_sender()
+        
+        return await sender.send_bulk(
+            recipients=recipients,
+            subject_template=subject,
+            html_template=html_template,
+            from_email=self.config.from_email,
+            from_name=self.config.from_name,
+            concurrency=self.config.concurrency,
+            progress_callback=progress_callback
+        )
+    
+    def get_statistics(self) -> Dict[str, Any]:
+        """Get sending statistics."""
+        stats = {
+            'config': {
+                'from_email': self.config.from_email,
+                'from_name': self.config.from_name,
+                'dry_run': self.config.dry_run,
+                'concurrency': self.config.concurrency
+            }
+        }
+        
+        if self._sender:
+            stats['sender'] = self._sender.get_stats()
+        
+        if self._rotation_manager:
+            stats['rotation'] = self._rotation_manager.get_statistics()
+        
+        return stats
+    
+    async def close(self):
+        """Clean up resources."""
+        if self._retry_queue:
+            await self._retry_queue.stop()
+        
+        await self.smtp_service.close()
+        self._sender = None
+

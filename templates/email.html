@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{company_name}} - Email</title>
+    <style>
+        /* Reset */
+        body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+        table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+        img { -ms-interpolation-mode: bicubic; }
+        
+        /* Removes spacing between tables */
+        img { border: 0; outline: none; text-decoration: none; }
+        table { border-collapse: collapse !important; }
+        body { margin: 0 !important; padding: 0 !important; width: 100% !important; }
+        
+        /* iOS blue links */
+        a[x-apple-data-detectors] {
+            color: inherit !important;
+            text-decoration: none !important;
+        }
+        
+        /* Main styles */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333333;
+            background-color: #f4f4f4;
+        }
+        
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 40px 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            color: #ffffff;
+            margin: 0;
+            font-size: 28px;
+            font-weight: 600;
+        }
+        
+        .content {
+            padding: 40px 30px;
+        }
+        
+        .greeting {
+            font-size: 20px;
+            font-weight: 600;
+            color: #333333;
+            margin-bottom: 20px;
+        }
+        
+        .message {
+            font-size: 16px;
+            color: #555555;
+            margin-bottom: 25px;
+        }
+        
+        .button-container {
+            text-align: center;
+            margin: 30px 0;
+        }
+        
+        .button {
+            display: inline-block;
+            padding: 14px 35px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #ffffff !important;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 16px;
+        }
+        
+        .info-box {
+            background-color: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 15px 20px;
+            margin: 25px 0;
+        }
+        
+        .info-box p {
+            margin: 0;
+            font-size: 14px;
+            color: #555555;
+        }
+        
+        .qr-container {
+            text-align: center;
+            margin: 30px 0;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        .qr-container p {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #666666;
+        }
+        
+        .footer {
+            background-color: #f8f9fa;
+            padding: 30px;
+            text-align: center;
+            border-top: 1px solid #e9ecef;
+        }
+        
+        .footer p {
+            font-size: 13px;
+            color: #888888;
+            margin: 5px 0;
+        }
+        
+        .footer a {
+            color: #667eea;
+            text-decoration: none;
+        }
+        
+        .social-links {
+            margin: 15px 0;
+        }
+        
+        .social-links a {
+            display: inline-block;
+            margin: 0 8px;
+            color: #667eea;
+        }
+        
+        /* Responsive */
+        @media only screen and (max-width: 600px) {
+            .container { width: 100% !important; }
+            .content { padding: 30px 20px !important; }
+            .header { padding: 30px 20px !important; }
+            .header h1 { font-size: 24px !important; }
+            .button { padding: 12px 25px !important; }
+        }
+    </style>
+</head>
+<body>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f4f4;">
+        <tr>
+            <td style="padding: 20px;">
+                <table role="presentation" class="container" width="100%" cellpadding="0" cellspacing="0">
+                    <!-- Header -->
+                    <tr>
+                        <td class="header">
+                            <h1>{{company_name}}</h1>
+                        </td>
+                    </tr>
+                    
+                    <!-- Content -->
+                    <tr>
+                        <td class="content">
+                            <p class="greeting">Hello {{first_name}},</p>
+                            
+                            <p class="message">
+                                Thank you for your continued interest in {{company_name}}. 
+                                We're excited to share some important updates with you.
+                            </p>
+                            
+                            <p class="message">
+                                This email was sent to <strong>{{email}}</strong> on {{date_formatted}}.
+                            </p>
+                            
+                            <div class="info-box">
+                                <p><strong>Your Details:</strong></p>
+                                <p>Email: {{email}}</p>
+                                <p>Domain: {{domain_name}}</p>
+                                <p>ID: {{short_id}}</p>
+                            </div>
+                            
+                            {{if:link}}
+                            <div class="button-container">
+                                <a href="{{link}}" class="button">Learn More</a>
+                            </div>
+                            {{endif}}
+                            
+                            {{if:qr_code}}
+                            <div class="qr-container">
+                                {{qr_code}}
+                                <p>Scan to access on your mobile device</p>
+                            </div>
+                            {{endif}}
+                            
+                            <p class="message">
+                                If you have any questions, don't hesitate to reach out to us at 
+                                <a href="mailto:{{support_email}}">{{support_email}}</a>.
+                            </p>
+                            
+                            <p class="message">
+                                Best regards,<br>
+                                <strong>The {{company_name}} Team</strong>
+                            </p>
+                        </td>
+                    </tr>
+                    
+                    <!-- Footer -->
+                    <tr>
+                        <td class="footer">
+                            <p>© {{year}} {{company_name}}. All rights reserved.</p>
+                            <p>{{company_address}}</p>
+                            
+                            <div class="social-links">
+                                <a href="{{website}}">Website</a> |
+                                <a href="{{unsubscribe_url}}">Unsubscribe</a>
+                            </div>
+                            
+                            <p style="font-size: 11px; color: #aaa;">
+                                This email was sent to {{email}}<br>
+                                Correlation ID: {{correlation_id}}
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
+

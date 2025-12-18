@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block title %}Recipients - Unified Email Sender{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Recipients</h1>
+    <p class="page-description">Manage recipient lists and email addresses</p>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Upload Recipients</h2>
+    </div>
+    <p class="text-muted mb-4">Upload a CSV file with an 'email' column. Additional columns will be available as placeholders.</p>
+    
+    <div class="form-group">
+        <label class="form-label">CSV File</label>
+        <input type="file" class="form-input" id="csv-file" accept=".csv,.txt">
+    </div>
+    
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;" class="mb-4">
+        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+            <input type="checkbox" id="validate-emails" checked style="width: auto;">
+            <span>Validate email format</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+            <input type="checkbox" id="deduplicate" checked style="width: auto;">
+            <span>Remove duplicates</span>
+        </label>
+    </div>
+    
+    <button class="btn btn-primary" onclick="uploadRecipients()">Upload & Process</button>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Sample CSV Format</h2>
+    </div>
+    <pre style="background: var(--bg-tertiary); padding: 1rem; border-radius: 8px; overflow-x: auto; font-family: 'JetBrains Mono', monospace; font-size: 0.875rem;">email,first_name,last_name,company
+john@example.com,John,Doe,Acme Inc
+jane@company.com,Jane,Smith,Tech Corp
+bob@domain.org,Bob,Wilson,StartUp LLC</pre>
+    
+    <p class="text-muted mt-4">
+        <strong>Columns:</strong><br>
+        • <code>email</code> (required) - Recipient email address<br>
+        • <code>first_name</code> - Available as <code>{{first_name}}</code><br>
+        • <code>last_name</code> - Available as <code>{{last_name}}</code><br>
+        • <code>company</code> - Available as <code>{{company}}</code><br>
+        • Any custom column becomes a placeholder
+    </p>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Suppression List</h2>
+    </div>
+    <p class="text-muted mb-4">Add emails to prevent sending to them.</p>
+    
+    <div class="form-group">
+        <label class="form-label">Email Address</label>
+        <div class="flex gap-4">
+            <input type="email" class="form-input" id="suppress-email" placeholder="email@example.com" style="flex: 1;">
+            <button class="btn btn-secondary" onclick="suppressEmail()">Add to Suppression</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    async function uploadRecipients() {
+        const fileInput = document.getElementById('csv-file');
+        const file = fileInput.files[0];
+        
+        if (!file) {
+            alert('Please select a file');
+            return;
+        }
+        
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('validate', document.getElementById('validate-emails').checked);
+        formData.append('deduplicate', document.getElementById('deduplicate').checked);
+        
+        // Note: API endpoint for file upload would need to be implemented
+        alert('File upload API not yet implemented. Use CLI: unified-sender run config.yaml');
+    }
+    
+    async function suppressEmail() {
+        const email = document.getElementById('suppress-email').value;
+        
+        if (!email) {
+            alert('Please enter an email address');
+            return;
+        }
+        
+        // Note: API endpoint for suppression would need to be implemented
+        alert(`Added ${email} to suppression list (API pending)`);
+        document.getElementById('suppress-email').value = '';
+    }
+</script>
+{% endblock %}
+

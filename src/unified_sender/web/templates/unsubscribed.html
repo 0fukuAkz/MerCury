@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unsubscribed - Unified Email Sender</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-primary: #0a0f1a;
+            --bg-secondary: #111827;
+            --accent-primary: #06b6d4;
+            --accent-secondary: #8b5cf6;
+            --accent-gradient: linear-gradient(135deg, #06b6d4, #8b5cf6);
+            --text-primary: #f9fafb;
+            --text-secondary: #9ca3af;
+            --border-color: #374151;
+            --success: #10b981;
+            --radius: 12px;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-image: 
+                radial-gradient(at 20% 80%, rgba(6, 182, 212, 0.15) 0%, transparent 50%),
+                radial-gradient(at 80% 20%, rgba(139, 92, 246, 0.15) 0%, transparent 50%);
+        }
+        
+        .container {
+            text-align: center;
+            max-width: 500px;
+            padding: 3rem;
+        }
+        
+        .icon {
+            width: 80px;
+            height: 80px;
+            background: var(--accent-gradient);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 2rem;
+        }
+        
+        .icon svg {
+            width: 40px;
+            height: 40px;
+            stroke: white;
+        }
+        
+        h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        p {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            line-height: 1.6;
+            margin-bottom: 1.5rem;
+        }
+        
+        .card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: 2rem;
+            margin-top: 2rem;
+        }
+        
+        .card h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--text-primary);
+        }
+        
+        .card p {
+            font-size: 0.9rem;
+            margin-bottom: 0;
+        }
+        
+        .success-check {
+            color: var(--success);
+            font-size: 1.2rem;
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+        </div>
+        
+        <h1>You've Been Unsubscribed</h1>
+        
+        <p class="success-check">✓ Successfully unsubscribed</p>
+        
+        <p>
+            You have been removed from our mailing list and will no longer 
+            receive marketing emails from us.
+        </p>
+        
+        <div class="card">
+            <h3>Changed your mind?</h3>
+            <p>
+                If you unsubscribed by mistake or would like to receive 
+                our emails again in the future, please contact us.
+            </p>
+        </div>
+    </div>
+</body>
+</html>
+

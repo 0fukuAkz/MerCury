@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+
+{% block title %}Campaigns - Unified Email Sender{% endblock %}
+
+{% block content %}
+<div class="page-header flex justify-between items-center">
+    <div>
+        <h1 class="page-title">Campaigns</h1>
+        <p class="page-description">Manage your email campaigns</p>
+    </div>
+    <a href="/campaigns/new" class="btn btn-primary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="5" x2="12" y2="19"/>
+            <line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        New Campaign
+    </a>
+</div>
+
+<div class="card">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Recipients</th>
+                <th>Sent</th>
+                <th>Failed</th>
+                <th>Rate</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="campaigns-table">
+            <tr>
+                <td colspan="8" class="text-muted" style="text-align: center;">Loading campaigns...</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<script>
+    async function loadCampaigns() {
+        try {
+            const response = await fetch('/api/campaigns');
+            const data = await response.json();
+            
+            const tbody = document.getElementById('campaigns-table');
+            
+            if (data.campaigns.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="8" style="text-align: center; padding: 3rem;">
+                            <p class="text-muted">No campaigns yet</p>
+                            <a href="/campaigns/new" class="btn btn-primary mt-4">Create your first campaign</a>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            tbody.innerHTML = data.campaigns.map(campaign => `
+                <tr>
+                    <td>
+                        <strong>${campaign.name}</strong>
+                        ${campaign.description ? `<br><span class="text-muted">${campaign.description.substring(0, 50)}</span>` : ''}
+                    </td>
+                    <td>${campaign.type || 'marketing'}</td>
+                    <td><span class="badge badge-${getStatusColor(campaign.status)}">${campaign.status}</span></td>
+                    <td class="font-mono">${(campaign.total_recipients || 0).toLocaleString()}</td>
+                    <td class="font-mono text-success">${(campaign.sent_count || 0).toLocaleString()}</td>
+                    <td class="font-mono text-error">${(campaign.failed_count || 0).toLocaleString()}</td>
+                    <td class="font-mono">${campaign.success_rate || 0}%</td>
+                    <td>
+                        <div class="flex gap-2">
+                            ${campaign.status === 'draft' ? `
+                                <button class="btn btn-primary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="startCampaign(${campaign.id})">Start</button>
+                            ` : ''}
+                            ${campaign.status === 'sending' ? `
+                                <button class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="pauseCampaign(${campaign.id})">Pause</button>
+                            ` : ''}
+                            ${campaign.status === 'paused' ? `
+                                <button class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="resumeCampaign(${campaign.id})">Resume</button>
+                            ` : ''}
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        } catch (error) {
+            console.error('Failed to load campaigns:', error);
+        }
+    }
+    
+    function getStatusColor(status) {
+        const colors = {
+            'draft': 'info',
+            'scheduled': 'info',
+            'sending': 'warning',
+            'paused': 'warning',
+            'completed': 'success',
+            'failed': 'error',
+            'cancelled': 'error'
+        };
+        return colors[status] || 'info';
+    }
+    
+    function startCampaign(id) {
+        socket.emit('start_campaign', { campaign_id: id });
+    }
+    
+    function pauseCampaign(id) {
+        socket.emit('pause_campaign', { campaign_id: id });
+    }
+    
+    function resumeCampaign(id) {
+        socket.emit('resume_campaign', { campaign_id: id });
+    }
+    
+    loadCampaigns();
+</script>
+{% endblock %}
+

@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+
+{% block title %}SMTP Servers - Unified Email Sender{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">SMTP Servers</h1>
+    <p class="page-description">Configure and manage SMTP server connections</p>
+</div>
+
+<!-- Add Server Form -->
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Add SMTP Server</h2>
+    </div>
+    <form id="smtp-form" onsubmit="addServer(event)">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+            <div class="form-group">
+                <label class="form-label">Name</label>
+                <input type="text" class="form-input" name="name" placeholder="Primary Server" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Host</label>
+                <input type="text" class="form-input" name="host" placeholder="smtp.gmail.com" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Port</label>
+                <input type="number" class="form-input" name="port" value="587">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Username</label>
+                <input type="text" class="form-input" name="username" placeholder="user@gmail.com">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Password</label>
+                <input type="password" class="form-input" name="password">
+            </div>
+            <div class="form-group" style="display: flex; align-items: flex-end;">
+                <button type="submit" class="btn btn-primary">Add Server</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Server List -->
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Configured Servers</h2>
+    </div>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Host</th>
+                <th>Port</th>
+                <th>Status</th>
+                <th>Rate Limit</th>
+                <th>Circuit</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="servers-table">
+            <tr>
+                <td colspan="7" class="text-muted" style="text-align: center;">Loading servers...</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<script>
+    async function loadServers() {
+        try {
+            const response = await fetch('/api/smtp');
+            const data = await response.json();
+            
+            const tbody = document.getElementById('servers-table');
+            
+            if (data.servers.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-muted" style="text-align: center;">No SMTP servers configured</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = data.servers.map(server => `
+                <tr>
+                    <td><strong>${server.name}</strong></td>
+                    <td class="font-mono">${server.host}</td>
+                    <td class="font-mono">${server.port}</td>
+                    <td>
+                        <span class="badge badge-${server.is_enabled ? 'success' : 'error'}">
+                            ${server.status || (server.is_enabled ? 'active' : 'inactive')}
+                        </span>
+                    </td>
+                    <td class="font-mono">${server.current_minute_count || 0}/${server.max_per_minute || 30}/min</td>
+                    <td>
+                        <span class="badge badge-${server.circuit_open ? 'error' : 'success'}">
+                            ${server.circuit_open ? 'Open' : 'Closed'}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="flex gap-2">
+                            <button class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="testServer('${server.name}')">Test</button>
+                            <button class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="deleteServer('${server.name}')">Delete</button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        } catch (error) {
+            console.error('Failed to load servers:', error);
+        }
+    }
+    
+    async function addServer(event) {
+        event.preventDefault();
+        
+        const form = event.target;
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData);
+        data.port = parseInt(data.port);
+        
+        try {
+            const response = await fetch('/api/smtp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                form.reset();
+                loadServers();
+                alert('Server added successfully!');
+            } else {
+                alert('Failed to add server: ' + result.error);
+            }
+        } catch (error) {
+            alert('Error: ' + error.message);
+        }
+    }
+    
+    async function testServer(name) {
+        try {
+            const btn = event.target;
+            btn.textContent = 'Testing...';
+            btn.disabled = true;
+            
+            const response = await fetch(`/api/smtp/test/${name}`, { method: 'POST' });
+            const result = await response.json();
+            
+            btn.textContent = 'Test';
+            btn.disabled = false;
+            
+            alert(result.success ? '✅ Connection successful!' : `❌ Connection failed: ${result.error}`);
+        } catch (error) {
+            alert('Test failed: ' + error.message);
+        }
+    }
+    
+    async function deleteServer(name) {
+        if (!confirm(`Delete server "${name}"?`)) return;
+        
+        // Note: Delete API endpoint would need to be implemented
+        alert('Delete functionality not yet implemented');
+    }
+    
+    loadServers();
+</script>
+{% endblock %}
+

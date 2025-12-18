@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block title %}Templates - Unified Email Sender{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Email Templates</h1>
+    <p class="page-description">Create and manage email templates with placeholder support</p>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+    <!-- Editor -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Template Editor</h2>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Template Name</label>
+            <input type="text" class="form-input" id="template-name" placeholder="My Template">
+        </div>
+        <div class="form-group">
+            <label class="form-label">HTML Content</label>
+            <textarea class="form-input" id="template-html" rows="20" style="font-family: 'JetBrains Mono', monospace; font-size: 0.875rem;" placeholder="<html>
+<body>
+    <h1>Hello {{first_name}}!</h1>
+    <p>Email: {{email}}</p>
+    <p>Date: {{date_formatted}}</p>
+</body>
+</html>"></textarea>
+        </div>
+        <div class="flex gap-4">
+            <button class="btn btn-primary" onclick="previewTemplate()">Preview</button>
+            <button class="btn btn-secondary" onclick="saveTemplate()">Save Template</button>
+        </div>
+    </div>
+    
+    <!-- Preview -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Preview</h2>
+            <div class="form-group" style="margin: 0; width: 250px;">
+                <input type="email" class="form-input" id="preview-email" placeholder="test@example.com" value="test@example.com">
+            </div>
+        </div>
+        <div id="preview-frame" style="background: white; border-radius: 8px; min-height: 400px; padding: 1rem;">
+            <p class="text-muted">Click "Preview" to see rendered template</p>
+        </div>
+        
+        <div class="mt-4">
+            <h3 style="font-size: 0.875rem; margin-bottom: 0.5rem;">Detected Placeholders:</h3>
+            <div id="placeholders-list" class="flex gap-2" style="flex-wrap: wrap;">
+                <span class="text-muted">None detected</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Available Placeholders -->
+<div class="card mt-4">
+    <div class="card-header">
+        <h2 class="card-title">Available Placeholders</h2>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem;">
+        <div>
+            <h4 style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.5rem;">Recipient</h4>
+            <code class="font-mono" style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{email}}</code>
+            <code class="font-mono" style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{first_name}}</code>
+            <code class="font-mono" style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{last_name}}</code>
+            <code class="font-mono" style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{full_name}}</code>
+            <code class="font-mono" style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{domain}}</code>
+            <code class="font-mono" style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{domain_name}}</code>
+        </div>
+        <div>
+            <h4 style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.5rem;">Date/Time</h4>
+            <code class="font-mono" style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{date}}</code>
+            <code class="font-mono" style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{date_formatted}}</code>
+            <code class="font-mono" style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{time}}</code>
+            <code class="font-mono" style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{year}}</code>
+            <code class="font-mono" style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{month_name}}</code>
+            <code class="font-mono" style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{day_name}}</code>
+        </div>
+        <div>
+            <h4 style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.5rem;">Random</h4>
+            <code class="font-mono" style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{random_name}}</code>
+            <code class="font-mono" style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{random_company}}</code>
+            <code class="font-mono" style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{random_phone}}</code>
+            <code class="font-mono" style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{uuid}}</code>
+            <code class="font-mono" style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{random_number}}</code>
+        </div>
+        <div>
+            <h4 style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.5rem;">Features</h4>
+            <code class="font-mono" style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{link}}</code>
+            <code class="font-mono" style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{qr_code}}</code>
+            <code class="font-mono" style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{if:placeholder}}...{{endif}}</code>
+            <code class="font-mono" style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{include:file.html}}</code>
+        </div>
+    </div>
+</div>
+
+<script>
+    async function previewTemplate() {
+        const html = document.getElementById('template-html').value;
+        const recipient = document.getElementById('preview-email').value;
+        
+        try {
+            const response = await fetch('/api/templates/preview', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ html, recipient })
+            });
+            
+            const data = await response.json();
+            
+            document.getElementById('preview-frame').innerHTML = data.html;
+            
+            const placeholdersList = document.getElementById('placeholders-list');
+            if (data.placeholders && data.placeholders.length > 0) {
+                placeholdersList.innerHTML = data.placeholders.map(p => 
+                    `<span class="badge badge-info">{{${p}}}</span>`
+                ).join('');
+            } else {
+                placeholdersList.innerHTML = '<span class="text-muted">None detected</span>';
+            }
+        } catch (error) {
+            alert('Preview failed: ' + error.message);
+        }
+    }
+    
+    async function saveTemplate() {
+        const name = document.getElementById('template-name').value;
+        const html = document.getElementById('template-html').value;
+        
+        if (!name) {
+            alert('Please enter a template name');
+            return;
+        }
+        
+        // Save template API would be implemented here
+        alert('Template saved! (API implementation pending)');
+    }
+</script>
+{% endblock %}
+

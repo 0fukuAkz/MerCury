@@ -1,0 +1,761 @@
+openapi: 3.0.3
+info:
+  title: Unified Email Sender API
+  description: |
+    Production-grade email automation platform API.
+    
+    ## Authentication
+    All API endpoints (except health checks) require authentication via:
+    - **API Key**: Include `X-API-Key` header
+    - **Session**: Login via web interface
+    
+    ## Rate Limiting
+    - Read operations: 30 requests/minute
+    - Write operations: 10 requests/minute
+    - SMTP tests: 5 requests/minute
+  version: 2.0.0
+  contact:
+    name: Unified Sender Team
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8080
+    description: Development server
+  - url: https://api.example.com
+    description: Production server
+
+tags:
+  - name: System
+    description: System status and health checks
+  - name: Campaigns
+    description: Email campaign management
+  - name: SMTP
+    description: SMTP server configuration
+  - name: Templates
+    description: Email template management
+  - name: Logs
+    description: Email logs and statistics
+  - name: Webhooks
+    description: Webhook management
+  - name: Tracking
+    description: Email tracking endpoints
+
+security:
+  - ApiKeyAuth: []
+  - SessionAuth: []
+
+paths:
+  /api/status:
+    get:
+      summary: Get system status
+      description: Public endpoint returning system health status
+      tags: [System]
+      security: []
+      responses:
+        '200':
+          description: System status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  timestamp:
+                    type: string
+                    format: date-time
+                  version:
+                    type: string
+                    example: "2.0.0"
+
+  /health:
+    get:
+      summary: Basic health check
+      description: Public health check for load balancers
+      tags: [System]
+      security: []
+      responses:
+        '200':
+          description: Application is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+
+  /health/detailed:
+    get:
+      summary: Detailed health check
+      description: Detailed component health status
+      tags: [System]
+      responses:
+        '200':
+          description: Detailed health status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailedHealthStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /ready:
+    get:
+      summary: Kubernetes readiness probe
+      tags: [System]
+      security: []
+      responses:
+        '200':
+          description: Application ready
+        '503':
+          description: Application not ready
+
+  /live:
+    get:
+      summary: Kubernetes liveness probe
+      tags: [System]
+      security: []
+      responses:
+        '200':
+          description: Application alive
+
+  /api/campaigns:
+    get:
+      summary: List campaigns
+      description: Get all email campaigns
+      tags: [Campaigns]
+      responses:
+        '200':
+          description: List of campaigns
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  campaigns:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Campaign'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+    post:
+      summary: Create campaign
+      description: Create a new email campaign
+      tags: [Campaigns]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCampaignRequest'
+      responses:
+        '201':
+          description: Campaign created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  campaign:
+                    $ref: '#/components/schemas/Campaign'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/smtp:
+    get:
+      summary: List SMTP servers
+      description: Get all configured SMTP servers
+      tags: [SMTP]
+      responses:
+        '200':
+          description: List of SMTP servers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  servers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SMTPServer'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      summary: Add SMTP server
+      description: Add a new SMTP server configuration
+      tags: [SMTP]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSMTPRequest'
+      responses:
+        '201':
+          description: SMTP server added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  server:
+                    $ref: '#/components/schemas/SMTPServer'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/smtp/test/{name}:
+    post:
+      summary: Test SMTP connection
+      description: Test connection to a specific SMTP server
+      tags: [SMTP]
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+          description: SMTP server name
+      responses:
+        '200':
+          description: Test result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SMTPTestResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/templates:
+    get:
+      summary: List templates
+      description: Get all email templates
+      tags: [Templates]
+      responses:
+        '200':
+          description: List of templates
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  templates:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Template'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/templates/preview:
+    post:
+      summary: Preview template
+      description: Render template with sample data
+      tags: [Templates]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PreviewTemplateRequest'
+      responses:
+        '200':
+          description: Rendered preview
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  html:
+                    type: string
+                    description: Rendered HTML
+                  placeholders:
+                    type: array
+                    items:
+                      type: string
+                    description: Placeholders found in template
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/logs/success:
+    get:
+      summary: Get success logs
+      description: Get recent successful email sends
+      tags: [Logs]
+      responses:
+        '200':
+          description: Success logs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  emails:
+                    type: array
+                    items:
+                      type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/logs/failed:
+    get:
+      summary: Get failure logs
+      description: Get recent failed email sends
+      tags: [Logs]
+      responses:
+        '200':
+          description: Failure logs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  failures:
+                    type: array
+                    items:
+                      type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/stats:
+    get:
+      summary: Get statistics
+      description: Get overall sending statistics
+      tags: [Logs]
+      responses:
+        '200':
+          description: Statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Statistics'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/webhooks:
+    get:
+      summary: List webhooks
+      description: Get all registered webhooks
+      tags: [Webhooks]
+      responses:
+        '200':
+          description: List of webhooks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  webhooks:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Webhook'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      summary: Register webhook
+      description: Register a new webhook endpoint
+      tags: [Webhooks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWebhookRequest'
+      responses:
+        '201':
+          description: Webhook registered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  webhook:
+                    $ref: '#/components/schemas/Webhook'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /track/open/{email_id}:
+    get:
+      summary: Track email open
+      description: Tracking pixel endpoint for open detection
+      tags: [Tracking]
+      security: []
+      parameters:
+        - name: email_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 1x1 transparent GIF
+          content:
+            image/gif:
+              schema:
+                type: string
+                format: binary
+
+  /track/click/{email_id}:
+    get:
+      summary: Track link click
+      description: Click tracking with redirect
+      tags: [Tracking]
+      security: []
+      parameters:
+        - name: email_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: url
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Destination URL
+        - name: lid
+          in: query
+          schema:
+            type: string
+          description: Link identifier
+      responses:
+        '302':
+          description: Redirect to destination URL
+
+  /track/unsubscribe/{email_id}:
+    get:
+      summary: Unsubscribe
+      description: Process unsubscribe request
+      tags: [Tracking]
+      security: []
+      parameters:
+        - name: email_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Secure unsubscribe token
+      responses:
+        '200':
+          description: Unsubscribe confirmation page
+        '400':
+          description: Invalid or expired token
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for programmatic access
+    SessionAuth:
+      type: apiKey
+      in: cookie
+      name: session
+      description: Session cookie from login
+
+  schemas:
+    Campaign:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [draft, scheduled, sending, paused, completed, failed, cancelled]
+        type:
+          type: string
+          enum: [marketing, transactional, newsletter, promotional, announcement, other]
+        from_email:
+          type: string
+        from_name:
+          type: string
+        total_recipients:
+          type: integer
+        sent_count:
+          type: integer
+        failed_count:
+          type: integer
+        success_rate:
+          type: number
+        created_at:
+          type: string
+          format: date-time
+        scheduled_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+
+    CreateCampaignRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: Campaign name
+        description:
+          type: string
+        subject:
+          type: string
+          description: Email subject (supports placeholders)
+        from_email:
+          type: string
+          format: email
+        from_name:
+          type: string
+        template_path:
+          type: string
+        recipients_path:
+          type: string
+        dry_run:
+          type: boolean
+          default: true
+
+    SMTPServer:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        host:
+          type: string
+        port:
+          type: integer
+        use_tls:
+          type: boolean
+        use_ssl:
+          type: boolean
+        is_active:
+          type: boolean
+        max_per_minute:
+          type: integer
+        max_per_hour:
+          type: integer
+
+    CreateSMTPRequest:
+      type: object
+      required: [host]
+      properties:
+        name:
+          type: string
+        host:
+          type: string
+        port:
+          type: integer
+          default: 587
+        username:
+          type: string
+        password:
+          type: string
+          format: password
+        use_tls:
+          type: boolean
+          default: true
+
+    SMTPTestResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        server:
+          type: string
+        host:
+          type: string
+        port:
+          type: integer
+        message:
+          type: string
+        error:
+          type: string
+
+    Template:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        subject:
+          type: string
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    PreviewTemplateRequest:
+      type: object
+      properties:
+        html:
+          type: string
+          description: HTML template content
+        recipient:
+          type: string
+          format: email
+          default: test@example.com
+        placeholders:
+          type: object
+          additionalProperties:
+            type: string
+
+    Statistics:
+      type: object
+      properties:
+        total_sent:
+          type: integer
+        total_failed:
+          type: integer
+        total_attempts:
+          type: integer
+        success_rate:
+          type: number
+          format: float
+
+    Webhook:
+      type: object
+      properties:
+        id:
+          type: string
+        url:
+          type: string
+          format: uri
+        events:
+          type: array
+          items:
+            type: string
+        is_active:
+          type: boolean
+
+    CreateWebhookRequest:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+        events:
+          type: array
+          items:
+            type: string
+            enum:
+              - email.sent
+              - email.failed
+              - email.bounced
+              - email.opened
+              - email.clicked
+              - email.unsubscribed
+        secret:
+          type: string
+          description: Shared secret for signature verification
+
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        timestamp:
+          type: string
+          format: date-time
+
+    DetailedHealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        components:
+          type: object
+          properties:
+            database:
+              type: object
+              properties:
+                status:
+                  type: string
+                type:
+                  type: string
+            smtp:
+              type: object
+              properties:
+                status:
+                  type: string
+                active_servers:
+                  type: integer
+            disk:
+              type: object
+              properties:
+                status:
+                  type: string
+                free_gb:
+                  type: number
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    RateLimited:
+      description: Rate limit exceeded
+      headers:
+        X-RateLimit-Limit:
+          schema:
+            type: integer
+        X-RateLimit-Remaining:
+          schema:
+            type: integer
+        X-RateLimit-Reset:
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+

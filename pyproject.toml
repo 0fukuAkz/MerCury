@@ -1,0 +1,119 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "unified-sender"
+version = "2.0.0"
+description = "Production-grade email automation platform with async sending, security, tracking, and campaign management"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "Unified Sender Team"}
+]
+keywords = ["email", "automation", "campaign", "smtp", "bulk-email", "tracking", "webhooks"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    # Core - Pinned versions for stability
+    "aiosmtplib==3.0.2",
+    "pyyaml==6.0.1",
+    "click==8.1.7",
+    "pydantic==2.5.3",
+    "pydantic-settings==2.1.0",
+    
+    # Database
+    "sqlalchemy==2.0.25",
+    "alembic==1.13.1",
+    
+    # Web UI
+    "flask==3.0.0",
+    "flask-socketio==5.3.6",
+    "python-socketio==5.11.0",
+    "flask-login==0.6.3",
+    "flask-limiter==3.5.1",
+    "flask-cors==4.0.0",
+    
+    # Security
+    "cryptography==42.0.1",
+    "passlib==1.7.4",
+    "bcrypt==4.1.2",
+    
+    # Document Generation
+    "qrcode[pil]==7.4.2",
+    "pillow==10.1.0",
+    "reportlab==4.0.9",
+    "python-docx==1.1.0",
+    
+    # Email
+    "email-validator==2.1.0.post1",
+    
+    # Async I/O
+    "aiofiles==23.2.1",
+    
+    # Scheduling
+    "apscheduler==3.10.4",
+    
+    # HTTP Client (webhooks)
+    "httpx==0.26.0",
+    
+    # Logging
+    "structlog==24.1.0",
+    "python-json-logger==2.0.7",
+    
+    # Utilities
+    "python-dotenv==1.0.0",
+    "tqdm==4.66.1",
+    "faker==22.5.1",
+    "pysocks==1.7.1",
+    "rich==13.7.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.0.0",
+    "pytest-asyncio==0.23.3",
+    "pytest-cov==4.1.0",
+    "pytest-mock==3.12.0",
+    "pytest-xdist==3.5.0",
+    "ruff==0.1.14",
+    "black==24.1.1",
+    "mypy==1.8.0",
+    "types-pyyaml==6.0.12.12",
+    "ipython==8.20.0",
+    "pre-commit==3.6.0",
+]
+pdf = [
+    # Better PDF generation (requires system dependencies)
+    "weasyprint>=60.0",
+]
+all = [
+    "unified-sender[dev,pdf]",
+]
+
+[project.scripts]
+sender = "unified_sender.cli.main:main"
+
+[project.urls]
+Homepage = "https://github.com/unified-sender/unified-sender"
+Documentation = "https://github.com/unified-sender/unified-sender#readme"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

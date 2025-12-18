@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+
+{% block title %}New Campaign - Unified Email Sender{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Create New Campaign</h1>
+    <p class="page-description">Configure and launch a new email campaign</p>
+</div>
+
+<form id="campaign-form" onsubmit="createCampaign(event)">
+    <!-- Basic Info -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Campaign Details</h2>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div class="form-group">
+                <label class="form-label">Campaign Name *</label>
+                <input type="text" class="form-input" name="name" required placeholder="Q1 Newsletter">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Type</label>
+                <select class="form-input" name="type">
+                    <option value="marketing">Marketing</option>
+                    <option value="newsletter">Newsletter</option>
+                    <option value="promotional">Promotional</option>
+                    <option value="announcement">Announcement</option>
+                    <option value="transactional">Transactional</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Description</label>
+            <textarea class="form-input" name="description" rows="2" placeholder="Optional campaign description"></textarea>
+        </div>
+    </div>
+    
+    <!-- Email Content -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Email Content</h2>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Subject Line *</label>
+            <input type="text" class="form-input" name="subject" required placeholder="Hello {{first_name}}, check this out!">
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div class="form-group">
+                <label class="form-label">From Email *</label>
+                <input type="email" class="form-input" name="from_email" required placeholder="sender@example.com">
+            </div>
+            <div class="form-group">
+                <label class="form-label">From Name</label>
+                <input type="text" class="form-input" name="from_name" placeholder="Your Company">
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Reply-To</label>
+            <input type="email" class="form-input" name="reply_to" placeholder="reply@example.com">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Template Path</label>
+            <input type="text" class="form-input" name="template_path" placeholder="templates/email.html">
+        </div>
+    </div>
+    
+    <!-- Recipients -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Recipients</h2>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Recipients File *</label>
+            <input type="text" class="form-input" name="recipients_path" required placeholder="data/recipients.csv">
+            <p class="text-muted mt-4" style="font-size: 0.875rem;">CSV file with 'email' column. Additional columns become placeholders.</p>
+        </div>
+    </div>
+    
+    <!-- Sending Options -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Sending Options</h2>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
+            <div class="form-group">
+                <label class="form-label">Concurrency</label>
+                <input type="number" class="form-input" name="concurrency" value="50">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Rate/Minute</label>
+                <input type="number" class="form-input" name="rate_per_minute" value="30" placeholder="0 = unlimited">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Chunk Size</label>
+                <input type="number" class="form-input" name="chunk_size" value="1000">
+            </div>
+        </div>
+        <div class="form-group">
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                <input type="checkbox" name="dry_run" checked style="width: auto;">
+                <span>Dry Run (don't actually send emails)</span>
+            </label>
+        </div>
+    </div>
+    
+    <!-- Features -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Features</h2>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                <input type="checkbox" name="enable_qr_code" style="width: auto;">
+                <span>Enable QR Codes</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                <input type="checkbox" name="send_as_image" style="width: auto;">
+                <span>Send as Image</span>
+            </label>
+        </div>
+    </div>
+    
+    <!-- Submit -->
+    <div class="flex gap-4">
+        <button type="submit" class="btn btn-primary">Create Campaign</button>
+        <a href="/campaigns" class="btn btn-secondary">Cancel</a>
+    </div>
+</form>
+
+<script>
+    async function createCampaign(event) {
+        event.preventDefault();
+        
+        const form = event.target;
+        const formData = new FormData(form);
+        const data = {};
+        
+        formData.forEach((value, key) => {
+            if (key === 'dry_run' || key === 'enable_qr_code' || key === 'send_as_image') {
+                data[key] = true;
+            } else if (key === 'concurrency' || key === 'rate_per_minute' || key === 'chunk_size') {
+                data[key] = parseInt(value);
+            } else {
+                data[key] = value;
+            }
+        });
+        
+        // Handle unchecked checkboxes
+        ['dry_run', 'enable_qr_code', 'send_as_image'].forEach(key => {
+            if (!data[key]) data[key] = false;
+        });
+        
+        try {
+            const response = await fetch('/api/campaigns', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                alert('Campaign created successfully!');
+                window.location.href = '/campaigns';
+            } else {
+                alert('Failed to create campaign: ' + result.error);
+            }
+        } catch (error) {
+            alert('Error: ' + error.message);
+        }
+    }
+</script>
+{% endblock %}
+

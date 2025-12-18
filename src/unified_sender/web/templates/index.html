@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Unified Email Sender{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Dashboard</h1>
+    <p class="page-description">Overview of your email campaigns and sending statistics</p>
+</div>
+
+<!-- Stats Grid -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-label">Total Sent</div>
+        <div class="stat-value accent" id="stat-sent">-</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Failed</div>
+        <div class="stat-value error" id="stat-failed">-</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Success Rate</div>
+        <div class="stat-value success" id="stat-rate">-</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Active Servers</div>
+        <div class="stat-value" id="stat-servers">-</div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Quick Actions</h2>
+    </div>
+    <div class="flex gap-4">
+        <a href="/campaigns/new" class="btn btn-primary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"/>
+                <line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            New Campaign
+        </a>
+        <a href="/smtp" class="btn btn-secondary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+            Configure SMTP
+        </a>
+        <a href="/templates" class="btn btn-secondary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                <polyline points="14 2 14 8 20 8"/>
+            </svg>
+            Manage Templates
+        </a>
+    </div>
+</div>
+
+<!-- Recent Campaigns -->
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Recent Campaigns</h2>
+        <a href="/campaigns" class="btn btn-secondary" style="padding: 0.5rem 1rem;">View All</a>
+    </div>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Status</th>
+                <th>Sent</th>
+                <th>Failed</th>
+                <th>Success Rate</th>
+                <th>Created</th>
+            </tr>
+        </thead>
+        <tbody id="campaigns-table">
+            <tr>
+                <td colspan="6" class="text-muted" style="text-align: center;">Loading campaigns...</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- System Status -->
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">SMTP Server Status</h2>
+    </div>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Server</th>
+                <th>Host</th>
+                <th>Status</th>
+                <th>Sends/min</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="smtp-table">
+            <tr>
+                <td colspan="5" class="text-muted" style="text-align: center;">Loading servers...</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<script>
+    // Load statistics
+    async function loadStats() {
+        try {
+            const response = await fetch('/api/stats');
+            const data = await response.json();
+            
+            document.getElementById('stat-sent').textContent = data.total_sent.toLocaleString();
+            document.getElementById('stat-failed').textContent = data.total_failed.toLocaleString();
+            document.getElementById('stat-rate').textContent = data.success_rate + '%';
+        } catch (error) {
+            console.error('Failed to load stats:', error);
+        }
+    }
+    
+    // Load campaigns
+    async function loadCampaigns() {
+        try {
+            const response = await fetch('/api/campaigns');
+            const data = await response.json();
+            
+            const tbody = document.getElementById('campaigns-table');
+            
+            if (data.campaigns.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-muted" style="text-align: center;">No campaigns yet</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = data.campaigns.slice(0, 5).map(campaign => `
+                <tr>
+                    <td>${campaign.name}</td>
+                    <td><span class="badge badge-${getStatusColor(campaign.status)}">${campaign.status}</span></td>
+                    <td class="font-mono">${campaign.sent_count || 0}</td>
+                    <td class="font-mono">${campaign.failed_count || 0}</td>
+                    <td class="font-mono">${campaign.success_rate || 0}%</td>
+                    <td class="text-muted">${formatDate(campaign.created_at)}</td>
+                </tr>
+            `).join('');
+        } catch (error) {
+            console.error('Failed to load campaigns:', error);
+        }
+    }
+    
+    // Load SMTP servers
+    async function loadServers() {
+        try {
+            const response = await fetch('/api/smtp');
+            const data = await response.json();
+            
+            const tbody = document.getElementById('smtp-table');
+            document.getElementById('stat-servers').textContent = data.servers.length;
+            
+            if (data.servers.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-muted" style="text-align: center;">No SMTP servers configured</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = data.servers.map(server => `
+                <tr>
+                    <td>${server.name}</td>
+                    <td class="font-mono">${server.host}:${server.port}</td>
+                    <td><span class="badge badge-${server.is_enabled ? 'success' : 'error'}">${server.is_enabled ? 'Active' : 'Inactive'}</span></td>
+                    <td class="font-mono">${server.current_minute_count || 0}/${server.max_per_minute || 30}</td>
+                    <td>
+                        <button class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="testServer('${server.name}')">Test</button>
+                    </td>
+                </tr>
+            `).join('');
+        } catch (error) {
+            console.error('Failed to load servers:', error);
+        }
+    }
+    
+    async function testServer(name) {
+        try {
+            const response = await fetch(`/api/smtp/test/${name}`, { method: 'POST' });
+            const result = await response.json();
+            alert(result.success ? 'Connection successful!' : `Connection failed: ${result.error}`);
+        } catch (error) {
+            alert('Test failed: ' + error.message);
+        }
+    }
+    
+    function getStatusColor(status) {
+        const colors = {
+            'draft': 'info',
+            'sending': 'warning',
+            'completed': 'success',
+            'failed': 'error',
+            'paused': 'warning'
+        };
+        return colors[status] || 'info';
+    }
+    
+    function formatDate(dateStr) {
+        if (!dateStr) return '-';
+        return new Date(dateStr).toLocaleDateString();
+    }
+    
+    // Load all data
+    loadStats();
+    loadCampaigns();
+    loadServers();
+    
+    // Refresh every 30 seconds
+    setInterval(loadStats, 30000);
+</script>
+{% endblock %}
+
