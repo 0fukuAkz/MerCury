@@ -75,6 +75,7 @@ class CampaignConfig:
     
     # Static placeholders
     placeholders: Optional[Dict[str, str]] = None
+    placeholders_path: str = ""
 
 
 class CampaignService:
@@ -133,6 +134,7 @@ class CampaignService:
             from_name=config.from_name,
             reply_to=config.reply_to,
             template_path=config.template_path,
+            placeholders_path=config.placeholders_path,
             dry_run=config.dry_run,
             concurrency=config.concurrency,
             rate_per_minute=config.rate_per_minute,
@@ -457,6 +459,7 @@ def load_campaign_from_yaml(yaml_path: str) -> CampaignConfig:
     sending = data.get('sending', {})
     features = data.get('features', {})
     placeholders = data.get('placeholders', {}).get('static', {})
+    placeholders_path = data.get('placeholders', {}).get('path', '')
     
     return CampaignConfig(
         name=campaign.get('name', 'Unnamed Campaign'),
@@ -491,5 +494,6 @@ def load_campaign_from_yaml(yaml_path: str) -> CampaignConfig:
         attachment_type=features.get('attachment_type'),
         attachment_path=features.get('attachment_path'),
         
-        placeholders=placeholders
+        placeholders=placeholders,
+        placeholders_path=placeholders_path
     )

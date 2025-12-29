@@ -43,6 +43,7 @@ data/*.txt
 !data/.gitkeep
 config/*.yaml
 !config/example.yaml
+!config/placeholders.yaml
 *.db
 *.db-shm
 *.db-wal

@@ -199,6 +199,7 @@ class UnifiedConfig:
     sending: SendingConfig = field(default_factory=SendingConfig)
     features: FeaturesConfig = field(default_factory=FeaturesConfig)
     
+    placeholders_path: str = "config/placeholders.yaml"
     placeholders: Dict[str, str] = field(default_factory=dict)
     
     @classmethod
@@ -267,6 +268,7 @@ class UnifiedConfig:
                 attachment_path=features.get('attachment_path', '')
             ),
             
+            placeholders_path=data.get('placeholders', {}).get('path', 'config/placeholders.yaml'),
             placeholders=data.get('placeholders', {}).get('static', {})
         )
     
@@ -352,6 +354,7 @@ recipients:
   deduplicate: true
 
 placeholders:
+  path: config/placeholders.yaml
   static:
     company_name: "Your Company"
     support_email: "support@example.com"

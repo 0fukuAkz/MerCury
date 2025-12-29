@@ -28,6 +28,7 @@ class EmailConfig:
     from_name: str = ""
     reply_to: str = ""
     template_path: Optional[str] = None
+    placeholders_path: Optional[str] = None
     html_content: Optional[str] = None
     
     # Attachments
@@ -97,7 +98,8 @@ class EmailService:
         if config.template_path or config.html_content:
             self._template_engine = TemplateEngine(
                 template_path=config.template_path,
-                html_content=config.html_content
+                html_content=config.html_content,
+                placeholders_path=config.placeholders_path
             )
             self._template_engine.config.enable_qr_code = config.enable_qr_code
         
