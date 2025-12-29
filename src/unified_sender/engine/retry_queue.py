@@ -128,6 +128,13 @@ class RetryQueue:
                         self.config.base_delay, 
                         self.config.max_delay
                     )
+                    # FIX: Do not push to heap again if already in queue. 
+                    # The item is modified in-place (reference), so when it pops from heap 
+                    # it will have the new next_retry_at. 
+                    # However, heapq doesn't re-sort when items change.
+                    # We need to re-heapify or accept that the order might be slightly stale 
+                    # until it pops. Efficient approach: remove and re-add or lazy delete.
+                    # Given the constraints, we will re-push but handle duplicates in get_ready.
                     heapq.heappush(self._queue, item)
                     self.stats['total_retried'] += 1
             else:
@@ -145,7 +152,8 @@ class RetryQueue:
                 heapq.heappush(self._queue, item)
                 self.stats['total_added'] += 1
             
-            self._persist_state()
+            # FIX: Await non-blocking persistence
+            await self._persist_state()
             return item
     
     async def get_ready(self) -> List[RetryItem]:
@@ -154,11 +162,25 @@ class RetryQueue:
         ready = []
         
         async with self._lock:
-            while self._queue and self._queue[0].next_retry_at <= now:
+            # Clean up the queue from stale references and check timing
+            while self._queue:
+                # Peek first
+                if self._queue[0].next_retry_at > now:
+                    break
+                    
                 item = heapq.heappop(self._queue)
-                if item.status != RetryStatus.EXHAUSTED:
-                    item.status = RetryStatus.RETRYING
-                    ready.append(item)
+                
+                # FIX: Verify item is still valid and active
+                if item.id not in self._items:
+                    continue
+                    
+                # Fix: Check if this is the latest reference (optimization) or just use state
+                if item.status == RetryStatus.EXHAUSTED:
+                    continue
+
+                # Prepare for retry
+                item.status = RetryStatus.RETRYING
+                ready.append(item)
         
         return ready
     
@@ -169,7 +191,7 @@ class RetryQueue:
                 self._items[id].status = RetryStatus.SUCCESS
                 self.stats['total_success'] += 1
                 del self._items[id]
-                self._persist_state()
+                await self._persist_state()
     
     async def mark_failed(self, id: str, error: str):
         """Mark item as failed, will be retried."""
@@ -205,7 +227,7 @@ class RetryQueue:
             except asyncio.CancelledError:
                 pass
         
-        self._persist_state()
+        await self._persist_state()
         logger.info("Retry queue stopped")
     
     async def _process_loop(self):
@@ -241,8 +263,8 @@ class RetryQueue:
                 logger.error(f"Error in retry queue: {e}")
                 await asyncio.sleep(self.config.process_interval)
     
-    def _persist_state(self):
-        """Persist queue state to disk."""
+    async def _persist_state(self):
+        """Persist queue state to disk asynchronously."""
         if not self.persist_path:
             return
         
@@ -251,10 +273,25 @@ class RetryQueue:
                 'items': {k: v.to_dict() for k, v in self._items.items()},
                 'stats': self.stats
             }
-            with open(self.persist_path, 'w') as f:
-                json.dump(state, f)
+            
+            # FIX: Run file I/O in thread pool to avoid blocking event loop
+            await asyncio.to_thread(self._write_state_to_disk, state)
+            
         except Exception as e:
             logger.error(f"Failed to persist retry queue: {e}")
+
+    def _write_state_to_disk(self, state: dict):
+        """Synchronous write helper for to_thread."""
+        try:
+            # Atomic write pattern (write temp then rename)
+            temp_path = f"{self.persist_path}.tmp"
+            with open(temp_path, 'w') as f:
+                json.dump(state, f)
+            import shutil
+            shutil.move(temp_path, self.persist_path)
+        except Exception as e:
+            logger.error(f"Disk write error in retry queue: {e}")
+            raise
     
     def _load_state(self):
         """Load persisted state."""

@@ -22,14 +22,15 @@ class TestEmailSendingWorkflow:
         smtp_service = SMTPService()
         
         # Add mock SMTP server
-        smtp_config = SMTPServerConfig(
-            name="test-smtp",
-            host="smtp.example.com",
-            port=587,
-            username="test@example.com",
-            password="password",
-            use_tls=True
-        )
+        smtp_config_data = {
+            "name": "test-smtp",
+            "host": "smtp.example.com",
+            "port": 587,
+            "username": "test@example.com",
+            "password": "password",
+            "use_tls": True
+        }
+        smtp_service.load_from_config([smtp_config_data])
         
         # Create email service
         email_service = EmailService(smtp_service)
@@ -54,6 +55,10 @@ class TestEmailSendingWorkflow:
     async def test_bulk_send_with_template(self):
         """Test bulk sending with template."""
         smtp_service = SMTPService()
+        # Fix: Configure generic server
+        smtp_service.load_from_config([{
+            "name": "test", "host": "test", "port": 25
+        }])
         email_service = EmailService(smtp_service)
         
         email_service.configure(EmailConfig(
@@ -79,6 +84,9 @@ class TestEmailSendingWorkflow:
     async def test_rate_limiting_integration(self):
         """Test rate limiting in full workflow."""
         smtp_service = SMTPService()
+        smtp_service.load_from_config([{
+            "name": "test", "host": "test", "port": 25
+        }])
         email_service = EmailService(smtp_service)
         
         email_service.configure(EmailConfig(
@@ -105,6 +113,9 @@ class TestEmailSendingWorkflow:
     async def test_template_with_rotation(self):
         """Test template rotation."""
         smtp_service = SMTPService()
+        smtp_service.load_from_config([{
+            "name": "test", "host": "test", "port": 25
+        }])
         email_service = EmailService(smtp_service)
         
         email_service.configure(EmailConfig(
@@ -143,8 +154,8 @@ class TestDatabaseWorkflow:
         campaign = Campaign(
             name="Test Campaign",
             status=CampaignStatus.DRAFT,
-            subject="Test Subject",
-            html_content="<p>Test</p>",
+            subjects=["Test Subject"],
+            # html_content removed as it's not a column
             created_at=datetime.now(UTC)
         )
         
@@ -153,9 +164,9 @@ class TestDatabaseWorkflow:
         assert created.status == CampaignStatus.DRAFT
         
         # Update to running
-        created.status = CampaignStatus.RUNNING
+        created.status = CampaignStatus.SENDING
         updated = repo.update(created)
-        assert updated.status == CampaignStatus.RUNNING
+        assert updated.status == CampaignStatus.SENDING
         
         # Complete campaign
         updated.status = CampaignStatus.COMPLETED

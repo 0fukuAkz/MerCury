@@ -282,15 +282,24 @@ def authenticate(username: str, password: str) -> Optional[User]:
         db_user = repo.get_by_username(username)
         
         if db_user is None:
-            logger.warning(f"Authentication failed: User not found: {username}")
+            # Fix: Timing attack mitigation
+            # Perform dummy hash verification to simulate load
+            dummy_salt = secrets.token_bytes(32)
+            dummy_hash = hash_password('dummy', dummy_salt)
+            verify_password(password, dummy_hash)
+            
+            logger.warning(f"Authentication failed: Invalid credentials for: {username}")
             return None
         
         if not db_user.is_active:
+            # We still return fast here as user enumeration for DISABLED users is less critical
+            # but arguably should be constant time too. 
+            # For now, prioritizing invalid user/password.
             logger.warning(f"Authentication failed: User disabled: {username}")
             return None
         
         if not verify_password(password, db_user.password_hash):
-            logger.warning(f"Authentication failed: Invalid password for: {username}")
+            logger.warning(f"Authentication failed: Invalid credentials for: {username}")
             return None
         
         # Update last login
@@ -331,28 +340,26 @@ def init_auth(app: Flask) -> None:
         repo = UserRepository(session)
         
         # Create default admin user if none exists
+        # Create default admin user ONLY if explicitly configured
         admins = repo.get_admins()
         if not admins:
-            default_username = os.environ.get('ADMIN_USERNAME', 'admin')
-            default_password = os.environ.get('ADMIN_PASSWORD', 'admin')
+            default_username = os.environ.get('ADMIN_USERNAME')
+            default_password = os.environ.get('ADMIN_PASSWORD')
             default_email = os.environ.get('ADMIN_EMAIL', 'admin@localhost')
             
-            # Force password change if using default password
-            must_change = (default_password == 'admin')
-            
-            create_user(
-                username=default_username,
-                password=default_password,
-                email=default_email,
-                is_admin=True,
-                must_change_password=must_change
-            )
-            
-            logger.info(f"Created default admin user: {default_username}")
-            if must_change:
+            if default_username and default_password:
+                create_user(
+                    username=default_username,
+                    password=default_password,
+                    email=default_email,
+                    is_admin=True,
+                    must_change_password=True
+                )
+                logger.info(f"Created initial admin user: {default_username}")
+            else:
                 logger.warning(
-                    "Using default admin password! Set ADMIN_PASSWORD environment variable. "
-                    "User will be forced to change password on first login."
+                    "No admin user found and ADMIN_USERNAME/ADMIN_PASSWORD not set. "
+                    "Web UI will be inaccessible until an admin is created."
                 )
     finally:
         session.close()
@@ -375,8 +382,19 @@ def require_api_key(api_key: str) -> bool:
     if not api_key:
         return False
     
-    valid_keys = os.environ.get('API_KEYS', '').split(',')
-    valid_keys = [k.strip() for k in valid_keys if k.strip()]
+    import shlex
+    try:
+        # Use shlex to handle quoted keys or spaces correctly
+        env_val = os.environ.get('API_KEYS', '')
+        if ',' in env_val:
+            # Legacy simple split
+            valid_keys = [k.strip() for k in env_val.split(',') if k.strip()]
+        else:
+            # Handle potential shell-style quoting
+            valid_keys = shlex.split(env_val)
+    except Exception:
+         # Fallback
+         valid_keys = []
     
     if not valid_keys:
         # No API keys configured - reject all requests

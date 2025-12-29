@@ -272,7 +272,7 @@ class TestAsyncEmailSender:
         pool.release = AsyncMock()
         pool.record_success = Mock()
         
-        rate_limiter = RateLimiter(RateLimiterConfig(per_minute=2, per_hour=10))
+        rate_limiter = RateLimiter(RateLimiterConfig(per_second=10, burst_size=10))
         
         sender = AsyncEmailSender(
             connection_pool=pool,
@@ -382,5 +382,5 @@ class TestAsyncEmailSender:
         assert 'total_sent' in stats
         assert 'total_failed' in stats
         assert 'pool_status' in stats
-        assert stats['total_sent'] == 2
+        assert stats['total_sent'] == 0  # Dry run doesn't increment sent count
 

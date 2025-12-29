@@ -147,7 +147,7 @@ def normalize_email(email: str) -> Optional[str]:
     Returns:
         Normalized email or None if invalid
     """
-    result = validate_email(email)
+    result = validate_email(email.lower())
     return result.normalized_email if result.is_valid else None
 
 

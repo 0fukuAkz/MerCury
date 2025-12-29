@@ -131,25 +131,26 @@ class RateLimiter:
             config: Rate limiter configuration
         """
         self.config = config or RateLimiterConfig()
+        self.stats = {'total_acquired': 0, 'total_waited': 0}
         self.buckets = {}
         
         # Create buckets for each rate limit
         if self.config.per_second > 0:
             self.buckets['second'] = TokenBucket(
                 rate=self.config.per_second,
-                capacity=min(int(self.config.per_second * 2), self.config.burst_size)
+                capacity=max(1, min(int(self.config.per_second * 2), self.config.burst_size))
             )
         
         if self.config.per_minute > 0:
             self.buckets['minute'] = TokenBucket(
                 rate=self.config.per_minute / 60,
-                capacity=min(int(self.config.per_minute / 6), self.config.burst_size)
+                capacity=max(1, min(int(self.config.per_minute / 6), self.config.burst_size))
             )
         
         if self.config.per_hour > 0:
             self.buckets['hour'] = TokenBucket(
                 rate=self.config.per_hour / 3600,
-                capacity=min(int(self.config.per_hour / 60), self.config.burst_size)
+                capacity=max(1, min(int(self.config.per_hour / 60), self.config.burst_size))
             )
     
     async def acquire(self, timeout: Optional[float] = None) -> bool:
@@ -177,7 +178,12 @@ class RateLimiter:
                 logger.debug(f"Rate limit hit on {name} bucket")
                 return False
         
+        self.stats['total_acquired'] += 1
         return True
+    
+    def get_stats(self) -> dict:
+        """Get rate limiter statistics."""
+        return self.stats
     
     def try_acquire(self) -> bool:
         """Try to acquire without blocking."""

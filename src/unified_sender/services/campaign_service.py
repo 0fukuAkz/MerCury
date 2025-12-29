@@ -189,25 +189,25 @@ class CampaignService:
         email_column: str = 'email',
         validate: bool = True,
         deduplicate: bool = True
-    ) -> List[Dict[str, Any]]:
+    ) -> Iterator[Dict[str, Any]]:
         """
-        Load recipients from CSV file.
+        Load recipients from CSV file as a generator (streaming).
         
         Args:
             csv_path: Path to CSV file
             email_column: Column name containing email addresses
             validate: Validate email format
-            deduplicate: Remove duplicates
+            deduplicate: Remove duplicates (requires keeping a set in memory)
             
         Returns:
-            List of recipient dicts
+            Iterator of recipient dicts
         """
         if not os.path.exists(csv_path):
             raise FileNotFoundError(f"CSV file not found: {csv_path}")
         
-        recipients = []
+        # Note: Deduplication still requires memory proportional to unique email count.
+        # If memory is critical, we might need Bloom filters or disk-based dedup.
         seen_emails = set()
-        invalid_count = 0
         
         with open(csv_path, 'r', encoding='utf-8-sig') as f:
             reader = csv.DictReader(f)
@@ -218,18 +218,16 @@ class CampaignService:
                 if not email:
                     continue
                 
-                # Validate email format using email-validator
-                if validate:
-                    if not is_valid_email(email):
-                        logger.debug(f"Invalid email format: {email}")
-                        invalid_count += 1
-                        continue
-                
                 # Deduplicate
                 if deduplicate:
                     if email in seen_emails:
                         continue
                     seen_emails.add(email)
+                
+                # Validate email format using simple check or email-validator
+                if validate:
+                    if not is_valid_email(email):
+                        continue
                 
                 # Build recipient dict
                 recipient = {'email': email}
@@ -237,22 +235,20 @@ class CampaignService:
                     if key != email_column:
                         recipient[key] = value
                 
-                recipients.append(recipient)
+                yield recipient
         
-        logger.info(f"Loaded {len(recipients)} recipients from {csv_path} ({invalid_count} invalid)")
-        return recipients
+        logger.info(f"Finished streaming recipients from {csv_path}")
     
     def load_recipients_from_text(
         self,
         txt_path: str,
         validate: bool = True,
         deduplicate: bool = True
-    ) -> List[Dict[str, Any]]:
-        """Load recipients from text file (one email per line)."""
+    ) -> Iterator[Dict[str, Any]]:
+        """Load recipients from text file (one email per line) as generator."""
         if not os.path.exists(txt_path):
             raise FileNotFoundError(f"Text file not found: {txt_path}")
         
-        recipients = []
         seen_emails = set()
         
         with open(txt_path, 'r', encoding='utf-8') as f:
@@ -270,19 +266,26 @@ class CampaignService:
                         continue
                     seen_emails.add(email)
                 
-                recipients.append({'email': email})
+                yield {'email': email}
         
-        logger.info(f"Loaded {len(recipients)} recipients from {txt_path}")
-        return recipients
+        logger.info(f"Finished streaming recipients from {txt_path}")
     
     def iterate_recipients(
         self, 
-        recipients: List[Dict[str, Any]], 
+        recipients: Iterator[Dict[str, Any]], 
         chunk_size: int = 1000
     ) -> Iterator[List[Dict[str, Any]]]:
         """Iterate through recipients in chunks."""
-        for i in range(0, len(recipients), chunk_size):
-            yield recipients[i:i + chunk_size]
+        # Handle both list and iterator
+        chunk = []
+        for recipient in recipients:
+            chunk.append(recipient)
+            if len(chunk) >= chunk_size:
+                yield chunk
+                chunk = []
+        
+        if chunk:
+            yield chunk
     
     async def run_campaign(
         self,
@@ -310,8 +313,13 @@ class CampaignService:
         
         os.makedirs(log_path, exist_ok=True)
         
+        # If recipients is a list, we know the total.
+        # If it's an iterator, we might not know unless we counted first.
+        # Assuming for now caller handles counting if they need progress bar accuracy.
+        total_count = len(recipients) if hasattr(recipients, '__len__') else 0
+        
         total_stats = {
-            'total': len(recipients),
+            'total': total_count,
             'sent': 0,
             'failed': 0,
             'chunks_processed': 0,

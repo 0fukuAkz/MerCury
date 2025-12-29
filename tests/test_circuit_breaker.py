@@ -57,7 +57,7 @@ class TestCircuitBreaker:
         """Test transition to half-open after timeout."""
         config = CircuitBreakerConfig(
             failure_threshold=2,
-            timeout_seconds=1  # Short timeout for testing
+            timeout_seconds=0.1  # Short timeout for testing
         )
         cb = CircuitBreaker("test-server", config)
         
@@ -69,7 +69,7 @@ class TestCircuitBreaker:
         
         # Wait for timeout
         import time
-        time.sleep(1.1)
+        time.sleep(0.15)
         
         # Should transition to half-open
         is_available = cb.is_available()
@@ -140,7 +140,7 @@ class TestCircuitBreaker:
         """Test failures outside monitoring window don't count."""
         config = CircuitBreakerConfig(
             failure_threshold=3,
-            monitor_window_seconds=2  # 2 second window
+            monitor_window_seconds=0.1  # 0.1 second window
         )
         cb = CircuitBreaker("test-server", config)
         
@@ -150,7 +150,7 @@ class TestCircuitBreaker:
         
         # Wait for window to expire
         import time
-        time.sleep(2.5)
+        time.sleep(0.15)
         
         # Add one more - should NOT open (old failures expired)
         cb.record_failure(Exception("Error"))

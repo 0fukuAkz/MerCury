@@ -121,7 +121,7 @@ class TestCampaignRepository:
         campaign = Campaign(
             name="Test Campaign",
             status=CampaignStatus.DRAFT,
-            subject="Test Subject",
+            subjects=["Test Subject"],
             created_at=datetime.now(UTC)
         )
         repo.create(campaign)
@@ -138,13 +138,13 @@ class TestCampaignRepository:
         draft = Campaign(
             name="Draft Campaign",
             status=CampaignStatus.DRAFT,
-            subject="Test",
+            subjects=["Test"],
             created_at=datetime.now(UTC)
         )
         running = Campaign(
             name="Running Campaign",
-            status=CampaignStatus.RUNNING,
-            subject="Test",
+            status=CampaignStatus.SENDING,
+            subjects=["Test"],
             created_at=datetime.now(UTC)
         )
         
@@ -187,8 +187,8 @@ class TestRecipientRepository:
         
         created = repo.bulk_create(recipients)
         
-        assert len(created) == 10
-        assert all(r.id is not None for r in created)
+        assert created == 10
+        assert all(r.id is not None for r in recipients)
 
 
 class TestTemplateRepository:

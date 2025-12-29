@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from typing import Optional, Dict, Any, List, Callable, Awaitable
+from typing import Optional, Dict, Any, List, Callable, Awaitable, Tuple
 from datetime import datetime, UTC
 import uuid
 
@@ -104,7 +104,7 @@ class EnhancedAsyncEmailSender(AsyncEmailSender):
                         from_name=from_name,
                         correlation_id=correlation_id,
                         preferred_smtp=current_smtp,
-                        **kwargs
+                        **{k: v for k, v in kwargs.items() if k != 'preferred_smtp'}
                     )
                     
                     if result.success:

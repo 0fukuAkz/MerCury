@@ -244,6 +244,28 @@ class AsyncConnectionPool:
             
             self._initialized = True
     
+    async def _replenish_one(self):
+        """
+        Proactively create a new connection if under pool limits.
+        
+        This prevents waiters from blocking on timeout when a stale 
+        connection is discarded.
+        """
+        async with self.lock:
+            if len(self.connections) >= self.pool_size:
+                return
+
+            try:
+                conn = AsyncSMTPConnection(self.config)
+                await conn.connect()
+                self.connections.append(conn)
+                await self.available.put(conn)
+                logger.debug(f"Replenished connection pool for {self.config.name}")
+            except Exception as e:
+                logger.warning(f"Failed to replenish connection: {e}")
+                # Don't raise, we'll try again later naturally
+
+    
     async def get_connection(self, timeout: float = 10.0) -> AsyncSMTPConnection:
         """Get a connection from the pool."""
         await self.initialize()
@@ -261,9 +283,18 @@ class AsyncConnectionPool:
                 await conn.close()
                 if conn in self.connections:
                     self.connections.remove(conn)
-                conn = AsyncSMTPConnection(self.config)
-                await conn.connect()
-                self.connections.append(conn)
+                
+                # FIX: Immediately try to get a replacement instead of looping/waiting
+                # If we can create a new one, do it now
+                async with self.lock:
+                    if len(self.connections) < self.pool_size:
+                        conn = AsyncSMTPConnection(self.config)
+                        await conn.connect()
+                        self.connections.append(conn)
+                    else:
+                        # Pool is full but we just discarded one? 
+                        # Race condition handled by loop
+                        return await self.get_connection(timeout)
             
             return conn
             
@@ -290,8 +321,12 @@ class AsyncConnectionPool:
             return
         
         await conn.close()
-        if conn in self.connections:
-            self.connections.remove(conn)
+        async with self.lock:
+            if conn in self.connections:
+                self.connections.remove(conn)
+        
+        # FIX: Proactively replenish to wake up waiters
+        asyncio.create_task(self._replenish_one())
     
     # Backward-compatible alias expected by tests
     async def return_connection(self, conn: AsyncSMTPConnection):

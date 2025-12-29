@@ -220,7 +220,7 @@ class UnifiedConfig:
         # Parse subjects
         subjects = email.get('subjects', [])
         if subjects and isinstance(subjects[0], dict):
-            subjects = [s.get('template', s) for s in subjects]
+            subjects = [s.get('template', s) if isinstance(s, dict) else s for s in subjects]
         
         return cls(
             campaign_name=campaign.get('name', 'Unnamed Campaign'),

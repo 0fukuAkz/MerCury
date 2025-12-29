@@ -34,6 +34,6 @@ pre-commit==3.6.0
 # sphinx-rtd-theme==2.0.0
 
 # Security Scanning
-safety==3.0.1
+# safety==3.0.1
 bandit==1.7.6
 

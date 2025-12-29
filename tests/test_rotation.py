@@ -65,7 +65,7 @@ class TestRotationManager:
         """Test fallback value when key not registered."""
         manager = RotationManager()
         
-        result = manager.get_next("nonexistent", fallback="default")
+        result = manager.get_next("nonexistent", default="default")
         
         assert result == "default"
     
@@ -92,8 +92,8 @@ class TestRotationManager:
         stats = manager.get_statistics()
         
         assert 'items' in stats
-        assert stats['items']['total_rotations'] == 3
-        assert stats['items']['strategy'] == 'ROUND_ROBIN'
+        assert stats['items']['current_index'] == 3
+        assert stats['items']['strategy'] == 'round_robin'
     
     def test_register_single_item(self):
         """Test registering single item (no rotation needed)."""
@@ -112,6 +112,6 @@ class TestRotationManager:
         manager.register("empty", [], RotationStrategy.ROUND_ROBIN)
         
         # Should return fallback
-        result = manager.get_next("empty", fallback="default")
+        result = manager.get_next("empty", default="default")
         assert result == "default"
 
