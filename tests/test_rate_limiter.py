@@ -76,7 +76,7 @@ class TestRateLimiter:
     
     async def test_get_stats(self):
         """Test statistics reporting."""
-        config = RateLimiterConfig(per_minute=10, per_hour=100)
+        config = RateLimiterConfig(per_second=10, per_hour=100)
         limiter = RateLimiter(config)
         
         await limiter.acquire()
@@ -104,7 +104,7 @@ class TestRateLimiter:
     
     async def test_reset_behavior(self):
         """Test limit resets over time."""
-        config = RateLimiterConfig(per_minute=2, per_hour=0)
+        config = RateLimiterConfig(per_second=10, per_hour=0)
         limiter = RateLimiter(config)
         
         # Acquire twice
@@ -116,8 +116,8 @@ class TestRateLimiter:
         stats_before = limiter.get_stats()
         
         # Manually clear for testing
-        if 'minute' in limiter.buckets:
-            limiter.buckets['minute'].tokens = 0
+        if 'second' in limiter.buckets:
+            limiter.buckets['second'].tokens = 0
         
         # Should be able to acquire again
         await limiter.acquire()

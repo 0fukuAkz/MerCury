@@ -8,6 +8,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from unified_sender.data.database import Base
+from unified_sender.data.models import User, Template, SMTPServer, Recipient, Campaign
 from unified_sender.engine.connection_pool import SMTPServerConfig, AsyncConnectionPool
 from unified_sender.engine.rate_limiter import RateLimiter, RateLimiterConfig
 from unified_sender.engine.retry_queue import RetryQueue, RetryConfig
@@ -18,7 +19,14 @@ from unified_sender.engine.retry_queue import RetryQueue, RetryConfig
 @pytest.fixture(scope="function")
 def db_engine():
     """Create in-memory SQLite database engine."""
-    engine = create_engine("sqlite:///:memory:", echo=False)
+    from sqlalchemy.pool import StaticPool
+    engine = create_engine(
+        "sqlite:///:memory:", 
+        connect_args={"check_same_thread": False}, 
+        poolclass=StaticPool,
+        echo=False
+    )
+    print(f"DEBUG: Registered tables: {Base.metadata.tables.keys()}")
     Base.metadata.create_all(engine)
     yield engine
     Base.metadata.drop_all(engine)

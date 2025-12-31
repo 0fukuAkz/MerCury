@@ -214,8 +214,21 @@ class CampaignService:
         with open(csv_path, 'r', encoding='utf-8-sig') as f:
             reader = csv.DictReader(f)
             
+            # Smart column detection
+            fieldnames = reader.fieldnames or []
+            target_column = email_column
+            
+            if email_column not in fieldnames:
+                # Try case-insensitive match
+                lower_fieldnames = {f.lower(): f for f in fieldnames}
+                if email_column.lower() in lower_fieldnames:
+                    target_column = lower_fieldnames[email_column.lower()]
+                    logger.info(f"Using column '{target_column}' for '{email_column}' (case-insensitive match)")
+                else:
+                    logger.warning(f"Email column '{email_column}' not found in CSV. Available: {fieldnames}")
+            
             for row in reader:
-                email = row.get(email_column, '').strip().lower()
+                email = row.get(target_column, '').strip().lower()
                 
                 if not email:
                     continue

@@ -51,7 +51,7 @@ class TestRotationManager:
         )
         
         # Get many samples
-        results = [manager.get_next("letters") for _ in range(100)]
+        results = [manager.get_next("letters") for _ in range(1000)]
         
         # A should appear most frequently
         count_a = results.count("A")
