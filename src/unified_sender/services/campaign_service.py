@@ -15,7 +15,8 @@ from ..data.repositories import (
     SMTPRepository, 
     TemplateRepository,
     RecipientRepository,
-    RecipientListRepository
+    RecipientListRepository,
+    LogRepository
 )
 from ..data.models import (
     Campaign, CampaignStatus, CampaignType,
@@ -285,6 +286,31 @@ class CampaignService:
         
         logger.info(f"Finished streaming recipients from {txt_path}")
     
+    async def load_recipients_async(
+        self,
+        path: str,
+        validate: bool = True,
+        deduplicate: bool = True
+    ) -> List[Dict[str, Any]]:
+        """
+        Load recipients asynchronously (runs in thread executor).
+        
+        Args:
+            path: Path to CSV or Text file
+            validate: Validate email format
+            deduplicate: Remove duplicates
+            
+        Returns:
+            List of recipient dicts
+        """
+        def _load():
+            if path.lower().endswith('.csv'):
+                return list(self.load_recipients_from_csv(path, validate=validate, deduplicate=deduplicate))
+            else:
+                return list(self.load_recipients_from_text(path, validate=validate, deduplicate=deduplicate))
+        
+        return await asyncio.to_thread(_load)
+
     def iterate_recipients(
         self, 
         recipients: Iterator[Dict[str, Any]], 
@@ -348,9 +374,14 @@ class CampaignService:
         async with AsyncFileLogger(success_log_path) as success_logger, \
                    AsyncFileLogger(failed_log_path) as failed_logger:
             
+            session = get_session_direct()
+            log_repo = LogRepository(session)
+            
             try:
                 chunk_size = self.config.chunk_size if self.config else 1000
                 pause = self.config.pause_between_chunks if self.config else 0
+                
+                campaign_id = self._current_campaign.id if self._current_campaign else None
                 
                 for chunk_num, chunk in enumerate(self.iterate_recipients(recipients, chunk_size)):
                     # Check for shutdown
@@ -370,18 +401,50 @@ class CampaignService:
                         progress_callback=progress_callback
                     )
                     
-                    # Log results asynchronously
+                    # Log results asynchronously and to DB
+                    db_logs = []
+                    
                     for email_result in result.results:
                         if email_result.success:
                             await success_logger.log_success(email_result.recipient)
                             total_stats['sent'] += 1
+                            
+                            db_logs.append(EmailLog(
+                                campaign_id=campaign_id,
+                                recipient_email=email_result.recipient,
+                                status=EmailStatus.SENT,
+                                sent_at=datetime.now(UTC),
+                                subject=self.config.subject if self.config else "",
+                                from_email=self.config.from_email if self.config else "",
+                                smtp_server_name=email_result.server_name
+                            ))
                         else:
                             await failed_logger.log_failure(
                                 email_result.recipient,
                                 email_result.error or 'Unknown error'
                             )
                             total_stats['failed'] += 1
+
+                            db_logs.append(EmailLog(
+                                campaign_id=campaign_id,
+                                recipient_email=email_result.recipient,
+                                status=EmailStatus.FAILED,
+                                failed_at=datetime.now(UTC),
+                                subject=self.config.subject if self.config else "",
+                                from_email=self.config.from_email if self.config else "",
+                                error_message=email_result.error,
+                                error_type=email_result.error_category
+                            ))
                     
+                    # Batch insert to DB
+                    if db_logs:
+                        # Todo: Use bulk_save_objects or add a valid batch method to BaseRepository
+                        # Using loop for now as BaseRepository.create commits one by one if not careful,
+                        # but specialized add_all is better. 
+                        # Ideally: log_repo.bulk_create(db_logs)
+                        session.add_all(db_logs)
+                        session.commit()
+
                     total_stats['chunks_processed'] += 1
                     
                     # Pause between chunks
@@ -406,6 +469,7 @@ class CampaignService:
                 return total_stats
                 
             finally:
+                session.close()
                 self._running = False
     
     def pause(self):

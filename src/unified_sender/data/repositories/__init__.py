@@ -6,6 +6,7 @@ from .smtp import SMTPRepository
 from .template import TemplateRepository
 from .recipient import RecipientRepository, RecipientListRepository
 from .user import UserRepository
+from .logs import LogRepository
 
 __all__ = [
     "BaseRepository",
@@ -15,5 +16,6 @@ __all__ = [
     "RecipientRepository",
     "RecipientListRepository",
     "UserRepository",
+    "LogRepository",
 ]
 

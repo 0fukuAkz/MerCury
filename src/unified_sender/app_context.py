@@ -47,29 +47,20 @@ class AppContext:
             logger.warning("AppContext already initialized")
             return
         
+        # Import extensions here to avoid circular imports
+        from .web.extensions import limiter, socketio
+        
         # Initialize rate limiter
-        self.limiter = Limiter(
-            key_func=self._get_rate_limit_key,
-            app=app,
-            default_limits=["200 per day", "50 per hour"],
-            storage_uri=os.environ.get('RATE_LIMIT_STORAGE', 'memory://')
-        )
+        limiter.init_app(app)
+        self.limiter = limiter
         
         # Initialize SocketIO
-        self.socketio = SocketIO(
-            app, 
-            async_mode='threading',
-            cors_allowed_origins=os.environ.get('CORS_ORIGINS', '*')
-        )
+        socketio.init_app(app)
+        self.socketio = socketio
         
         self.is_initialized = True
         logger.info("AppContext initialized successfully")
     
-    def _get_rate_limit_key(self) -> str:
-        """Get rate limit key based on user or IP."""
-        if current_user.is_authenticated:
-            return f"user:{current_user.id}"
-        return get_remote_address()
     
     def emit_progress(self, data: Dict[str, Any]) -> None:
         """Emit progress update to connected clients."""
