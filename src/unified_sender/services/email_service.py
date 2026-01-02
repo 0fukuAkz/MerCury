@@ -58,6 +58,7 @@ class EmailConfig:
     subjects: Optional[List[str]] = None
     from_names: Optional[List[str]] = None
     templates: Optional[List[str]] = None
+    rotation_strategy: str = "round_robin"
 
 
 class EmailService:
@@ -105,15 +106,16 @@ class EmailService:
         
         # Setup rotation
         self._rotation_manager = RotationManager()
+        strategy = RotationStrategy(config.rotation_strategy) if config.rotation_strategy else RotationStrategy.ROUND_ROBIN
         
         if config.subjects and len(config.subjects) > 1:
-            self._rotation_manager.register('subjects', config.subjects, RotationStrategy.ROUND_ROBIN)
+            self._rotation_manager.register('subjects', config.subjects, strategy)
         
         if config.from_names and len(config.from_names) > 1:
-            self._rotation_manager.register('from_names', config.from_names, RotationStrategy.ROUND_ROBIN)
+            self._rotation_manager.register('from_names', config.from_names, strategy)
         
         if config.templates and len(config.templates) > 1:
-            self._rotation_manager.register('templates', config.templates, RotationStrategy.ROUND_ROBIN)
+            self._rotation_manager.register('templates', config.templates, strategy)
         
         # Setup attachment generator
         self._attachment_generator = AttachmentGenerator(GeneratorConfig())
@@ -275,25 +277,70 @@ class EmailService:
         Returns:
             BulkSendResult with statistics
         """
-        if subject is None:
-            subject = self.config.subject
+        start_time = datetime.now(UTC)
+        total = len(recipients)
         
-        if html_template is None and self._template_engine:
-            html_template = self._template_engine._template_content
+        # Use semaphore for concurrency
+        semaphore = asyncio.Semaphore(self.config.concurrency)
         
-        if not html_template:
-            html_template = "<p>Email to {{email}}</p>"
+        async def send_wrapper(index: int, recipient_data: Dict[str, Any]) -> EmailResult:
+            async with semaphore:
+                # Use send_single to ensure full feature support (rotation, tracking, etc.)
+                result = await self.send_single(
+                    recipient=recipient_data['email'],
+                    subject=subject, # Passes None implies use config/rotation
+                    html_body=None,  # Force template rendering
+                    placeholders=recipient_data
+                )
+                
+                if progress_callback:
+                    await progress_callback({
+                        'index': index,
+                        'total': total,
+                        'recipient': recipient_data['email'],
+                        'success': result.success,
+                        'percent': round((index + 1) / total * 100, 1)
+                    })
+                
+                return result
+
+        # Create tasks
+        tasks = [send_wrapper(i, r) for i, r in enumerate(recipients)]
         
-        sender = self.get_sender()
+        # Execute
+        results = await asyncio.gather(*tasks, return_exceptions=True)
         
-        return await sender.send_bulk(
-            recipients=recipients,
-            subject_template=subject,
-            html_template=html_template,
-            from_email=self.config.from_email,
-            from_name=self.config.from_name,
-            concurrency=self.config.concurrency,
-            progress_callback=progress_callback
+        # Process results
+        processed_results = []
+        success_count = 0
+        
+        for r in results:
+            if isinstance(r, Exception):
+                processed_results.append(EmailResult(
+                    success=False,
+                    recipient="unknown", 
+                    correlation_id="",
+                    timestamp=datetime.now(UTC),
+                    error=str(r),
+                    error_type="exception"
+                ))
+            else:
+                processed_results.append(r)
+                if r.success:
+                    success_count += 1
+        
+        end_time = datetime.now(UTC)
+        duration = (end_time - start_time).total_seconds()
+        
+        return BulkSendResult(
+            total=total,
+            success=success_count,
+            failed=total - success_count,
+            duration_seconds=duration,
+            emails_per_second=total / duration if duration > 0 else 0,
+            start_time=start_time,
+            end_time=end_time,
+            results=processed_results
         )
     
     def get_statistics(self) -> Dict[str, Any]:

@@ -53,15 +53,49 @@ def api_create_campaign():
     if not data.get('name'):
         return jsonify({'error': 'Campaign name required'}), 400
     
+    # Handle rotation arrays (from newline-separated frontend or direct arrays)
+    subjects = data.get('subjects') if isinstance(data.get('subjects'), list) else None
+    from_names = data.get('from_names') if isinstance(data.get('from_names'), list) else None
+    templates = data.get('templates') if isinstance(data.get('templates'), list) else None
+
     config = CampaignConfig(
         name=data.get('name'),
         description=data.get('description', ''),
+        
+        # Email content
         subject=data.get('subject', ''),
+        subjects=subjects,
         from_email=data.get('from_email', ''),
         from_name=data.get('from_name', ''),
+        from_names=from_names,
+        reply_to=data.get('reply_to', ''),
+        
+        # Templates
         template_path=data.get('template_path', ''),
+        templates=templates,
+        
+        # Recipients
         recipients_path=data.get('recipients_path', ''),
-        dry_run=data.get('dry_run', True)
+        validate_emails=data.get('validate_emails', True),
+        deduplicate=data.get('deduplicate', True),
+        
+        # Sending options
+        dry_run=data.get('dry_run', True),
+        concurrency=int(data.get('concurrency', 50)),
+        rate_per_minute=int(data.get('rate_per_minute', 0)),
+        rate_per_hour=int(data.get('rate_per_hour', 0)),
+        chunk_size=int(data.get('chunk_size', 1000)),
+        pause_between_chunks=int(data.get('pause_between_chunks', 0)),
+        smtp_rotation=data.get('rotation_strategy', 'weighted'),
+        
+        # Features
+        enable_qr_code=data.get('enable_qr_code', False),
+        send_as_image=data.get('send_as_image', False),
+        attachment_type=data.get('attachment_type') or None,
+        attachment_path=data.get('attachment_path') or None,
+        
+        # Placeholders
+        placeholders_path=data.get('placeholders_path', '')
     )
     
     service = CampaignService()
@@ -258,3 +292,291 @@ def api_register_webhook():
         'success': True,
         'webhook': webhook.to_dict()
     })
+
+
+@api_bp.route('/webhooks/<webhook_id>', methods=['DELETE'])
+@api_key_or_login_required
+@limiter.limit("10/minute")
+def api_delete_webhook(webhook_id):
+    """Delete a registered webhook."""
+    service = WebhookService()
+    service.unregister_webhook(webhook_id)
+    return jsonify({'success': True})
+
+
+# ============ SCHEDULING API ============
+
+@api_bp.route('/scheduling/jobs', methods=['GET'])
+@api_key_or_login_required
+@limiter.limit("30/minute")
+def api_list_scheduled_jobs():
+    """List all scheduled jobs."""
+    from ...services.scheduler_service import SchedulerService
+    
+    service = SchedulerService(use_async=False)
+    jobs = service.get_all_jobs()
+    
+    return jsonify({
+        'jobs': [j.to_dict() for j in jobs.values()]
+    })
+
+
+@api_bp.route('/scheduling/jobs', methods=['POST'])
+@api_key_or_login_required
+@limiter.limit("10/minute")
+def api_create_scheduled_job():
+    """Create a new scheduled job."""
+    from ...services.scheduler_service import SchedulerService, ScheduleType
+    from datetime import datetime
+    import uuid
+    
+    data = request.json
+    
+    if not data.get('name'):
+        return jsonify({'error': 'Job name is required'}), 400
+    if not data.get('campaign_id'):
+        return jsonify({'error': 'Campaign ID is required'}), 400
+    
+    service = SchedulerService(use_async=False)
+    job_id = data.get('job_id', str(uuid.uuid4()))
+    schedule_type = data.get('schedule_type', 'once')
+    
+    try:
+        if schedule_type == 'once':
+            run_at = datetime.fromisoformat(data['run_at'])
+            job = service.schedule_once(
+                job_id=job_id,
+                name=data['name'],
+                run_at=run_at,
+                callback=lambda: None,  # Placeholder - actual execution handled by campaign
+                campaign_id=data['campaign_id']
+            )
+        elif schedule_type == 'recurring':
+            if not data.get('cron_expression'):
+                return jsonify({'error': 'Cron expression required for recurring jobs'}), 400
+            job = service.schedule_recurring(
+                job_id=job_id,
+                name=data['name'],
+                cron_expression=data['cron_expression'],
+                callback=lambda: None,
+                campaign_id=data['campaign_id']
+            )
+        elif schedule_type == 'interval':
+            if not data.get('interval_seconds'):
+                return jsonify({'error': 'Interval seconds required'}), 400
+            job = service.schedule_interval(
+                job_id=job_id,
+                name=data['name'],
+                interval_seconds=int(data['interval_seconds']),
+                callback=lambda: None,
+                campaign_id=data['campaign_id']
+            )
+        else:
+            return jsonify({'error': f'Invalid schedule type: {schedule_type}'}), 400
+        
+        return jsonify({
+            'success': True,
+            'job': job.to_dict()
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/scheduling/jobs/<job_id>', methods=['DELETE'])
+@api_key_or_login_required
+@limiter.limit("10/minute")
+def api_cancel_scheduled_job(job_id):
+    """Cancel a scheduled job."""
+    from ...services.scheduler_service import SchedulerService
+    
+    service = SchedulerService(use_async=False)
+    success = service.cancel_job(job_id)
+    
+    return jsonify({'success': success})
+
+
+@api_bp.route('/scheduling/jobs/<job_id>/pause', methods=['POST'])
+@api_key_or_login_required
+@limiter.limit("10/minute")
+def api_pause_scheduled_job(job_id):
+    """Pause a scheduled job."""
+    from ...services.scheduler_service import SchedulerService
+    
+    service = SchedulerService(use_async=False)
+    service.pause_job(job_id)
+    
+    return jsonify({'success': True})
+
+
+@api_bp.route('/scheduling/jobs/<job_id>/resume', methods=['POST'])
+@api_key_or_login_required
+@limiter.limit("10/minute")
+def api_resume_scheduled_job(job_id):
+    """Resume a paused job."""
+    from ...services.scheduler_service import SchedulerService
+    
+    service = SchedulerService(use_async=False)
+    service.resume_job(job_id)
+    
+    return jsonify({'success': True})
+
+
+# ============ BOUNCE API ============
+
+@api_bp.route('/bounces', methods=['GET'])
+@api_key_or_login_required
+@limiter.limit("30/minute")
+def api_list_bounces():
+    """List recent bounces."""
+    from ...services.bounce_service import BounceService
+    
+    service = BounceService()
+    # Get bounce records (stored in service._bounces list)
+    bounces = list(service._bounces)[-100:]  # Last 100
+    
+    return jsonify({
+        'bounces': [b.to_dict() for b in bounces]
+    })
+
+
+@api_bp.route('/bounces/stats', methods=['GET'])
+@api_key_or_login_required
+@limiter.limit("30/minute")
+def api_bounce_stats():
+    """Get bounce statistics."""
+    from ...services.bounce_service import BounceService
+    
+    service = BounceService()
+    stats = service.get_bounce_stats()
+    
+    return jsonify(stats)
+
+
+@api_bp.route('/bounces/suppression', methods=['GET'])
+@api_key_or_login_required
+@limiter.limit("30/minute")
+def api_get_suppression_list():
+    """Get suppression list."""
+    from ...services.bounce_service import BounceService
+    
+    service = BounceService()
+    suppression_list = list(service.get_suppression_list())
+    
+    return jsonify({
+        'suppression_list': suppression_list,
+        'count': len(suppression_list)
+    })
+
+
+@api_bp.route('/bounces/suppression', methods=['POST'])
+@api_key_or_login_required
+@limiter.limit("10/minute")
+def api_add_to_suppression():
+    """Add email to suppression list."""
+    from ...services.bounce_service import BounceService
+    
+    data = request.json
+    email = data.get('email', '').lower().strip()
+    
+    if not email:
+        return jsonify({'error': 'Email is required'}), 400
+    
+    service = BounceService()
+    service.add_to_suppression_list(email)
+    
+    return jsonify({'success': True, 'email': email})
+
+
+@api_bp.route('/bounces/suppression/<email>', methods=['DELETE'])
+@api_key_or_login_required
+@limiter.limit("10/minute")
+def api_remove_from_suppression(email):
+    """Remove email from suppression list."""
+    from ...services.bounce_service import BounceService
+    
+    service = BounceService()
+    removed = service.remove_from_suppression_list(email.lower().strip())
+    
+    return jsonify({'success': removed, 'email': email})
+
+
+# ============ DEAD LETTER API ============
+
+@api_bp.route('/dead-letter', methods=['GET'])
+@api_key_or_login_required
+@limiter.limit("30/minute")
+def api_list_dead_letters():
+    """List dead letter queue items."""
+    from ...services.dead_letter_service import DeadLetterService
+    from ...data.repositories.dead_letter import DeadLetterRepository
+    
+    session = get_session_direct()
+    try:
+        repo = DeadLetterRepository(session)
+        service = DeadLetterService(repo)
+        items = service.get_unresolved(limit=100)
+        
+        return jsonify({
+            'items': [item.to_dict() for item in items],
+            'count': len(items)
+        })
+    finally:
+        session.close()
+
+
+@api_bp.route('/dead-letter/<int:item_id>/retry', methods=['POST'])
+@api_key_or_login_required
+@limiter.limit("10/minute")
+def api_retry_dead_letter(item_id):
+    """Retry a dead letter item."""
+    from ...services.dead_letter_service import DeadLetterService
+    from ...data.repositories.dead_letter import DeadLetterRepository
+    
+    session = get_session_direct()
+    try:
+        repo = DeadLetterRepository(session)
+        service = DeadLetterService(repo)
+        result = service.retry_dead_letter(item_id)
+        
+        return jsonify({'success': result is not None})
+    finally:
+        session.close()
+
+
+@api_bp.route('/dead-letter/<int:item_id>', methods=['DELETE'])
+@api_key_or_login_required
+@limiter.limit("10/minute")
+def api_discard_dead_letter(item_id):
+    """Discard a dead letter item (mark as resolved)."""
+    from ...services.dead_letter_service import DeadLetterService
+    from ...data.repositories.dead_letter import DeadLetterRepository
+    
+    session = get_session_direct()
+    try:
+        repo = DeadLetterRepository(session)
+        service = DeadLetterService(repo)
+        result = service.mark_resolved(item_id, "Discarded via UI")
+        
+        return jsonify({'success': result is not None})
+    finally:
+        session.close()
+
+
+@api_bp.route('/dead-letter/stats', methods=['GET'])
+@api_key_or_login_required
+@limiter.limit("30/minute")
+def api_dead_letter_stats():
+    """Get dead letter queue statistics."""
+    from ...services.dead_letter_service import DeadLetterService
+    from ...data.repositories.dead_letter import DeadLetterRepository
+    
+    session = get_session_direct()
+    try:
+        repo = DeadLetterRepository(session)
+        service = DeadLetterService(repo)
+        stats = service.get_statistics()
+        
+        return jsonify(stats)
+    finally:
+        session.close()
+

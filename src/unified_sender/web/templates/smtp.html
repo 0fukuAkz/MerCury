@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}SMTP Servers - Unified Email Sender{% endblock %}
+{% block title %}SMTP Servers - MerCury{% endblock %}
 
 {% block content %}
 <div class="page-header">
@@ -72,14 +72,14 @@
         try {
             const response = await fetch('/api/smtp');
             const data = await response.json();
-            
+
             const tbody = document.getElementById('servers-table');
-            
+
             if (data.servers.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="7" class="text-muted" style="text-align: center;">No SMTP servers configured</td></tr>';
                 return;
             }
-            
+
             tbody.innerHTML = data.servers.map(server => `
                 <tr>
                     <td><strong>${server.name}</strong></td>
@@ -108,24 +108,24 @@
             console.error('Failed to load servers:', error);
         }
     }
-    
+
     async function addServer(event) {
         event.preventDefault();
-        
+
         const form = event.target;
         const formData = new FormData(form);
         const data = Object.fromEntries(formData);
         data.port = parseInt(data.port);
-        
+
         try {
             const response = await fetch('/api/smtp', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
             });
-            
+
             const result = await response.json();
-            
+
             if (result.success) {
                 form.reset();
                 loadServers();
@@ -137,33 +137,32 @@
             alert('Error: ' + error.message);
         }
     }
-    
+
     async function testServer(name) {
         try {
             const btn = event.target;
             btn.textContent = 'Testing...';
             btn.disabled = true;
-            
+
             const response = await fetch(`/api/smtp/test/${name}`, { method: 'POST' });
             const result = await response.json();
-            
+
             btn.textContent = 'Test';
             btn.disabled = false;
-            
+
             alert(result.success ? '✅ Connection successful!' : `❌ Connection failed: ${result.error}`);
         } catch (error) {
             alert('Test failed: ' + error.message);
         }
     }
-    
+
     async function deleteServer(name) {
         if (!confirm(`Delete server "${name}"?`)) return;
-        
+
         // Note: Delete API endpoint would need to be implemented
         alert('Delete functionality not yet implemented');
     }
-    
+
     loadServers();
 </script>
 {% endblock %}
-

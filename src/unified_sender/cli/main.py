@@ -461,6 +461,69 @@ def _show_file(path):
 
 
 # =============================================================================
+# GENERATE - Generate content (QR, PDF, Image)
+# =============================================================================
+
+@cli.group('generate')
+def generate():
+    """
+    Generate content (QR, PDF, Image).
+    
+    \b
+    EXAMPLES:
+      sender generate qr "https://example.com"
+      sender generate pdf input.html output.pdf
+      sender generate image input.html output.png
+    """
+    pass
+
+@generate.command('qr')
+@click.argument('data')
+@click.argument('output', default='qrcode.png')
+@click.option('--size', default=10, help='Box size')
+def generate_qr(data, output, size):
+    """Generate QR code."""
+    from ..features.generators import QRCodeGenerator, GeneratorConfig
+    
+    config = GeneratorConfig(qr_box_size=size)
+    gen = QRCodeGenerator(config)
+    
+    click.echo(f"Generating QR code for: {data}")
+    gen.generate_to_file(data, output)
+    click.echo(click.style(f"Saved to {output}", fg='green'))
+
+@generate.command('pdf')
+@click.argument('input_file', type=click.Path(exists=True))
+@click.argument('output_file', default='output.pdf')
+def generate_pdf(input_file, output_file):
+    """Convert HTML to PDF."""
+    from ..features.generators import PDFGenerator, GeneratorConfig
+    
+    with open(input_file, 'r', encoding='utf-8') as f:
+        content = f.read()
+        
+    click.echo(f"Converting {input_file} to PDF...")
+    gen = PDFGenerator(GeneratorConfig())
+    gen.generate_from_html(content, output_file)
+    click.echo(click.style(f"Saved to {output_file}", fg='green'))
+
+@generate.command('image')
+@click.argument('input_file', type=click.Path(exists=True))
+@click.argument('output_file', default='output.png')
+def generate_image(input_file, output_file):
+    """Convert HTML to Image."""
+    from ..features.generators import ImageGenerator, GeneratorConfig
+    
+    with open(input_file, 'r', encoding='utf-8') as f:
+        content = f.read()
+        
+    click.echo(f"Converting {input_file} to Image...")
+    gen = ImageGenerator(GeneratorConfig())
+    gen.generate_from_html(content, output_file)
+    click.echo(click.style(f"Saved to {output_file}", fg='green'))
+
+
+# =============================================================================
 # START - Start server
 # =============================================================================
 

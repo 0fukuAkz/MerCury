@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}Tools - MerCury{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- QR Code Generator -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">QR Code Generator</h5>
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('tools.generate_qr') }}" method="POST" target="_blank">
+                    <div class="mb-3">
+                        <label for="qrData" class="form-label">Text or URL</label>
+                        <input type="text" class="form-control" id="qrData" name="data" required
+                            placeholder="https://example.com">
+                    </div>
+                    <button type="submit" class="btn btn-primary">Generate QR Code</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Document Renderer -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Document Converter</h5>
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('tools.render_content') }}" method="POST" target="_blank">
+                    <div class="mb-3">
+                        <label for="renderContent" class="form-label">HTML Content</label>
+                        <textarea class="form-control" id="renderContent" name="content" rows="6" required
+                            placeholder="<h1>Hello World</h1>"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Output Format</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="format" id="formatPdf" value="pdf"
+                                checked>
+                            <label class="form-check-label" for="formatPdf">PDF Document</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="format" id="formatImage" value="image">
+                            <label class="form-check-label" for="formatImage">Image (PNG)</label>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Convert & Download</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

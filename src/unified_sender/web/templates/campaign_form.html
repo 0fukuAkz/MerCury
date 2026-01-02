@@ -1,165 +1,501 @@
 {% extends "base.html" %}
 
-{% block title %}New Campaign - Unified Email Sender{% endblock %}
+{% block title %}New Campaign - MerCury{% endblock %}
 
 {% block content %}
 <div class="page-header">
     <h1 class="page-title">Create New Campaign</h1>
-    <p class="page-description">Configure and launch a new email campaign</p>
+    <p class="page-description">Configure and launch a new email campaign with full feature control</p>
 </div>
 
 <form id="campaign-form" onsubmit="createCampaign(event)">
-    <!-- Basic Info -->
-    <div class="card">
-        <div class="card-header">
-            <h2 class="card-title">Campaign Details</h2>
-        </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-            <div class="form-group">
-                <label class="form-label">Campaign Name *</label>
-                <input type="text" class="form-input" name="name" required placeholder="Q1 Newsletter">
+    <div class="row">
+        <div class="col-md-8">
+            <!-- Basic Info -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h2 class="card-title">Campaign Details</h2>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Campaign Name *</label>
+                            <input type="text" class="form-control" name="name" required placeholder="Q1 Newsletter">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Type</label>
+                            <select class="form-select" name="type">
+                                <option value="marketing">Marketing</option>
+                                <option value="newsletter">Newsletter</option>
+                                <option value="promotional">Promotional</option>
+                                <option value="announcement">Announcement</option>
+                                <option value="transactional">Transactional</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <textarea class="form-control" name="description" rows="2"
+                            placeholder="Optional campaign description"></textarea>
+                    </div>
+                </div>
             </div>
-            <div class="form-group">
-                <label class="form-label">Type</label>
-                <select class="form-input" name="type">
-                    <option value="marketing">Marketing</option>
-                    <option value="newsletter">Newsletter</option>
-                    <option value="promotional">Promotional</option>
-                    <option value="announcement">Announcement</option>
-                    <option value="transactional">Transactional</option>
-                </select>
+
+            <!-- Email Content -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h2 class="card-title">Email Content</h2>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Subject Line *</label>
+                        <input type="text" class="form-control" name="subject" required
+                            placeholder="Hello {{first_name}}, check this out!">
+                        <small class="form-text text-muted">Primary subject line. For A/B testing, use the rotation
+                            section below.</small>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">From Email *</label>
+                            <input type="email" class="form-control" name="from_email" required
+                                placeholder="sender@example.com">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">From Name</label>
+                            <input type="text" class="form-control" name="from_name" placeholder="Your Company">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Reply-To</label>
+                        <input type="email" class="form-control" name="reply_to" placeholder="reply@example.com">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Template Path</label>
+                        <input type="text" class="form-control" name="template_path" placeholder="templates/email.html">
+                        <small class="form-text text-muted">Primary template. For A/B testing, use the rotation section
+                            below.</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Content Rotation / A/B Testing -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h2 class="card-title">Content Rotation (A/B Testing)</h2>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">Enter multiple values (one per line) for automatic rotation during
+                        sending.</p>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Subject Lines (Rotation)</label>
+                            <textarea class="form-control" name="subjects_list" rows="3"
+                                placeholder="Subject A&#10;Subject B&#10;Subject C"></textarea>
+                            <small class="form-text text-muted">One subject per line. Leave empty to use primary
+                                subject.</small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">From Names (Rotation)</label>
+                            <textarea class="form-control" name="from_names_list" rows="3"
+                                placeholder="John Smith&#10;Jane Doe&#10;Sales Team"></textarea>
+                            <small class="form-text text-muted">One name per line. Leave empty to use primary from
+                                name.</small>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">From Emails (Rotation)</label>
+                            <textarea class="form-control" name="from_emails_list" rows="3"
+                                placeholder="sender1@domain.com&#10;sender2@domain.com&#10;noreply@domain.com"></textarea>
+                            <small class="form-text text-muted">One sender email per line. Rotates sender
+                                addresses.</small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Link URLs (Rotation)</label>
+                            <textarea class="form-control" name="links_list" rows="3"
+                                placeholder="https://link1.example.com&#10;https://link2.example.com"></textarea>
+                            <small class="form-text text-muted">Rotating redirect links. Use {{link}} in
+                                template.</small>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Template Paths (Rotation)</label>
+                        <textarea class="form-control" name="templates_list" rows="2"
+                            placeholder="templates/variant_a.html&#10;templates/variant_b.html"></textarea>
+                        <small class="form-text text-muted">One template path per line. Leave empty to use primary
+                            template.</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SMTP Server Selection -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h2 class="card-title">SMTP Server Selection</h2>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-8 mb-3">
+                            <label class="form-label">SMTP Servers</label>
+                            <textarea class="form-control" name="smtp_hosts_list" rows="3"
+                                placeholder="smtp1.example.com:587:user1:pass1&#10;smtp2.example.com:465:user2:pass2"></textarea>
+                            <small class="form-text text-muted">Format: host:port:username:password (one per line). Or
+                                leave empty to use configured servers.</small>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">SMTP Rotation</label>
+                            <select class="form-select" name="smtp_rotation">
+                                <option value="round_robin">Round Robin</option>
+                                <option value="weighted" selected>Weighted</option>
+                                <option value="random">Random</option>
+                                <option value="failover">Failover</option>
+                            </select>
+                            <small class="form-text text-muted">How to rotate between servers</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Proxy Configuration -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h2 class="card-title">Proxy Configuration</h2>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-8 mb-3">
+                            <label class="form-label">Proxy List</label>
+                            <textarea class="form-control" name="proxies_list" rows="3"
+                                placeholder="proxy1.example.com:8080&#10;proxy2.example.com:8080:user:pass&#10;socks5://proxy3.example.com:1080"></textarea>
+                            <small class="form-text text-muted">Format: host:port or host:port:user:pass. Prefix with
+                                socks5:// for SOCKS proxies.</small>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Proxy Rotation</label>
+                            <select class="form-select" name="proxy_rotation">
+                                <option value="none">None (No Proxy)</option>
+                                <option value="round_robin">Round Robin</option>
+                                <option value="random">Random</option>
+                                <option value="per_email">Per Email</option>
+                            </select>
+                            <small class="form-text text-muted">How to rotate proxies</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
+            <!-- Recipients -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h2 class="card-title">Recipients</h2>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-8 mb-3">
+                            <label class="form-label">Recipients File *</label>
+                            <input type="text" class="form-control" name="recipients_path" required
+                                placeholder="data/recipients.csv">
+                            <small class="form-text text-muted">CSV or TXT file. Additional columns become
+                                placeholders.</small>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Email Column</label>
+                            <input type="text" class="form-control" name="email_column" value="email"
+                                placeholder="email">
+                            <small class="form-text text-muted">Column name with emails</small>
+                        </div>
+                    </div>
+                    <div class="d-flex gap-4">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="validate_emails" id="validateEmails"
+                                checked>
+                            <label class="form-check-label" for="validateEmails">Validate Emails</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="deduplicate" id="deduplicate" checked>
+                            <label class="form-check-label" for="deduplicate">Deduplicate Recipients</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sending Options -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h2 class="card-title">Sending Options</h2>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-2 mb-3">
+                            <label class="form-label">Concurrency</label>
+                            <input type="number" class="form-control" name="concurrency" value="50">
+                            <small class="form-text text-muted">Parallel sends</small>
+                        </div>
+                        <div class="col-md-2 mb-3">
+                            <label class="form-label">Rate/Min</label>
+                            <input type="number" class="form-control" name="rate_per_minute" value="30">
+                            <small class="form-text text-muted">0 = unlimited</small>
+                        </div>
+                        <div class="col-md-2 mb-3">
+                            <label class="form-label">Rate/Hour</label>
+                            <input type="number" class="form-control" name="rate_per_hour" value="500">
+                            <small class="form-text text-muted">0 = unlimited</small>
+                        </div>
+                        <div class="col-md-2 mb-3">
+                            <label class="form-label">Chunk Size</label>
+                            <input type="number" class="form-control" name="chunk_size" value="1000">
+                            <small class="form-text text-muted">Batch size</small>
+                        </div>
+                        <div class="col-md-2 mb-3">
+                            <label class="form-label">Pause (sec)</label>
+                            <input type="number" class="form-control" name="pause_between_chunks" value="0">
+                            <small class="form-text text-muted">Between chunks</small>
+                        </div>
+                        <div class="col-md-2 mb-3">
+                            <label class="form-label">Rotation</label>
+                            <select class="form-select" name="rotation_strategy">
+                                <option value="round_robin">Round Robin</option>
+                                <option value="weighted">Weighted</option>
+                                <option value="random">Random</option>
+                                <option value="sequential">Sequential</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" name="dry_run" checked id="dryRun">
+                        <label class="form-check-label" for="dryRun">
+                            <strong>Dry Run</strong> (don't actually send emails)
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tracking -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h2 class="card-title">Tracking & Analytics</h2>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" name="enable_tracking"
+                                    id="enableTracking" checked>
+                                <label class="form-check-label" for="enableTracking">Enable Tracking</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" name="track_opens" id="trackOpens"
+                                    checked>
+                                <label class="form-check-label" for="trackOpens">Track Opens (pixel)</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" name="track_clicks" id="trackClicks"
+                                    checked>
+                                <label class="form-check-label" for="trackClicks">Track Clicks (links)</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Tracking Base URL</label>
+                            <input type="text" class="form-control" name="tracking_base_url"
+                                placeholder="https://track.yourdomain.com">
+                            <small class="form-text text-muted">Custom domain for tracking pixels/links</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Features -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h2 class="card-title">Features & Attachments</h2>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" name="enable_qr_code" id="enableQr">
+                                <label class="form-check-label" for="enableQr">Enable QR Codes</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" name="send_as_image" id="sendAsImage">
+                                <label class="form-check-label" for="sendAsImage">Send as Image</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" name="enable_bounce_filtering"
+                                    id="bounceFilter" checked>
+                                <label class="form-check-label" for="bounceFilter">Filter Suppressed Emails</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Attachment Type</label>
+                                <select class="form-select" name="attachment_type">
+                                    <option value="">None</option>
+                                    <option value="pdf">PDF</option>
+                                    <option value="docx">DOCX</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Attachment Path</label>
+                                <input type="text" class="form-control" name="attachment_path"
+                                    placeholder="data/attachments/document.pdf">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Placeholders -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h2 class="card-title">Placeholders Configuration</h2>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Placeholders File</label>
+                        <input type="text" class="form-control" name="placeholders_path"
+                            placeholder="config/placeholders.yaml">
+                        <small class="form-text text-muted">YAML file with static placeholder values (company name,
+                            links, etc.)</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Submit -->
+            <div class="d-flex gap-2 mb-4">
+                <button type="submit" class="btn btn-primary btn-lg">Create Campaign</button>
+                <a href="/campaigns" class="btn btn-secondary btn-lg">Cancel</a>
             </div>
         </div>
-        <div class="form-group">
-            <label class="form-label">Description</label>
-            <textarea class="form-input" name="description" rows="2" placeholder="Optional campaign description"></textarea>
-        </div>
-    </div>
-    
-    <!-- Email Content -->
-    <div class="card">
-        <div class="card-header">
-            <h2 class="card-title">Email Content</h2>
-        </div>
-        <div class="form-group">
-            <label class="form-label">Subject Line *</label>
-            <input type="text" class="form-input" name="subject" required placeholder="Hello {{first_name}}, check this out!">
-        </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-            <div class="form-group">
-                <label class="form-label">From Email *</label>
-                <input type="email" class="form-input" name="from_email" required placeholder="sender@example.com">
-            </div>
-            <div class="form-group">
-                <label class="form-label">From Name</label>
-                <input type="text" class="form-input" name="from_name" placeholder="Your Company">
-            </div>
-        </div>
-        <div class="form-group">
-            <label class="form-label">Reply-To</label>
-            <input type="email" class="form-input" name="reply_to" placeholder="reply@example.com">
-        </div>
-        <div class="form-group">
-            <label class="form-label">Template Path</label>
-            <input type="text" class="form-input" name="template_path" placeholder="templates/email.html">
-        </div>
-    </div>
-    
-    <!-- Recipients -->
-    <div class="card">
-        <div class="card-header">
-            <h2 class="card-title">Recipients</h2>
-        </div>
-        <div class="form-group">
-            <label class="form-label">Recipients File *</label>
-            <input type="text" class="form-input" name="recipients_path" required placeholder="data/recipients.csv">
-            <p class="text-muted mt-4" style="font-size: 0.875rem;">CSV file with 'email' column. Additional columns become placeholders.</p>
-        </div>
-    </div>
-    
-    <!-- Sending Options -->
-    <div class="card">
-        <div class="card-header">
-            <h2 class="card-title">Sending Options</h2>
-        </div>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
-            <div class="form-group">
-                <label class="form-label">Concurrency</label>
-                <input type="number" class="form-input" name="concurrency" value="50">
-            </div>
-            <div class="form-group">
-                <label class="form-label">Rate/Minute</label>
-                <input type="number" class="form-input" name="rate_per_minute" value="30" placeholder="0 = unlimited">
-            </div>
-            <div class="form-group">
-                <label class="form-label">Chunk Size</label>
-                <input type="number" class="form-input" name="chunk_size" value="1000">
+
+        <!-- Sidebar: Placeholders -->
+        <div class="col-md-4">
+            <div class="card sticky-top" style="top: 20px;">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Placeholders & Logic</h5>
+                </div>
+                <div class="card-body" style="max-height: 80vh; overflow-y: auto;">
+                    {% raw %}
+                    <h6 class="text-primary mt-2">Recipient</h6>
+                    <code class="d-block">{{email}}</code>
+                    <code class="d-block">{{first_name}}</code>
+                    <code class="d-block">{{last_name}}</code>
+                    <code class="d-block">{{company}}</code>
+                    <code class="d-block">{{domain}}</code>
+
+                    <h6 class="text-primary mt-3">Date & Time</h6>
+                    <code class="d-block">{{date}}</code> <small class="text-muted">YYYY-MM-DD</small>
+                    <code class="d-block">{{time}}</code> <small class="text-muted">HH:MM:SS</small>
+                    <code class="d-block">{{day_name}}</code> <small class="text-muted">Monday</small>
+                    <code class="d-block">{{month_name}}</code> <small class="text-muted">January</small>
+
+                    <h6 class="text-primary mt-3">Random Data</h6>
+                    <code class="d-block">{{uuid}}</code>
+                    <code class="d-block">{{random_number}}</code>
+                    <code class="d-block">{{random_name}}</code>
+                    <code class="d-block">{{random_company}}</code>
+
+                    <h6 class="text-primary mt-3">Logic & Flow</h6>
+                    <pre class="bg-light p-2 mt-1" style="font-size: 0.8em;">{{if:first_name}}
+Hello {{first_name}}
+{{else}}
+Hello there
+{{endif}}</pre>
+
+                    <h6 class="text-primary mt-3">QR Codes</h6>
+                    <p class="small text-muted mb-1">Inline QR Code:</p>
+                    <code class="d-block">{{qrcode:https://link.com}}</code>
+                    <p class="small text-muted mt-2 mb-1">Using campaign link:</p>
+                    <pre class="bg-light p-2 mt-1" style="font-size: 0.8em;">{{if:qr_code}}
+&lt;img src="{{qr_code_url}}"&gt;
+{{endif}}</pre>
+                    {% endraw %}
+                </div>
             </div>
         </div>
-        <div class="form-group">
-            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                <input type="checkbox" name="dry_run" checked style="width: auto;">
-                <span>Dry Run (don't actually send emails)</span>
-            </label>
-        </div>
-    </div>
-    
-    <!-- Features -->
-    <div class="card">
-        <div class="card-header">
-            <h2 class="card-title">Features</h2>
-        </div>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
-            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                <input type="checkbox" name="enable_qr_code" style="width: auto;">
-                <span>Enable QR Codes</span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                <input type="checkbox" name="send_as_image" style="width: auto;">
-                <span>Send as Image</span>
-            </label>
-        </div>
-    </div>
-    
-    <!-- Submit -->
-    <div class="flex gap-4">
-        <button type="submit" class="btn btn-primary">Create Campaign</button>
-        <a href="/campaigns" class="btn btn-secondary">Cancel</a>
     </div>
 </form>
 
 <script>
     async function createCampaign(event) {
         event.preventDefault();
-        
+
         const form = event.target;
         const formData = new FormData(form);
         const data = {};
-        
+
+        // Checkbox fields
+        const checkboxFields = [
+            'dry_run', 'enable_qr_code', 'send_as_image',
+            'validate_emails', 'deduplicate',
+            'enable_tracking', 'track_opens', 'track_clicks',
+            'enable_bounce_filtering'
+        ];
+
+        // Integer fields
+        const intFields = [
+            'concurrency', 'rate_per_minute', 'rate_per_hour',
+            'chunk_size', 'pause_between_chunks'
+        ];
+
         formData.forEach((value, key) => {
-            if (key === 'dry_run' || key === 'enable_qr_code' || key === 'send_as_image') {
+            if (checkboxFields.includes(key)) {
                 data[key] = true;
-            } else if (key === 'concurrency' || key === 'rate_per_minute' || key === 'chunk_size') {
-                data[key] = parseInt(value);
+            } else if (intFields.includes(key)) {
+                data[key] = parseInt(value) || 0;
             } else {
                 data[key] = value;
             }
         });
-        
-        // Handle unchecked checkboxes
-        ['dry_run', 'enable_qr_code', 'send_as_image'].forEach(key => {
-            if (!data[key]) data[key] = false;
+
+        // Handle unchecked checkboxes (default to false)
+        checkboxFields.forEach(key => {
+            if (data[key] === undefined) data[key] = false;
         });
-        
+
+        // Parse rotation lists (newline-separated to arrays)
+        if (data.subjects_list && data.subjects_list.trim()) {
+            data.subjects = data.subjects_list.split('\n').map(s => s.trim()).filter(s => s);
+        }
+        if (data.from_names_list && data.from_names_list.trim()) {
+            data.from_names = data.from_names_list.split('\n').map(s => s.trim()).filter(s => s);
+        }
+        if (data.from_emails_list && data.from_emails_list.trim()) {
+            data.from_emails = data.from_emails_list.split('\n').map(s => s.trim()).filter(s => s);
+        }
+        if (data.templates_list && data.templates_list.trim()) {
+            data.templates = data.templates_list.split('\n').map(s => s.trim()).filter(s => s);
+        }
+        if (data.links_list && data.links_list.trim()) {
+            data.links = data.links_list.split('\n').map(s => s.trim()).filter(s => s);
+        }
+        if (data.smtp_hosts_list && data.smtp_hosts_list.trim()) {
+            data.smtp_hosts = data.smtp_hosts_list.split('\n').map(s => s.trim()).filter(s => s);
+        }
+        if (data.proxies_list && data.proxies_list.trim()) {
+            data.proxies = data.proxies_list.split('\n').map(s => s.trim()).filter(s => s);
+        }
+
+        // Clean up list fields
+        delete data.subjects_list;
+        delete data.from_names_list;
+        delete data.from_emails_list;
+        delete data.templates_list;
+        delete data.links_list;
+        delete data.smtp_hosts_list;
+        delete data.proxies_list;
+
         try {
             const response = await fetch('/api/campaigns', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
             });
-            
+
             const result = await response.json();
-            
+
             if (result.success) {
                 alert('Campaign created successfully!');
                 window.location.href = '/campaigns';
@@ -172,4 +508,3 @@
     }
 </script>
 {% endblock %}
-

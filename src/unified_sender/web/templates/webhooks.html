@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+
+{% block title %}Webhooks - MerCury{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Webhook Management</h1>
+    <p class="page-description">Configure external webhooks for email events</p>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-label">Registered Webhooks</div>
+        <div class="stat-value accent" id="webhook-count">0</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Active</div>
+        <div class="stat-value success" id="active-count">0</div>
+    </div>
+</div>
+
+<!-- Register New Webhook -->
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Register New Webhook</h2>
+    </div>
+    <div class="card-body">
+        <form id="webhook-form" onsubmit="registerWebhook(event)">
+            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1rem;">
+                <div class="form-group">
+                    <label class="form-label">Webhook URL *</label>
+                    <input type="url" class="form-input" name="url" required
+                        placeholder="https://your-server.com/webhook">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Secret (optional)</label>
+                    <input type="text" class="form-input" name="secret" placeholder="HMAC signing secret">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Events to Subscribe</label>
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; margin-top: 0.5rem;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                        <input type="checkbox" name="events" value="email.sent" checked> Email Sent
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                        <input type="checkbox" name="events" value="email.failed" checked> Email Failed
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                        <input type="checkbox" name="events" value="email.bounced" checked> Email Bounced
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                        <input type="checkbox" name="events" value="email.opened"> Email Opened
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                        <input type="checkbox" name="events" value="email.clicked"> Email Clicked
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                        <input type="checkbox" name="events" value="email.unsubscribed"> Unsubscribed
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                        <input type="checkbox" name="events" value="campaign.started"> Campaign Started
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                        <input type="checkbox" name="events" value="campaign.completed"> Campaign Completed
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                        <input type="checkbox" name="events" value="system.rate_limit"> Rate Limit Hit
+                    </label>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Register Webhook</button>
+        </form>
+    </div>
+</div>
+
+<!-- Webhooks List -->
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Registered Webhooks</h2>
+        <button class="btn btn-secondary" onclick="loadWebhooks()">Refresh</button>
+    </div>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>URL</th>
+                <th>Events</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="webhooks-table">
+            <tr>
+                <td colspan="4" class="text-muted">Loading...</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<script>
+    async function loadWebhooks() {
+        try {
+            const resp = await fetch('/api/webhooks');
+            const data = await resp.json();
+            const webhooks = data.webhooks || [];
+
+            document.getElementById('webhook-count').textContent = webhooks.length;
+            document.getElementById('active-count').textContent = webhooks.filter(w => w.enabled).length;
+
+            const tbody = document.getElementById('webhooks-table');
+            if (webhooks.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-muted">No webhooks registered</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = webhooks.map(w => `
+                <tr>
+                    <td class="font-mono" style="max-width: 300px; overflow: hidden; text-overflow: ellipsis;">${w.url}</td>
+                    <td>
+                        ${(w.events || []).slice(0, 3).map(e => `<span class="badge badge-info" style="margin-right: 0.25rem;">${e}</span>`).join('')}
+                        ${(w.events || []).length > 3 ? `<span class="text-muted">+${w.events.length - 3} more</span>` : ''}
+                    </td>
+                    <td>
+                        <span class="badge ${w.enabled ? 'badge-success' : 'badge-warning'}">
+                            ${w.enabled ? 'Active' : 'Disabled'}
+                        </span>
+                    </td>
+                    <td>
+                        <button class="btn btn-secondary" onclick="deleteWebhook('${w.id}')" style="color: var(--error);">Delete</button>
+                    </td>
+                </tr>
+            `).join('');
+        } catch (e) {
+            console.error('Failed to load webhooks:', e);
+        }
+    }
+
+    async function registerWebhook(event) {
+        event.preventDefault();
+        const form = event.target;
+        const formData = new FormData(form);
+
+        const events = [];
+        form.querySelectorAll('input[name="events"]:checked').forEach(cb => {
+            events.push(cb.value);
+        });
+
+        const data = {
+            url: formData.get('url'),
+            secret: formData.get('secret') || null,
+            events: events
+        };
+
+        try {
+            const resp = await fetch('/api/webhooks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            const result = await resp.json();
+
+            if (result.success) {
+                alert('Webhook registered successfully!');
+                form.reset();
+                loadWebhooks();
+            } else {
+                alert('Error: ' + result.error);
+            }
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
+    }
+
+    async function deleteWebhook(webhookId) {
+        if (!confirm('Delete this webhook?')) return;
+
+        try {
+            await fetch(`/api/webhooks/${webhookId}`, { method: 'DELETE' });
+            loadWebhooks();
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
+    }
+
+    // Load webhooks on page load
+    loadWebhooks();
+</script>
+{% endblock %}

@@ -146,7 +146,8 @@ class CampaignService:
             attachment_path=config.attachment_path,
             subjects=config.subjects,
             from_names=config.from_names,
-            templates=config.templates
+            templates=config.templates,
+            rotation_strategy=config.smtp_rotation
         ))
         
         # Add static placeholders
@@ -174,7 +175,8 @@ class CampaignService:
                 rate_per_minute=config.rate_per_minute,
                 rate_per_hour=config.rate_per_hour,
                 enable_qr_code=config.enable_qr_code,
-                convert_to_image=config.send_as_image
+                convert_to_image=config.send_as_image,
+                smtp_rotation_strategy=config.smtp_rotation
             )
             
             repo = CampaignRepository(session)
@@ -416,7 +418,7 @@ class CampaignService:
                                 sent_at=datetime.now(UTC),
                                 subject=self.config.subject if self.config else "",
                                 from_email=self.config.from_email if self.config else "",
-                                smtp_server_name=email_result.server_name
+                                smtp_server_name=email_result.smtp_server
                             ))
                         else:
                             await failed_logger.log_failure(
@@ -433,7 +435,7 @@ class CampaignService:
                                 subject=self.config.subject if self.config else "",
                                 from_email=self.config.from_email if self.config else "",
                                 error_message=email_result.error,
-                                error_type=email_result.error_category
+                                error_type=email_result.error_type
                             ))
                     
                     # Batch insert to DB

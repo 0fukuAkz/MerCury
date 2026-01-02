@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+
+{% block title %}Dead Letter Queue - MerCury{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Dead Letter Queue</h1>
+    <p class="page-description">View and manage failed messages that exceeded retry attempts</p>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-label">Pending Items</div>
+        <div class="stat-value error" id="pending-count">0</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Total Processed</div>
+        <div class="stat-value accent" id="processed-count">0</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Retried</div>
+        <div class="stat-value success" id="retried-count">0</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Discarded</div>
+        <div class="stat-value warning" id="discarded-count">0</div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Failed Messages</h2>
+        <div class="flex gap-2">
+            <button class="btn btn-primary" onclick="retryAll()">Retry All</button>
+            <button class="btn btn-secondary" onclick="loadDeadLetters()">Refresh</button>
+        </div>
+    </div>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Recipient</th>
+                <th>Subject</th>
+                <th>Error</th>
+                <th>Attempts</th>
+                <th>Failed At</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="dead-letter-table">
+            <tr>
+                <td colspan="6" class="text-muted">Loading...</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<script>
+    async function loadDeadLetters() {
+        try {
+            const [itemsResp, statsResp] = await Promise.all([
+                fetch('/api/dead-letter'),
+                fetch('/api/dead-letter/stats')
+            ]);
+
+            const itemsData = await itemsResp.json();
+            const statsData = await statsResp.json();
+
+            document.getElementById('pending-count').textContent = statsData.pending || 0;
+            document.getElementById('processed-count').textContent = statsData.total_processed || 0;
+            document.getElementById('retried-count').textContent = statsData.retried || 0;
+            document.getElementById('discarded-count').textContent = statsData.discarded || 0;
+
+            const items = itemsData.items || [];
+            const tbody = document.getElementById('dead-letter-table');
+
+            if (items.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-muted">No failed messages in queue</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = items.map(item => `
+                <tr>
+                    <td class="font-mono">${item.recipient || '-'}</td>
+                    <td>${item.subject || '-'}</td>
+                    <td>
+                        <span title="${item.error || ''}" style="cursor: help;">
+                            ${(item.error || 'Unknown error').substring(0, 50)}${item.error && item.error.length > 50 ? '...' : ''}
+                        </span>
+                    </td>
+                    <td>${item.attempts || 0}</td>
+                    <td>${item.failed_at ? new Date(item.failed_at).toLocaleString() : '-'}</td>
+                    <td>
+                        <div class="flex gap-2">
+                            <button class="btn btn-primary" onclick="retryItem('${item.id}')" style="padding: 0.25rem 0.75rem;">Retry</button>
+                            <button class="btn btn-secondary" onclick="discardItem('${item.id}')" style="padding: 0.25rem 0.75rem; color: var(--error);">Discard</button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        } catch (e) {
+            console.error('Failed to load dead letters:', e);
+        }
+    }
+
+    async function retryItem(itemId) {
+        try {
+            const resp = await fetch(`/api/dead-letter/${itemId}/retry`, { method: 'POST' });
+            const result = await resp.json();
+
+            if (result.success) {
+                loadDeadLetters();
+            } else {
+                alert('Retry failed');
+            }
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
+    }
+
+    async function discardItem(itemId) {
+        if (!confirm('Discard this message permanently?')) return;
+
+        try {
+            await fetch(`/api/dead-letter/${itemId}`, { method: 'DELETE' });
+            loadDeadLetters();
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
+    }
+
+    async function retryAll() {
+        if (!confirm('Retry all failed messages?')) return;
+
+        const tbody = document.getElementById('dead-letter-table');
+        const rows = tbody.querySelectorAll('tr');
+
+        for (const row of rows) {
+            const retryBtn = row.querySelector('button');
+            if (retryBtn && retryBtn.textContent === 'Retry') {
+                retryBtn.click();
+            }
+        }
+
+        setTimeout(loadDeadLetters, 1000);
+    }
+
+    // Load data on page load
+    loadDeadLetters();
+</script>
+{% endblock %}

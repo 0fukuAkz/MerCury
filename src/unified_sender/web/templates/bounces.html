@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+
+{% block title %}Bounces - MerCury{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Bounce Management</h1>
+    <p class="page-description">View bounces and manage suppression list</p>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-label">Total Bounces</div>
+        <div class="stat-value error" id="total-bounces">0</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Hard Bounces</div>
+        <div class="stat-value error" id="hard-bounces">0</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Soft Bounces</div>
+        <div class="stat-value warning" id="soft-bounces">0</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Suppressed Emails</div>
+        <div class="stat-value accent" id="suppressed-count">0</div>
+    </div>
+</div>
+
+<!-- Tabs -->
+<div class="flex gap-4 mb-4">
+    <button class="btn btn-primary" id="tab-bounces" onclick="showTab('bounces')">Recent Bounces</button>
+    <button class="btn btn-secondary" id="tab-suppression" onclick="showTab('suppression')">Suppression List</button>
+</div>
+
+<!-- Recent Bounces -->
+<div class="card" id="bounces-panel">
+    <div class="card-header">
+        <h2 class="card-title">Recent Bounces</h2>
+        <button class="btn btn-secondary" onclick="loadBounces()">Refresh</button>
+    </div>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Email</th>
+                <th>Type</th>
+                <th>Category</th>
+                <th>Reason</th>
+                <th>Timestamp</th>
+            </tr>
+        </thead>
+        <tbody id="bounces-table">
+            <tr>
+                <td colspan="5" class="text-muted">Loading...</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- Suppression List -->
+<div class="card" id="suppression-panel" style="display: none;">
+    <div class="card-header">
+        <h2 class="card-title">Suppression List</h2>
+        <button class="btn btn-secondary" onclick="loadSuppression()">Refresh</button>
+    </div>
+
+    <div class="card-body">
+        <form id="add-suppression-form" onsubmit="addToSuppression(event)"
+            style="display: flex; gap: 1rem; margin-bottom: 1rem;">
+            <input type="email" class="form-input" name="email" placeholder="email@example.com" required
+                style="flex: 1;">
+            <button type="submit" class="btn btn-primary">Add to Suppression</button>
+        </form>
+
+        <div id="suppression-list" style="max-height: 400px; overflow-y: auto;">
+            <p class="text-muted">Loading...</p>
+        </div>
+    </div>
+</div>
+
+<script>
+    function showTab(tab) {
+        document.getElementById('bounces-panel').style.display = tab === 'bounces' ? 'block' : 'none';
+        document.getElementById('suppression-panel').style.display = tab === 'suppression' ? 'block' : 'none';
+
+        document.getElementById('tab-bounces').className = tab === 'bounces' ? 'btn btn-primary' : 'btn btn-secondary';
+        document.getElementById('tab-suppression').className = tab === 'suppression' ? 'btn btn-primary' : 'btn btn-secondary';
+
+        if (tab === 'suppression') loadSuppression();
+    }
+
+    async function loadBounces() {
+        try {
+            const [bouncesResp, statsResp] = await Promise.all([
+                fetch('/api/bounces'),
+                fetch('/api/bounces/stats')
+            ]);
+
+            const bouncesData = await bouncesResp.json();
+            const statsData = await statsResp.json();
+
+            document.getElementById('total-bounces').textContent = statsData.total_bounces || 0;
+            document.getElementById('hard-bounces').textContent = statsData.hard_bounces || 0;
+            document.getElementById('soft-bounces').textContent = statsData.soft_bounces || 0;
+            document.getElementById('suppressed-count').textContent = statsData.suppressed_count || 0;
+
+            const bounces = bouncesData.bounces || [];
+            const tbody = document.getElementById('bounces-table');
+
+            if (bounces.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-muted">No bounces recorded</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = bounces.map(b => `
+                <tr>
+                    <td class="font-mono">${b.email}</td>
+                    <td>
+                        <span class="badge ${b.bounce_type === 'hard' ? 'badge-error' : 'badge-warning'}">
+                            ${b.bounce_type}
+                        </span>
+                    </td>
+                    <td><span class="badge badge-info">${b.category}</span></td>
+                    <td>${b.reason || '-'}</td>
+                    <td>${new Date(b.timestamp).toLocaleString()}</td>
+                </tr>
+            `).join('');
+        } catch (e) {
+            console.error('Failed to load bounces:', e);
+        }
+    }
+
+    async function loadSuppression() {
+        try {
+            const resp = await fetch('/api/bounces/suppression');
+            const data = await resp.json();
+
+            const list = data.suppression_list || [];
+            document.getElementById('suppressed-count').textContent = list.length;
+
+            const container = document.getElementById('suppression-list');
+            if (list.length === 0) {
+                container.innerHTML = '<p class="text-muted">No emails in suppression list</p>';
+                return;
+            }
+
+            container.innerHTML = list.map(email => `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; border-bottom: 1px solid var(--border-color);">
+                    <span class="font-mono">${email}</span>
+                    <button class="btn btn-secondary" onclick="removeFromSuppression('${email}')" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">Remove</button>
+                </div>
+            `).join('');
+        } catch (e) {
+            console.error('Failed to load suppression list:', e);
+        }
+    }
+
+    async function addToSuppression(event) {
+        event.preventDefault();
+        const form = event.target;
+        const email = form.email.value.trim();
+
+        try {
+            const resp = await fetch('/api/bounces/suppression', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email })
+            });
+            const result = await resp.json();
+
+            if (result.success) {
+                form.reset();
+                loadSuppression();
+            } else {
+                alert('Error: ' + result.error);
+            }
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
+    }
+
+    async function removeFromSuppression(email) {
+        if (!confirm(`Remove ${email} from suppression list?`)) return;
+
+        try {
+            await fetch(`/api/bounces/suppression/${encodeURIComponent(email)}`, { method: 'DELETE' });
+            loadSuppression();
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
+    }
+
+    // Load data on page load
+    loadBounces();
+</script>
+{% endblock %}

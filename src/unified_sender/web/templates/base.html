@@ -1,53 +1,79 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Unified Email Sender{% endblock %}</title>
-    
+    <title>{% block title %}MerCury{% endblock %}</title>
+
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-    
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+
     <style>
         :root {
-            --bg-primary: #0a0f1a;
-            --bg-secondary: #111827;
-            --bg-tertiary: #1f2937;
-            --accent-primary: #06b6d4;
-            --accent-secondary: #8b5cf6;
-            --accent-gradient: linear-gradient(135deg, #06b6d4, #8b5cf6);
-            --text-primary: #f9fafb;
-            --text-secondary: #9ca3af;
-            --text-muted: #6b7280;
-            --border-color: #374151;
-            --success: #10b981;
-            --warning: #f59e0b;
-            --error: #ef4444;
-            --radius: 12px;
+            /* Cyberpunk Color Palette */
+            --bg-primary: #0d0d0d;
+            --bg-secondary: #1a1a2e;
+            --bg-tertiary: #16213e;
+            --accent-primary: #ff0080;
+            --accent-secondary: #00ffff;
+            --accent-tertiary: #39ff14;
+            --accent-gradient: linear-gradient(135deg, #ff0080, #00ffff);
+            --neon-pink: #ff0080;
+            --neon-cyan: #00ffff;
+            --neon-green: #39ff14;
+            --text-primary: #ffffff;
+            --text-secondary: #8892b0;
+            --text-muted: #5c6370;
+            --border-color: #2a2a4a;
+            --success: #39ff14;
+            --warning: #ff6b35;
+            --error: #ff0055;
+            --radius: 4px;
+            --glow-pink: 0 0 20px rgba(255, 0, 128, 0.5);
+            --glow-cyan: 0 0 20px rgba(0, 255, 255, 0.5);
+            --glow-green: 0 0 20px rgba(57, 255, 20, 0.5);
         }
-        
+
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
-            font-family: 'Space Grotesk', sans-serif;
+            font-family: 'JetBrains Mono', 'Space Grotesk', monospace;
             background: var(--bg-primary);
             color: var(--text-primary);
             min-height: 100vh;
-            background-image: 
-                radial-gradient(at 20% 80%, rgba(6, 182, 212, 0.15) 0%, transparent 50%),
-                radial-gradient(at 80% 20%, rgba(139, 92, 246, 0.15) 0%, transparent 50%);
+            position: relative;
         }
-        
+
+        /* Scanline overlay */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(0deg,
+                    transparent,
+                    transparent 2px,
+                    rgba(0, 0, 0, 0.1) 2px,
+                    rgba(0, 0, 0, 0.1) 4px);
+            pointer-events: none;
+            z-index: 9999;
+        }
+
         .layout {
             display: flex;
             min-height: 100vh;
         }
-        
+
         /* Sidebar */
         .sidebar {
             width: 260px;
@@ -57,28 +83,29 @@
             display: flex;
             flex-direction: column;
         }
-        
+
         .logo {
             font-size: 1.25rem;
             font-weight: 700;
             background: var(--accent-gradient);
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
             margin-bottom: 2rem;
             display: flex;
             align-items: center;
             gap: 0.5rem;
         }
-        
+
         .logo svg {
             width: 28px;
             height: 28px;
         }
-        
+
         .nav-section {
             margin-bottom: 1.5rem;
         }
-        
+
         .nav-title {
             font-size: 0.75rem;
             text-transform: uppercase;
@@ -86,7 +113,7 @@
             color: var(--text-muted);
             margin-bottom: 0.75rem;
         }
-        
+
         .nav-link {
             display: flex;
             align-items: center;
@@ -98,64 +125,73 @@
             margin-bottom: 0.25rem;
             transition: all 0.2s;
         }
-        
+
         .nav-link:hover {
             background: var(--bg-tertiary);
             color: var(--text-primary);
         }
-        
+
         .nav-link.active {
             background: var(--accent-gradient);
             color: white;
         }
-        
+
         .nav-link svg {
             width: 20px;
             height: 20px;
         }
-        
+
         /* Main Content */
         .main {
             flex: 1;
             padding: 2rem;
             overflow-y: auto;
         }
-        
+
         .page-header {
             margin-bottom: 2rem;
         }
-        
+
         .page-title {
             font-size: 1.75rem;
             font-weight: 700;
             margin-bottom: 0.5rem;
         }
-        
+
         .page-description {
             color: var(--text-secondary);
         }
-        
+
         /* Cards */
         .card {
-            background: var(--bg-secondary);
+            background: rgba(26, 26, 46, 0.8);
             border: 1px solid var(--border-color);
             border-radius: var(--radius);
             padding: 1.5rem;
             margin-bottom: 1.5rem;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
         }
-        
+
+        .card:hover {
+            border-color: var(--neon-cyan);
+            box-shadow: var(--glow-cyan);
+        }
+
         .card-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 1rem;
         }
-        
+
         .card-title {
             font-size: 1.125rem;
             font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
         }
-        
+
         /* Stats Grid */
         .stats-grid {
             display: grid;
@@ -163,31 +199,48 @@
             gap: 1rem;
             margin-bottom: 2rem;
         }
-        
+
         .stat-card {
-            background: var(--bg-secondary);
+            background: rgba(26, 26, 46, 0.8);
             border: 1px solid var(--border-color);
             border-radius: var(--radius);
             padding: 1.25rem;
+            transition: all 0.3s ease;
         }
-        
+
+        .stat-card:hover {
+            border-color: var(--neon-pink);
+            box-shadow: var(--glow-pink);
+        }
+
         .stat-label {
             font-size: 0.875rem;
             color: var(--text-secondary);
             margin-bottom: 0.5rem;
         }
-        
+
         .stat-value {
             font-size: 2rem;
             font-weight: 700;
             font-family: 'JetBrains Mono', monospace;
         }
-        
-        .stat-value.success { color: var(--success); }
-        .stat-value.warning { color: var(--warning); }
-        .stat-value.error { color: var(--error); }
-        .stat-value.accent { color: var(--accent-primary); }
-        
+
+        .stat-value.success {
+            color: var(--success);
+        }
+
+        .stat-value.warning {
+            color: var(--warning);
+        }
+
+        .stat-value.error {
+            color: var(--error);
+        }
+
+        .stat-value.accent {
+            color: var(--accent-primary);
+        }
+
         /* Buttons */
         .btn {
             display: inline-flex;
@@ -202,32 +255,33 @@
             border: none;
             transition: all 0.2s;
         }
-        
+
         .btn-primary {
             background: var(--accent-gradient);
             color: white;
         }
-        
+
         .btn-primary:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(6, 182, 212, 0.3);
+            box-shadow: var(--glow-pink);
         }
-        
+
         .btn-secondary {
             background: var(--bg-tertiary);
             color: var(--text-primary);
             border: 1px solid var(--border-color);
         }
-        
+
         .btn-secondary:hover {
-            background: var(--border-color);
+            border-color: var(--neon-cyan);
+            box-shadow: var(--glow-cyan);
         }
-        
+
         /* Forms */
         .form-group {
             margin-bottom: 1.25rem;
         }
-        
+
         .form-label {
             display: block;
             font-size: 0.875rem;
@@ -235,7 +289,7 @@
             margin-bottom: 0.5rem;
             color: var(--text-secondary);
         }
-        
+
         .form-input {
             width: 100%;
             padding: 0.75rem 1rem;
@@ -247,30 +301,30 @@
             color: var(--text-primary);
             transition: all 0.2s;
         }
-        
+
         .form-input:focus {
             outline: none;
             border-color: var(--accent-primary);
             box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.2);
         }
-        
+
         .form-input::placeholder {
             color: var(--text-muted);
         }
-        
+
         /* Tables */
         .table {
             width: 100%;
             border-collapse: collapse;
         }
-        
+
         .table th,
         .table td {
             padding: 1rem;
             text-align: left;
             border-bottom: 1px solid var(--border-color);
         }
-        
+
         .table th {
             font-size: 0.75rem;
             text-transform: uppercase;
@@ -278,11 +332,11 @@
             color: var(--text-muted);
             font-weight: 600;
         }
-        
+
         .table tr:hover td {
             background: rgba(6, 182, 212, 0.05);
         }
-        
+
         /* Status Badges */
         .badge {
             display: inline-flex;
@@ -292,27 +346,27 @@
             font-size: 0.75rem;
             font-weight: 600;
         }
-        
+
         .badge-success {
             background: rgba(16, 185, 129, 0.15);
             color: var(--success);
         }
-        
+
         .badge-warning {
             background: rgba(245, 158, 11, 0.15);
             color: var(--warning);
         }
-        
+
         .badge-error {
             background: rgba(239, 68, 68, 0.15);
             color: var(--error);
         }
-        
+
         .badge-info {
             background: rgba(6, 182, 212, 0.15);
             color: var(--accent-primary);
         }
-        
+
         /* Progress Bar */
         .progress {
             height: 8px;
@@ -320,30 +374,66 @@
             border-radius: 4px;
             overflow: hidden;
         }
-        
+
         .progress-bar {
             height: 100%;
             background: var(--accent-gradient);
             transition: width 0.3s ease;
         }
-        
+
         /* Utilities */
-        .text-muted { color: var(--text-muted); }
-        .text-success { color: var(--success); }
-        .text-warning { color: var(--warning); }
-        .text-error { color: var(--error); }
-        .font-mono { font-family: 'JetBrains Mono', monospace; }
-        .mt-4 { margin-top: 1rem; }
-        .mb-4 { margin-bottom: 1rem; }
-        .flex { display: flex; }
-        .gap-2 { gap: 0.5rem; }
-        .gap-4 { gap: 1rem; }
-        .items-center { align-items: center; }
-        .justify-between { justify-content: space-between; }
+        .text-muted {
+            color: var(--text-muted);
+        }
+
+        .text-success {
+            color: var(--success);
+        }
+
+        .text-warning {
+            color: var(--warning);
+        }
+
+        .text-error {
+            color: var(--error);
+        }
+
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .mt-4 {
+            margin-top: 1rem;
+        }
+
+        .mb-4 {
+            margin-bottom: 1rem;
+        }
+
+        .flex {
+            display: flex;
+        }
+
+        .gap-2 {
+            gap: 0.5rem;
+        }
+
+        .gap-4 {
+            gap: 1rem;
+        }
+
+        .items-center {
+            align-items: center;
+        }
+
+        .justify-between {
+            justify-content: space-between;
+        }
     </style>
-    
+
     {% block extra_css %}{% endblock %}
 </head>
+
 <body>
     <div class="layout">
         <aside class="sidebar">
@@ -351,95 +441,134 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="url(#gradient)" stroke-width="2">
                     <defs>
                         <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" style="stop-color:#06b6d4"/>
-                            <stop offset="100%" style="stop-color:#8b5cf6"/>
+                            <stop offset="0%" style="stop-color:#ff0080" />
+                            <stop offset="100%" style="stop-color:#00ffff" />
                         </linearGradient>
                     </defs>
-                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-                    <polyline points="22,6 12,13 2,6"/>
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M12 2a4 4 0 0 0-4 4v2a4 4 0 0 0 8 0V6a4 4 0 0 0-4-4z" />
+                    <path d="M12 22v-6" />
                 </svg>
-                Unified Sender
+                MerCury
             </div>
-            
+
             <nav>
                 <div class="nav-section">
                     <div class="nav-title">Main</div>
                     <a href="/" class="nav-link {% if request.path == '/' %}active{% endif %}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="3" width="7" height="9"/>
-                            <rect x="14" y="3" width="7" height="5"/>
-                            <rect x="14" y="12" width="7" height="9"/>
-                            <rect x="3" y="16" width="7" height="5"/>
+                            <rect x="3" y="3" width="7" height="9" />
+                            <rect x="14" y="3" width="7" height="5" />
+                            <rect x="14" y="12" width="7" height="9" />
+                            <rect x="3" y="16" width="7" height="5" />
                         </svg>
                         Dashboard
                     </a>
                     <a href="/campaigns" class="nav-link {% if 'campaigns' in request.path %}active{% endif %}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-                            <polyline points="22 4 12 14.01 9 11.01"/>
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                            <polyline points="22 4 12 14.01 9 11.01" />
                         </svg>
                         Campaigns
                     </a>
+                    <a href="/scheduling" class="nav-link {% if 'scheduling' in request.path %}active{% endif %}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10" />
+                            <polyline points="12 6 12 12 16 14" />
+                        </svg>
+                        Scheduling
+                    </a>
+                    <a href="/tools" class="nav-link {% if 'tools' in request.path %}active{% endif %}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path
+                                d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2 2 0 0 1-3.41-2.09L9.5 9.5a1 1 0 0 0 0-1.4l-1.6-1.6a1 1 0 0 0-1.4 0L3.23 10.23a6 6 0 0 1 7.94-7.94l6.91-6.91a2 2 0 0 1 2.09 3.41L14.7 6.3z" />
+                        </svg>
+                        Tools
+                    </a>
                 </div>
-                
+
                 <div class="nav-section">
                     <div class="nav-title">Settings</div>
                     <a href="/smtp" class="nav-link {% if 'smtp' in request.path %}active{% endif %}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="2" y="4" width="20" height="16" rx="2"/>
-                            <path d="M7 15h0M12 15h0M17 15h0"/>
+                            <rect x="2" y="4" width="20" height="16" rx="2" />
+                            <path d="M7 15h0M12 15h0M17 15h0" />
                         </svg>
                         SMTP Servers
                     </a>
                     <a href="/templates" class="nav-link {% if 'templates' in request.path %}active{% endif %}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
-                            <polyline points="14 2 14 8 20 8"/>
+                            <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+                            <polyline points="14 2 14 8 20 8" />
                         </svg>
                         Templates
                     </a>
                     <a href="/recipients" class="nav-link {% if 'recipients' in request.path %}active{% endif %}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                            <circle cx="9" cy="7" r="4"/>
-                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-                            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                            <circle cx="9" cy="7" r="4" />
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                         </svg>
                         Recipients
                     </a>
+                    <a href="/webhooks" class="nav-link {% if 'webhooks' in request.path %}active{% endif %}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M18 16.98h-5.99c-1.1 0-1.95.94-2.48 1.9A4 4 0 0 1 2 17c.01-.7.2-1.4.57-2" />
+                            <path d="m6 17 3.13-5.78c.53-.97.1-2.18-.5-3.1a4 4 0 1 1 6.89-4.06" />
+                            <path d="m12 6 3.13 5.73C15.66 12.7 16.9 13 18 13a4 4 0 0 1 0 8" />
+                        </svg>
+                        Webhooks
+                    </a>
                 </div>
-                
+
                 <div class="nav-section">
                     <div class="nav-title">Monitoring</div>
-                    <a href="/logs" class="nav-link {% if 'logs' in request.path %}active{% endif %}">
+                    <a href="/logs" class="nav-link {% if request.path == '/logs' %}active{% endif %}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                            <polyline points="14 2 14 8 20 8"/>
-                            <line x1="16" y1="13" x2="8" y2="13"/>
-                            <line x1="16" y1="17" x2="8" y2="17"/>
-                            <polyline points="10 9 9 9 8 9"/>
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                            <polyline points="14 2 14 8 20 8" />
+                            <line x1="16" y1="13" x2="8" y2="13" />
+                            <line x1="16" y1="17" x2="8" y2="17" />
+                            <polyline points="10 9 9 9 8 9" />
                         </svg>
                         Logs
+                    </a>
+                    <a href="/bounces" class="nav-link {% if 'bounces' in request.path %}active{% endif %}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                            <polyline points="22,6 12,13 2,6" />
+                            <line x1="2" y1="20" x2="8" y2="14" />
+                        </svg>
+                        Bounces
+                    </a>
+                    <a href="/dead-letter" class="nav-link {% if 'dead-letter' in request.path %}active{% endif %}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="12" y1="8" x2="12" y2="12" />
+                            <line x1="12" y1="16" x2="12.01" y2="16" />
+                        </svg>
+                        Dead Letter
                     </a>
                 </div>
             </nav>
         </aside>
-        
+
         <main class="main">
             {% block content %}{% endblock %}
         </main>
     </div>
-    
+
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script>
         // Initialize WebSocket connection
         const socket = io();
-        
-        socket.on('connect', function() {
+
+        socket.on('connect', function () {
             console.log('Connected to server');
         });
-        
-        socket.on('campaign_progress', function(data) {
+
+        socket.on('campaign_progress', function (data) {
             console.log('Progress:', data);
             // Update progress UI
             const progressBar = document.querySelector('.progress-bar');
@@ -447,13 +576,13 @@
                 progressBar.style.width = data.percent + '%';
             }
         });
-        
-        socket.on('campaign_complete', function(data) {
+
+        socket.on('campaign_complete', function (data) {
             console.log('Campaign complete:', data);
         });
     </script>
-    
+
     {% block extra_js %}{% endblock %}
 </body>
-</html>
 
+</html>

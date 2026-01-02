@@ -18,7 +18,7 @@ Features:
 """
 
 __version__ = "2.0.0"
-__author__ = "Unified Sender Team"
+__author__ = "MerCury Team"
 
 from .services import (
     CampaignService,

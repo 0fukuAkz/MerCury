@@ -232,7 +232,7 @@ def get_user_by_id(user_id: str) -> Optional[User]:
     session = get_session_direct()
     try:
         repo = UserRepository(session)
-        db_user = repo.get_by_id(int(user_id))
+        db_user = repo.get(int(user_id))
         
         if db_user:
             return User.from_db_model(db_user)

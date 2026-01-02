@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard - Unified Email Sender{% endblock %}
+{% block title %}Dashboard - MerCury{% endblock %}
 
 {% block content %}
 <div class="page-header">
@@ -36,22 +36,23 @@
     <div class="flex gap-4">
         <a href="/campaigns/new" class="btn btn-primary">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="12" y1="5" x2="12" y2="19"/>
-                <line x1="5" y1="12" x2="19" y2="12"/>
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
             New Campaign
         </a>
         <a href="/smtp" class="btn btn-secondary">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="3"/>
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                <circle cx="12" cy="12" r="3" />
+                <path
+                    d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
             </svg>
             Configure SMTP
         </a>
         <a href="/templates" class="btn btn-secondary">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
-                <polyline points="14 2 14 8 20 8"/>
+                <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+                <polyline points="14 2 14 8 20 8" />
             </svg>
             Manage Templates
         </a>
@@ -112,7 +113,7 @@
         try {
             const response = await fetch('/api/stats');
             const data = await response.json();
-            
+
             document.getElementById('stat-sent').textContent = data.total_sent.toLocaleString();
             document.getElementById('stat-failed').textContent = data.total_failed.toLocaleString();
             document.getElementById('stat-rate').textContent = data.success_rate + '%';
@@ -120,20 +121,20 @@
             console.error('Failed to load stats:', error);
         }
     }
-    
+
     // Load campaigns
     async function loadCampaigns() {
         try {
             const response = await fetch('/api/campaigns');
             const data = await response.json();
-            
+
             const tbody = document.getElementById('campaigns-table');
-            
+
             if (data.campaigns.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="6" class="text-muted" style="text-align: center;">No campaigns yet</td></tr>';
                 return;
             }
-            
+
             tbody.innerHTML = data.campaigns.slice(0, 5).map(campaign => `
                 <tr>
                     <td>${campaign.name}</td>
@@ -148,21 +149,21 @@
             console.error('Failed to load campaigns:', error);
         }
     }
-    
+
     // Load SMTP servers
     async function loadServers() {
         try {
             const response = await fetch('/api/smtp');
             const data = await response.json();
-            
+
             const tbody = document.getElementById('smtp-table');
             document.getElementById('stat-servers').textContent = data.servers.length;
-            
+
             if (data.servers.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="5" class="text-muted" style="text-align: center;">No SMTP servers configured</td></tr>';
                 return;
             }
-            
+
             tbody.innerHTML = data.servers.map(server => `
                 <tr>
                     <td>${server.name}</td>
@@ -178,7 +179,7 @@
             console.error('Failed to load servers:', error);
         }
     }
-    
+
     async function testServer(name) {
         try {
             const response = await fetch(`/api/smtp/test/${name}`, { method: 'POST' });
@@ -188,7 +189,7 @@
             alert('Test failed: ' + error.message);
         }
     }
-    
+
     function getStatusColor(status) {
         const colors = {
             'draft': 'info',
@@ -199,19 +200,18 @@
         };
         return colors[status] || 'info';
     }
-    
+
     function formatDate(dateStr) {
         if (!dateStr) return '-';
         return new Date(dateStr).toLocaleDateString();
     }
-    
+
     // Load all data
     loadStats();
     loadCampaigns();
     loadServers();
-    
+
     // Refresh every 30 seconds
     setInterval(loadStats, 30000);
 </script>
 {% endblock %}
-

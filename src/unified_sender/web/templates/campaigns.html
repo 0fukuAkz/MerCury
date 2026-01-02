@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Campaigns - Unified Email Sender{% endblock %}
+{% block title %}Campaigns - MerCury{% endblock %}
 
 {% block content %}
 <div class="page-header flex justify-between items-center">
@@ -10,8 +10,8 @@
     </div>
     <a href="/campaigns/new" class="btn btn-primary">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="12" y1="5" x2="12" y2="19"/>
-            <line x1="5" y1="12" x2="19" y2="12"/>
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
         </svg>
         New Campaign
     </a>
@@ -44,9 +44,9 @@
         try {
             const response = await fetch('/api/campaigns');
             const data = await response.json();
-            
+
             const tbody = document.getElementById('campaigns-table');
-            
+
             if (data.campaigns.length === 0) {
                 tbody.innerHTML = `
                     <tr>
@@ -58,7 +58,7 @@
                 `;
                 return;
             }
-            
+
             tbody.innerHTML = data.campaigns.map(campaign => `
                 <tr>
                     <td>
@@ -90,7 +90,7 @@
             console.error('Failed to load campaigns:', error);
         }
     }
-    
+
     function getStatusColor(status) {
         const colors = {
             'draft': 'info',
@@ -103,20 +103,19 @@
         };
         return colors[status] || 'info';
     }
-    
+
     function startCampaign(id) {
         socket.emit('start_campaign', { campaign_id: id });
     }
-    
+
     function pauseCampaign(id) {
         socket.emit('pause_campaign', { campaign_id: id });
     }
-    
+
     function resumeCampaign(id) {
         socket.emit('resume_campaign', { campaign_id: id });
     }
-    
+
     loadCampaigns();
 </script>
 {% endblock %}
-

@@ -48,3 +48,29 @@ def recipients():
     return render_template('recipients.html')
 
 
+@views_bp.route('/scheduling')
+@login_required
+def scheduling():
+    """Campaign scheduling management page."""
+    return render_template('scheduling.html')
+
+
+@views_bp.route('/bounces')
+@login_required
+def bounces():
+    """Bounce and suppression list management page."""
+    return render_template('bounces.html')
+
+
+@views_bp.route('/dead-letter')
+@login_required
+def dead_letter():
+    """Dead letter queue viewer page."""
+    return render_template('dead_letter.html')
+
+
+@views_bp.route('/webhooks')
+@login_required
+def webhooks():
+    """Webhook management page."""
+    return render_template('webhooks.html')

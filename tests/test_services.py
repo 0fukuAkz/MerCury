@@ -60,6 +60,20 @@ def test_campaign_service_create_campaign(mock_db_session, mock_repo):
     assert campaign.name == "New Campaign"
     mock_repo.return_value.create.assert_called_once()
 
+def test_campaign_service_create_campaign_with_rotation(mock_db_session, mock_repo):
+    service = CampaignService()
+    config = CampaignConfig(
+        name="Rotation Campaign",
+        subject="Hi",
+        smtp_rotation="random"
+    )
+    
+    mock_repo.return_value.create.side_effect = lambda c: c # Return argument passed
+    
+    campaign = service.create_campaign(config)
+    
+    assert campaign.smtp_rotation_strategy == "random"
+
 # ...
 
 def test_smtp_service_get_pool():
@@ -114,8 +128,8 @@ async def test_run_campaign_flow():
     # Mock send_bulk result
     bulk_result = Mock()
     bulk_result.results = [
-        Mock(success=True, recipient='a@b.com'),
-        Mock(success=False, recipient='c@d.com', error='Fail')
+        Mock(success=True, recipient='a@b.com', smtp_server='smtp1', error_type=None),
+        Mock(success=False, recipient='c@d.com', error='Fail', smtp_server=None, error_type='auth_error')
     ]
     service.email_service.send_bulk.return_value = bulk_result
     

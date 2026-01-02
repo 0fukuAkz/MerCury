@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Logs - Unified Email Sender{% endblock %}
+{% block title %}Logs - MerCury{% endblock %}
 
 {% block content %}
 <div class="page-header">
@@ -29,18 +29,20 @@
     <div class="card">
         <div class="card-header">
             <h2 class="card-title" style="color: var(--success);">✅ Successful Sends</h2>
-            <button class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="loadSuccessLogs()">Refresh</button>
+            <button class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;"
+                onclick="loadSuccessLogs()">Refresh</button>
         </div>
         <div id="success-logs" style="max-height: 400px; overflow-y: auto;">
             <p class="text-muted">Loading...</p>
         </div>
     </div>
-    
+
     <!-- Failed Logs -->
     <div class="card">
         <div class="card-header">
             <h2 class="card-title" style="color: var(--error);">❌ Failed Sends</h2>
-            <button class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="loadFailedLogs()">Refresh</button>
+            <button class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;"
+                onclick="loadFailedLogs()">Refresh</button>
         </div>
         <div id="failed-logs" style="max-height: 400px; overflow-y: auto;">
             <p class="text-muted">Loading...</p>
@@ -53,7 +55,7 @@
         try {
             const response = await fetch('/api/stats');
             const data = await response.json();
-            
+
             document.getElementById('success-count').textContent = data.total_sent.toLocaleString();
             document.getElementById('failed-count').textContent = data.total_failed.toLocaleString();
             document.getElementById('success-rate').textContent = data.success_rate + '%';
@@ -61,19 +63,19 @@
             console.error('Failed to load stats:', error);
         }
     }
-    
+
     async function loadSuccessLogs() {
         try {
             const response = await fetch('/api/logs/success');
             const data = await response.json();
-            
+
             const container = document.getElementById('success-logs');
-            
+
             if (data.emails.length === 0) {
                 container.innerHTML = '<p class="text-muted">No successful sends yet</p>';
                 return;
             }
-            
+
             container.innerHTML = data.emails.map(email => `
                 <div style="padding: 0.5rem; border-bottom: 1px solid var(--border-color); font-family: 'JetBrains Mono', monospace; font-size: 0.875rem;">
                     ${email}
@@ -83,19 +85,19 @@
             console.error('Failed to load success logs:', error);
         }
     }
-    
+
     async function loadFailedLogs() {
         try {
             const response = await fetch('/api/logs/failed');
             const data = await response.json();
-            
+
             const container = document.getElementById('failed-logs');
-            
+
             if (data.failures.length === 0) {
                 container.innerHTML = '<p class="text-muted">No failed sends</p>';
                 return;
             }
-            
+
             container.innerHTML = data.failures.map(line => {
                 const [email, ...errorParts] = line.split('|');
                 const error = errorParts.join('|') || 'Unknown error';
@@ -110,10 +112,9 @@
             console.error('Failed to load failed logs:', error);
         }
     }
-    
+
     loadStats();
     loadSuccessLogs();
     loadFailedLogs();
 </script>
 {% endblock %}
-
