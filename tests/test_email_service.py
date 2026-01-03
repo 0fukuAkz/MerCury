@@ -4,9 +4,9 @@ import pytest
 from unittest.mock import Mock, AsyncMock, patch
 from datetime import datetime, UTC
 
-from unified_sender.services.email_service import EmailService, EmailConfig
-from unified_sender.services.smtp_service import SMTPService
-from unified_sender.engine.async_sender import EmailResult
+from mercury.services.email_service import EmailService, EmailConfig
+from mercury.services.smtp_service import SMTPService
+from mercury.engine.async_sender import EmailResult
 
 
 @pytest.mark.asyncio

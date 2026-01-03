@@ -7,11 +7,11 @@ from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from unified_sender.data.database import Base
-from unified_sender.data.models import User, Template, SMTPServer, Recipient, Campaign
-from unified_sender.engine.connection_pool import SMTPServerConfig, AsyncConnectionPool
-from unified_sender.engine.rate_limiter import RateLimiter, RateLimiterConfig
-from unified_sender.engine.retry_queue import RetryQueue, RetryConfig
+from mercury.data.database import Base
+from mercury.data.models import User, Template, SMTPServer, Recipient, Campaign
+from mercury.engine.connection_pool import SMTPServerConfig, AsyncConnectionPool
+from mercury.engine.rate_limiter import RateLimiter, RateLimiterConfig
+from mercury.engine.retry_queue import RetryQueue, RetryConfig
 
 
 # Database Fixtures

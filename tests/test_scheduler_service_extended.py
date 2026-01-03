@@ -3,12 +3,12 @@ import pytest
 import asyncio
 from datetime import datetime, UTC, timedelta
 from unittest.mock import MagicMock, AsyncMock, patch
-from unified_sender.services.scheduler_service import SchedulerService, ScheduleType, schedule_campaign
+from mercury.services.scheduler_service import SchedulerService, ScheduleType, schedule_campaign
 
 @pytest.fixture
 def scheduler_service():
     """Create SchedulerService with mocked APScheduler."""
-    with patch('unified_sender.services.scheduler_service.AsyncIOScheduler') as MockScheduler:
+    with patch('mercury.services.scheduler_service.AsyncIOScheduler') as MockScheduler:
         service = SchedulerService(use_async=True)
         # Mock the internal scheduler instance
         service._scheduler = MockScheduler.return_value
@@ -129,7 +129,7 @@ class TestSchedulerServiceExtended:
         """Test rescheduling a job."""
         job_id = "job1"
         # Create full object because type check
-        from unified_sender.services.scheduler_service import ScheduledJob
+        from mercury.services.scheduler_service import ScheduledJob
         
         job = ScheduledJob(
             id=job_id, name="test", schedule_type=ScheduleType.ONCE, 
@@ -149,7 +149,7 @@ class TestSchedulerServiceExtended:
 
     def test_getters(self, scheduler_service):
         """Test job retrieval methods."""
-        from unified_sender.services.scheduler_service import ScheduledJob
+        from mercury.services.scheduler_service import ScheduledJob
         
         j1 = ScheduledJob(id="1", name="j1", schedule_type=ScheduleType.ONCE, scheduled_at=datetime.now(UTC), campaign_id="c1", run_count=0)
         j2 = ScheduledJob(id="2", name="j2", schedule_type=ScheduleType.ONCE, scheduled_at=datetime.now(UTC), campaign_id="c2", run_count=1)

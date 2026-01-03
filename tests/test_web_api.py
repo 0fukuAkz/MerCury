@@ -3,16 +3,16 @@
 import pytest
 from unittest.mock import patch, Mock, MagicMock, mock_open
 from flask import json
-from unified_sender.web.app import create_app
+from mercury.web.app import create_app
 
 @pytest.fixture
 def api_app():
     """Create app for API tests."""
-    with patch('unified_sender.web.app.init_auth'), \
-         patch('unified_sender.web.app.get_app_context') as mock_ctx_getter, \
-         patch('unified_sender.web.app.register_auth_routes'), \
-         patch('unified_sender.web.app.limiter') as mock_limiter, \
-         patch('unified_sender.web.app.api_key_or_login_required', side_effect=lambda f: f):
+    with patch('mercury.web.app.init_auth'), \
+         patch('mercury.web.app.get_app_context') as mock_ctx_getter, \
+         patch('mercury.web.app.register_auth_routes'), \
+         patch('mercury.web.app.limiter') as mock_limiter, \
+         patch('mercury.web.app.api_key_or_login_required', side_effect=lambda f: f):
         
         # Configure mock context limiter
         mock_ctx = Mock()
@@ -41,7 +41,7 @@ def test_api_status(auth_client):
 # /api/campaigns
 
 def test_api_list_campaigns(auth_client):
-    with patch('unified_sender.services.campaign_service.CampaignService') as MockService:
+    with patch('mercury.services.campaign_service.CampaignService') as MockService:
         service = MockService.return_value
         campaign = Mock()
         campaign.to_dict.return_value = {'id': 1, 'name': 'Test'}
@@ -54,7 +54,7 @@ def test_api_list_campaigns(auth_client):
         assert data['campaigns'][0]['name'] == 'Test'
 
 def test_api_create_campaign(auth_client):
-    with patch('unified_sender.services.campaign_service.CampaignService') as MockService:
+    with patch('mercury.services.campaign_service.CampaignService') as MockService:
         service = MockService.return_value
         campaign = Mock()
         campaign.to_dict.return_value = {'id': 1, 'name': 'New'}
@@ -77,8 +77,8 @@ def test_api_create_campaign_validation(auth_client):
 # /api/smtp
 
 def test_api_list_smtp(auth_client):
-    with patch('unified_sender.data.repositories.SMTPRepository') as MockRepo, \
-         patch('unified_sender.data.database.get_session_direct'):
+    with patch('mercury.data.repositories.SMTPRepository') as MockRepo, \
+         patch('mercury.data.database.get_session_direct'):
         
         repo = MockRepo.return_value
         server = Mock()
@@ -92,7 +92,7 @@ def test_api_list_smtp(auth_client):
         assert data['servers'][0]['host'] == 'smtp.test'
 
 def test_api_add_smtp(auth_client):
-    with patch('unified_sender.services.smtp_service.SMTPService') as MockService:
+    with patch('mercury.services.smtp_service.SMTPService') as MockService:
         service = MockService.return_value
         server = Mock()
         server.to_dict.return_value = {'host': 'new.smtp'}
@@ -106,9 +106,9 @@ def test_api_add_smtp(auth_client):
         assert data['success'] is True
 
 def test_api_test_smtp(auth_client):
-    with patch('unified_sender.data.repositories.SMTPRepository') as MockRepo, \
-         patch('unified_sender.services.smtp_service.SMTPService') as MockService, \
-         patch('unified_sender.data.database.get_session_direct'):
+    with patch('mercury.data.repositories.SMTPRepository') as MockRepo, \
+         patch('mercury.services.smtp_service.SMTPService') as MockService, \
+         patch('mercury.data.database.get_session_direct'):
         
         # Mock Repo
         repo = MockRepo.return_value
@@ -139,8 +139,8 @@ def test_api_test_smtp(auth_client):
 # /api/templates
 
 def test_api_list_templates(auth_client):
-    with patch('unified_sender.data.repositories.TemplateRepository') as MockRepo, \
-         patch('unified_sender.data.database.get_session_direct'):
+    with patch('mercury.data.repositories.TemplateRepository') as MockRepo, \
+         patch('mercury.data.database.get_session_direct'):
          
         repo = MockRepo.return_value
         tpl = Mock()
@@ -153,7 +153,7 @@ def test_api_list_templates(auth_client):
         assert len(data['templates']) == 1
 
 def test_api_preview_template(auth_client):
-    with patch('unified_sender.features.template_engine.TemplateEngine') as MockEngine:
+    with patch('mercury.features.template_engine.TemplateEngine') as MockEngine:
         engine = MockEngine.return_value
         engine.preview.return_value = "<html>Preview</html>"
         engine.get_used_placeholders.return_value = ["name"]

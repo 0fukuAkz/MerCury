@@ -5,19 +5,19 @@ import asyncio
 from unittest.mock import AsyncMock, Mock, patch, ANY
 from datetime import datetime, UTC
 
-from unified_sender.engine.enhanced_sender import (
+from mercury.engine.enhanced_sender import (
     EnhancedAsyncEmailSender,
     EmailResult,
     BulkSendResult
 )
-from unified_sender.engine.error_recovery import (
+from mercury.engine.error_recovery import (
     ErrorRecoveryManager,
     ErrorRecoveryDecision,
     RecoveryStrategy
 )
-from unified_sender.engine.error_aggregator import ErrorAggregator
-from unified_sender.services.dead_letter_service import DeadLetterService
-from unified_sender.engine.connection_pool import SMTPConnectionPool
+from mercury.engine.error_aggregator import ErrorAggregator
+from mercury.services.dead_letter_service import DeadLetterService
+from mercury.engine.connection_pool import SMTPConnectionPool
 
 
 @pytest.fixture
@@ -74,14 +74,14 @@ class TestEnhancedSender:
             
             # Must patch the PARENT class method if we are calling super().send_email
             # But EnhancedSender calls super().send_email.
-            # patching unified_sender.engine.async_sender.AsyncEmailSender.send_email works IF the method is awaited.
+            # patching mercury.engine.async_sender.AsyncEmailSender.send_email works IF the method is awaited.
             
             # Let's try patching the actual class method again but ensure return_value is correct.
             pass
 
     async def test_send_email_success_no_recovery_needed_v2(self, enhanced_sender):
          # Redoing the test with proper class patching
-         with patch('unified_sender.engine.async_sender.AsyncEmailSender.send_email', new_callable=AsyncMock) as mock_super_send:
+         with patch('mercury.engine.async_sender.AsyncEmailSender.send_email', new_callable=AsyncMock) as mock_super_send:
             mock_super_send.return_value = EmailResult(
                 success=True,
                 recipient="test@example.com",
@@ -104,7 +104,7 @@ class TestEnhancedSender:
     async def test_recovery_switch_server(self, enhanced_sender):
         """Test recovery by switching server."""
         # Use side_effect with an async-compatible iterable
-        with patch('unified_sender.engine.async_sender.AsyncEmailSender.send_email', new_callable=AsyncMock) as mock_super_send:
+        with patch('mercury.engine.async_sender.AsyncEmailSender.send_email', new_callable=AsyncMock) as mock_super_send:
             
             fail_result = EmailResult(
                 success=False,
@@ -140,7 +140,7 @@ class TestEnhancedSender:
 
     async def test_recovery_delay_retry(self, enhanced_sender):
         """Test recovery with delay."""
-        with patch('unified_sender.engine.async_sender.AsyncEmailSender.send_email', new_callable=AsyncMock) as mock_super_send:
+        with patch('mercury.engine.async_sender.AsyncEmailSender.send_email', new_callable=AsyncMock) as mock_super_send:
             fail_result = EmailResult(success=False, recipient="test", correlation_id="1", timestamp=datetime.now(UTC), error="Busy", is_transient=True)
             success_result = EmailResult(success=True, recipient="test", correlation_id="1", timestamp=datetime.now(UTC))
             
@@ -164,7 +164,7 @@ class TestEnhancedSender:
 
     async def test_recovery_dead_letter(self, enhanced_sender):
         """Test moving to dead letter queue."""
-        with patch('unified_sender.engine.async_sender.AsyncEmailSender.send_email', new_callable=AsyncMock) as mock_super_send:
+        with patch('mercury.engine.async_sender.AsyncEmailSender.send_email', new_callable=AsyncMock) as mock_super_send:
             fail_result = EmailResult(
                 success=False, 
                 recipient="test@example.com", 
@@ -201,7 +201,7 @@ class TestEnhancedSender:
 
     async def test_recovery_exhausted(self, enhanced_sender):
         """Test exhaustion of retry attempts."""
-        with patch('unified_sender.engine.async_sender.AsyncEmailSender.send_email', new_callable=AsyncMock) as mock_super_send:
+        with patch('mercury.engine.async_sender.AsyncEmailSender.send_email', new_callable=AsyncMock) as mock_super_send:
             fail_result = EmailResult(success=False, recipient="test", correlation_id="1", timestamp=datetime.now(UTC), error="Timeout", is_transient=True)
             mock_super_send.return_value = fail_result
             
@@ -225,7 +225,7 @@ class TestEnhancedSender:
 
     async def test_unexpected_exception_in_recovery(self, enhanced_sender):
         """Test handling of unexpected exception during recovery logic."""
-        with patch('unified_sender.engine.async_sender.AsyncEmailSender.send_email', new_callable=AsyncMock) as mock_super_send:
+        with patch('mercury.engine.async_sender.AsyncEmailSender.send_email', new_callable=AsyncMock) as mock_super_send:
             mock_super_send.side_effect = Exception("Critical Error")
             
             with pytest.raises(Exception) as exc:

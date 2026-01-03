@@ -1,7 +1,7 @@
 """Tests for placeholder processor."""
 
 import pytest
-from unified_sender.features.placeholders import PlaceholderProcessor, generate_identity
+from mercury.features.placeholders import PlaceholderProcessor, generate_identity
 
 
 def test_placeholder_processor_basic():

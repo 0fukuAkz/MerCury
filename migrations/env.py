@@ -13,8 +13,8 @@ from alembic import context
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 # Import our models
-from unified_sender.data.database import Base
-from unified_sender.data.models import (
+from mercury.data.database import Base
+from mercury.data.models import (
     Campaign, SMTPServer, Template, RecipientList, Recipient, EmailLog
 )
 

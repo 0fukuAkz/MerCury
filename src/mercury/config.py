@@ -316,7 +316,7 @@ class UnifiedConfig:
 # Default configuration template
 DEFAULT_CONFIG = """
 # Unified Email Sender - Campaign Configuration
-# Documentation: https://github.com/unified-sender/unified-sender
+# Documentation: https://github.com/mercury/mercury
 
 campaign:
   name: "My Email Campaign"

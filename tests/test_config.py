@@ -6,7 +6,7 @@ import yaml
 from unittest.mock import patch, mock_open
 from pathlib import Path
 
-from unified_sender.config import (
+from mercury.config import (
     expand_env_vars,
     load_yaml_config,
     merge_configs,

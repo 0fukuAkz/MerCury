@@ -5,7 +5,7 @@ import asyncio
 from datetime import datetime, UTC
 from unittest.mock import AsyncMock, Mock
 
-from unified_sender.engine.retry_queue import RetryQueue, RetryConfig, RetryItem
+from mercury.engine.retry_queue import RetryQueue, RetryConfig, RetryItem
 
 
 @pytest.mark.asyncio

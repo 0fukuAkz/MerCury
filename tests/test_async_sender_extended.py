@@ -6,14 +6,14 @@ from datetime import datetime, UTC
 from email.message import EmailMessage
 import aiosmtplib
 
-from unified_sender.engine.async_sender import (
+from mercury.engine.async_sender import (
     AsyncEmailSender, EmailResult, BulkSendResult, categorize_smtp_error,
     SMTPConnectionError, SMTPAuthenticationError, SMTPRateLimitError,
     SMTPMailboxError, TransientSMTPError, PermanentSMTPError,
     send_email_async, send_bulk_emails_async
 )
-from unified_sender.engine.connection_pool import SMTPServerConfig, SMTPConnectionPool
-from unified_sender.engine.rate_limiter import RateLimiter
+from mercury.engine.connection_pool import SMTPServerConfig, SMTPConnectionPool
+from mercury.engine.rate_limiter import RateLimiter
 
 @pytest.fixture
 def mock_pool():
@@ -148,8 +148,8 @@ class TestAsyncSenderExtended:
         assert progress.call_count == 10
 
     async def test_convenience_function_bulk(self):
-        with patch('unified_sender.engine.async_sender.SMTPConnectionPool') as MockPool, \
-             patch('unified_sender.engine.async_sender.AsyncEmailSender') as MockSender:
+        with patch('mercury.engine.async_sender.SMTPConnectionPool') as MockPool, \
+             patch('mercury.engine.async_sender.AsyncEmailSender') as MockSender:
             
             mock_pool_inst = MockPool.return_value
             mock_pool_inst.close_all = AsyncMock()
@@ -168,8 +168,8 @@ class TestAsyncSenderExtended:
             mock_pool_inst.close_all.assert_called_once()
 
     async def test_convenience_function_single(self):
-         with patch('unified_sender.engine.async_sender.AsyncConnectionPool') as MockPool, \
-              patch('unified_sender.engine.async_sender.SMTPServerConfig') as MockConfig:
+         with patch('mercury.engine.async_sender.AsyncConnectionPool') as MockPool, \
+              patch('mercury.engine.async_sender.SMTPServerConfig') as MockConfig:
             
             pool_inst = MockPool.return_value
             pool_inst.initialize = AsyncMock()

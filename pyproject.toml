@@ -3,14 +3,14 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "unified-sender"
+name = "mercury"
 version = "2.0.0"
 description = "Production-grade email automation platform with async sending, security, tracking, and campaign management"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
 authors = [
-    {name = "Unified Sender Team"}
+    {name = "MerCury Team"}
 ]
 keywords = ["email", "automation", "campaign", "smtp", "bulk-email", "tracking", "webhooks"]
 classifiers = [
@@ -97,15 +97,15 @@ pdf = [
     "weasyprint>=60.0",
 ]
 all = [
-    "unified-sender[dev,pdf]",
+    "mercury[dev,pdf]",
 ]
 
 [project.scripts]
-sender = "unified_sender.cli.main:main"
+sender = "mercury.cli.main:main"
 
 [project.urls]
-Homepage = "https://github.com/unified-sender/unified-sender"
-Documentation = "https://github.com/unified-sender/unified-sender#readme"
+Homepage = "https://github.com/mercury/mercury"
+Documentation = "https://github.com/mercury/mercury#readme"
 
 [tool.setuptools.packages.find]
 where = ["src"]

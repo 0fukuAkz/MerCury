@@ -7,8 +7,8 @@ import asyncio
 from unittest.mock import MagicMock, patch, mock_open
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 
-from unified_sender.services.campaign_service import CampaignService, CampaignConfig
-from unified_sender.data.models import Campaign, CampaignStatus
+from mercury.services.campaign_service import CampaignService, CampaignConfig
+from mercury.data.models import Campaign, CampaignStatus
 
 @pytest.fixture
 def service():
@@ -39,7 +39,7 @@ class TestCampaignServiceErrors:
         
         with patch("os.path.exists", return_value=True), \
              patch("builtins.open", mock_open(read_data=csv_content)), \
-             patch("unified_sender.services.campaign_service.logger") as mock_logger:
+             patch("mercury.services.campaign_service.logger") as mock_logger:
             
             recipients = list(service.load_recipients_from_csv("test.csv", email_column="email"))
             
@@ -52,10 +52,10 @@ class TestCampaignServiceErrors:
 
     def test_create_campaign_db_error(self, service, valid_config):
         """Verify database errors during campaign creation propagate."""
-        with patch('unified_sender.services.campaign_service.get_session_direct') as mock_session_cls:
+        with patch('mercury.services.campaign_service.get_session_direct') as mock_session_cls:
             mock_session = mock_session_cls.return_value
             # Setup repository to raise exception
-            with patch('unified_sender.services.campaign_service.CampaignRepository') as MockRepo:
+            with patch('mercury.services.campaign_service.CampaignRepository') as MockRepo:
                 MockRepo.return_value.create.side_effect = SQLAlchemyError("DB Connection Failed")
                 
                 with pytest.raises(SQLAlchemyError):
@@ -83,9 +83,9 @@ class TestCampaignServiceErrors:
         mock_result.results = [MagicMock(success=True, recipient="test@example.com", server_name="smtp1")]
         service.email_service.send_bulk = MagicMock(return_value=mod_result_future(mock_result))
 
-        with patch('unified_sender.services.campaign_service.get_session_direct') as mock_session_cls, \
-             patch('unified_sender.services.campaign_service.LogRepository'), \
-             patch('unified_sender.services.campaign_service.AsyncFileLogger') as MockLogger:
+        with patch('mercury.services.campaign_service.get_session_direct') as mock_session_cls, \
+             patch('mercury.services.campaign_service.LogRepository'), \
+             patch('mercury.services.campaign_service.AsyncFileLogger') as MockLogger:
              
             # Setup session commit to fail
             mock_session = mock_session_cls.return_value

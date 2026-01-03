@@ -256,13 +256,13 @@ def main():
     print()
     
     try:
-        from unified_sender.web.app import create_app, socketio
+        from mercury.web.app import create_app, socketio
         
         global _socketio
         _socketio = socketio
         
         # Create application
-        app = create_app(config={'DEBUG': True})
+        app = create_app(config={'DEBUG': False})
         
         # Run with SocketIO support
         socketio.run(app, host='0.0.0.0', port=5000, allow_unsafe_werkzeug=True)

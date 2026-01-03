@@ -3,14 +3,14 @@
 import pytest
 from datetime import datetime, UTC
 
-from unified_sender.data.models.campaign import Campaign, CampaignStatus
-from unified_sender.data.models.recipient import Recipient
-from unified_sender.data.models.smtp import SMTPServer
-from unified_sender.data.models.template import EmailTemplate
-from unified_sender.data.repositories.campaign import CampaignRepository
-from unified_sender.data.repositories.recipient import RecipientRepository
-from unified_sender.data.repositories.smtp import SMTPRepository
-from unified_sender.data.repositories.template import TemplateRepository
+from mercury.data.models.campaign import Campaign, CampaignStatus
+from mercury.data.models.recipient import Recipient
+from mercury.data.models.smtp import SMTPServer
+from mercury.data.models.template import EmailTemplate
+from mercury.data.repositories.campaign import CampaignRepository
+from mercury.data.repositories.recipient import RecipientRepository
+from mercury.data.repositories.smtp import SMTPRepository
+from mercury.data.repositories.template import TemplateRepository
 
 
 class TestBaseRepository:

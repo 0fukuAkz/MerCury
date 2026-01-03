@@ -4,7 +4,7 @@ import os
 import json
 import logging
 from unittest.mock import AsyncMock, MagicMock, patch
-from unified_sender.services.webhook_service import WebhookService, WebhookEvent, WebhookConfig
+from mercury.services.webhook_service import WebhookService, WebhookEvent, WebhookConfig
 
 @pytest.fixture
 def webhook_service():
@@ -176,7 +176,7 @@ class TestWebhookServiceExtended:
     async def test_get_delivery_stats(self, webhook_service):
         """Test statistics generation."""
         # Add some fake deliveries
-        from unified_sender.services.webhook_service import WebhookDelivery
+        from mercury.services.webhook_service import WebhookDelivery
         from datetime import datetime
         
         webhook_service._deliveries = [

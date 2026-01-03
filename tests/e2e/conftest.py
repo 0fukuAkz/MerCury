@@ -3,10 +3,10 @@ import threading
 import time
 import os
 import signal
-from unified_sender.web.app import create_app, init_db
-from unified_sender.data.database import get_session_direct
-from unified_sender.data.models import User
-from unified_sender.security.auth import hash_password
+from mercury.web.app import create_app, init_db
+from mercury.data.database import get_session_direct
+from mercury.data.models import User
+from mercury.security.auth import hash_password
 
 HOST = "127.0.0.1"
 PORT = 5001

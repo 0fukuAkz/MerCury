@@ -4,10 +4,10 @@ import pytest
 from unittest.mock import Mock, MagicMock
 from sqlalchemy.orm import Session
 from datetime import datetime
-from unified_sender.data.repositories.recipient import RecipientRepository, RecipientListRepository
-from unified_sender.data.repositories.campaign import CampaignRepository
-from unified_sender.data.repositories.smtp import SMTPRepository
-from unified_sender.data.models import (
+from mercury.data.repositories.recipient import RecipientRepository, RecipientListRepository
+from mercury.data.repositories.campaign import CampaignRepository
+from mercury.data.repositories.smtp import SMTPRepository
+from mercury.data.models import (
     Recipient, RecipientList, RecipientStatus, 
     Campaign, CampaignStatus,
     SMTPServer, SMTPServerStatus

@@ -2,12 +2,12 @@
 
 import pytest
 
-from unified_sender.engine.error_recovery import (
+from mercury.engine.error_recovery import (
     ErrorRecoveryManager,
     ErrorRecoveryDecision,
     RecoveryStrategy
 )
-from unified_sender.exceptions import (
+from mercury.exceptions import (
     SMTPConnectionError,
     SMTPAuthenticationError,
     SMTPMailboxError,

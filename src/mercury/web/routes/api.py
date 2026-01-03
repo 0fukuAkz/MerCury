@@ -317,7 +317,7 @@ def api_list_scheduled_jobs():
     jobs = service.get_all_jobs()
     
     return jsonify({
-        'jobs': [j.to_dict() for j in jobs.values()]
+        'jobs': [j.to_dict() for j in jobs]
     })
 
 

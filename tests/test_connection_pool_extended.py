@@ -3,7 +3,7 @@ import pytest
 import asyncio
 from unittest.mock import MagicMock, AsyncMock, patch
 from datetime import datetime, UTC
-from unified_sender.engine.connection_pool import (
+from mercury.engine.connection_pool import (
     SMTPServerConfig, AsyncSMTPConnection, AsyncConnectionPool, SMTPConnectionPool
 )
 
@@ -19,7 +19,7 @@ def smtp_config():
 
 @pytest.fixture
 def mock_aiosmtp():
-    with patch("unified_sender.engine.connection_pool.aiosmtplib.SMTP") as MockSMTP:
+    with patch("mercury.engine.connection_pool.aiosmtplib.SMTP") as MockSMTP:
         client = AsyncMock()
         MockSMTP.return_value = client
         client.connect.return_value = (220, "OK")

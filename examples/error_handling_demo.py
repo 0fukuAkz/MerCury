@@ -13,18 +13,18 @@ import asyncio
 from datetime import datetime, UTC
 
 # Import error handling components
-from unified_sender.engine.enhanced_sender import EnhancedAsyncEmailSender
-from unified_sender.engine.connection_pool import SMTPConnectionPool, SMTPServerConfig
-from unified_sender.engine.error_recovery import ErrorRecoveryManager
-from unified_sender.services.dead_letter_service import DeadLetterService
-from unified_sender.data.repositories.dead_letter import DeadLetterRepository
-from unified_sender.data.database import get_session
-from unified_sender.exceptions import (
+from mercury.engine.enhanced_sender import EnhancedAsyncEmailSender
+from mercury.engine.connection_pool import SMTPConnectionPool, SMTPServerConfig
+from mercury.engine.error_recovery import ErrorRecoveryManager
+from mercury.services.dead_letter_service import DeadLetterService
+from mercury.data.repositories.dead_letter import DeadLetterRepository
+from mercury.data.database import get_session
+from mercury.exceptions import (
     SMTPConnectionError,
     SMTPAuthenticationError,
     is_transient_error
 )
-from unified_sender.utils.logging_context import (
+from mercury.utils.logging_context import (
     configure_structured_logging,
     EmailOperationContext
 )
@@ -59,7 +59,7 @@ async def demo_circuit_breaker():
     print("DEMO 2: Circuit Breaker")
     print("="*60)
     
-    from unified_sender.engine.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
+    from mercury.engine.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
     
     config = CircuitBreakerConfig(
         failure_threshold=3,
@@ -94,8 +94,8 @@ async def demo_error_recovery():
     print("DEMO 3: Error Recovery")
     print("="*60)
     
-    from unified_sender.engine.error_recovery import ErrorRecoveryManager
-    from unified_sender.exceptions import TransientSMTPError
+    from mercury.engine.error_recovery import ErrorRecoveryManager
+    from mercury.exceptions import TransientSMTPError
     
     manager = ErrorRecoveryManager(
         available_smtp_servers=["smtp1.example.com", "smtp2.example.com", "smtp3.example.com"],
@@ -141,7 +141,7 @@ def demo_dead_letter_queue():
     # Create in-memory database for demo
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
-    from unified_sender.data.database import Base
+    from mercury.data.database import Base
     
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
@@ -189,8 +189,8 @@ async def demo_error_aggregation():
     print("DEMO 5: Error Aggregation")
     print("="*60)
     
-    from unified_sender.engine.error_aggregator import ErrorAggregator
-    from unified_sender.exceptions import (
+    from mercury.engine.error_aggregator import ErrorAggregator
+    from mercury.exceptions import (
         SMTPConnectionError,
         SMTPMailboxError,
         SMTPRateLimitError
@@ -253,7 +253,7 @@ async def main():
     configure_structured_logging(log_level="INFO")
     
     print("\n🚀 Advanced Error Handling Demo")
-    print("Unified Sender v2.0")
+    print("MerCury v2.0")
     
     await demo_basic_exceptions()
     await demo_circuit_breaker()

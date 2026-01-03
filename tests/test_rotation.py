@@ -2,7 +2,7 @@
 
 import pytest
 
-from unified_sender.features.rotation import RotationManager, RotationStrategy
+from mercury.features.rotation import RotationManager, RotationStrategy
 
 
 class TestRotationManager:

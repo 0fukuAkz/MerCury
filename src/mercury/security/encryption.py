@@ -74,7 +74,7 @@ class EncryptionService:
         # Use a fixed salt derived from environment or a default
         # In production, this should be stored securely
         if salt is None:
-            salt_str = os.environ.get('ENCRYPTION_SALT', 'unified-sender-default-salt')
+            salt_str = os.environ.get('ENCRYPTION_SALT', 'mercury-default-salt')
             salt = salt_str.encode()
         
         kdf = PBKDF2HMAC(

@@ -3,10 +3,10 @@ import pytest
 from datetime import datetime, UTC
 from sqlalchemy import text
 
-from unified_sender.data.repositories.template import TemplateRepository
-from unified_sender.data.repositories.user import UserRepository
-from unified_sender.data.repositories.smtp import SMTPRepository
-from unified_sender.data.models import Template, User, SMTPServer, SMTPServerStatus
+from mercury.data.repositories.template import TemplateRepository
+from mercury.data.repositories.user import UserRepository
+from mercury.data.repositories.smtp import SMTPRepository
+from mercury.data.models import Template, User, SMTPServer, SMTPServerStatus
 
 @pytest.fixture
 def session(db_session):

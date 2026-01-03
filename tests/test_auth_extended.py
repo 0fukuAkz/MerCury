@@ -5,7 +5,7 @@ import secrets
 from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime, UTC, timedelta
 
-from unified_sender.security.auth import (
+from mercury.security.auth import (
     User, hash_password, verify_password, authenticate, 
     require_api_key, generate_unsubscribe_token, 
     validate_unsubscribe_token, create_user
@@ -37,8 +37,8 @@ class TestAuthExtended:
         assert verify_password("wrongpassword", pw_hash) is False
         assert verify_password(password, "malformedhash") is False
 
-    @patch('unified_sender.data.database.get_session_direct')
-    @patch('unified_sender.security.auth.hash_password')
+    @patch('mercury.data.database.get_session_direct')
+    @patch('mercury.security.auth.hash_password')
     def test_create_user(self, mock_hash, mock_get_session):
         """Test user creation."""
         mock_hash.return_value = "hashed_pw"
@@ -47,7 +47,7 @@ class TestAuthExtended:
         mock_get_session.return_value = mock_session
         
         # Mock repository
-        with patch('unified_sender.data.repositories.UserRepository') as MockRepo:
+        with patch('mercury.data.repositories.UserRepository') as MockRepo:
             repo_instance = MockRepo.return_value
             repo_instance.username_exists.return_value = False
             
@@ -71,15 +71,15 @@ class TestAuthExtended:
             assert user.id == "1"
             repo_instance.create.assert_called_once()
 
-    @patch('unified_sender.data.database.get_session_direct')
-    @patch('unified_sender.security.auth.verify_password')
+    @patch('mercury.data.database.get_session_direct')
+    @patch('mercury.security.auth.verify_password')
     def test_authenticate_success(self, mock_verify, mock_get_session):
         """Test successful authentication."""
         mock_verify.return_value = True
         mock_session = MagicMock()
         mock_get_session.return_value = mock_session
         
-        with patch('unified_sender.data.repositories.UserRepository') as MockRepo:
+        with patch('mercury.data.repositories.UserRepository') as MockRepo:
             repo_instance = MockRepo.return_value
             
             db_user = MagicMock()
@@ -98,13 +98,13 @@ class TestAuthExtended:
             assert db_user.login_count == 1
             mock_session.commit.assert_called_once()
 
-    @patch('unified_sender.data.database.get_session_direct')
+    @patch('mercury.data.database.get_session_direct')
     def test_authenticate_failure(self, mock_get_session):
         """Test authentication failures."""
         mock_session = MagicMock()
         mock_get_session.return_value = mock_session
         
-        with patch('unified_sender.data.repositories.UserRepository') as MockRepo:
+        with patch('mercury.data.repositories.UserRepository') as MockRepo:
             repo_instance = MockRepo.return_value
             
             # Case 1: User not found
@@ -157,7 +157,7 @@ class TestAuthExtended:
             # Need to generate an expired token manually or rely on internals, 
             # simplest is to mock datetime during validation or generation.
             # Here we mock generation to set old timestamp
-            with patch('unified_sender.security.auth.datetime') as mock_dt:
+            with patch('mercury.security.auth.datetime') as mock_dt:
                 # Setup mock to behave like datetime
                 mock_dt.now.return_value = datetime.now(UTC) - timedelta(days=2)
                 mock_dt.UTC = UTC

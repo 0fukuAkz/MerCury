@@ -2,7 +2,7 @@
 
 import pytest
 from unittest.mock import patch, Mock, MagicMock, mock_open
-from unified_sender.features.generators import (
+from mercury.features.generators import (
     QRCodeGenerator, PDFGenerator, DOCXGenerator, 
     ImageGenerator, AttachmentGenerator, GeneratorConfig
 )
@@ -42,7 +42,7 @@ def test_pdf_generator_weasyprint():
     mock_html_inst.write_pdf.return_value = b'pdf-bytes'
     
     with patch.dict('sys.modules', {'weasyprint': mock_weasyprint}):
-        with patch('unified_sender.features.generators.PDFGenerator._check_weasyprint', return_value=True):
+        with patch('mercury.features.generators.PDFGenerator._check_weasyprint', return_value=True):
             generator._weasyprint_available = True
             result = generator.generate_from_html("<html></html>")
             assert result == b'pdf-bytes'

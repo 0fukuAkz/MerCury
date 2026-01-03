@@ -4,12 +4,12 @@ import pytest
 import asyncio
 from datetime import datetime, UTC, timedelta
 
-from unified_sender.engine.circuit_breaker import (
+from mercury.engine.circuit_breaker import (
     CircuitBreaker,
     CircuitBreakerConfig,
     CircuitState
 )
-from unified_sender.exceptions import SMTPConnectionError, SMTPAuthenticationError
+from mercury.exceptions import SMTPConnectionError, SMTPAuthenticationError
 
 
 class TestCircuitBreaker:

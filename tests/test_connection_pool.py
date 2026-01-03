@@ -3,7 +3,7 @@
 import pytest
 import asyncio
 from unittest.mock import patch, Mock, AsyncMock
-from unified_sender.engine.connection_pool import (
+from mercury.engine.connection_pool import (
     SMTPConnectionPool, AsyncConnectionPool, AsyncSMTPConnection,
     SMTPServerConfig, CircuitBreaker
 )
@@ -64,7 +64,7 @@ async def test_async_connection_send(server_config):
 async def test_async_pool_initialization(server_config):
     pool = AsyncConnectionPool(server_config, pool_size=2)
     
-    with patch('unified_sender.engine.connection_pool.AsyncSMTPConnection') as MockConn:
+    with patch('mercury.engine.connection_pool.AsyncSMTPConnection') as MockConn:
         mock_instance = AsyncMock()
         MockConn.return_value = mock_instance
         

@@ -9,7 +9,7 @@ class TestEncryption:
     
     def test_encrypt_decrypt(self):
         """Test basic encryption and decryption."""
-        from unified_sender.security.encryption import EncryptionService
+        from mercury.security.encryption import EncryptionService
         
         service = EncryptionService(password="test-password")
         
@@ -22,7 +22,7 @@ class TestEncryption:
     
     def test_is_encrypted(self):
         """Test encrypted value detection."""
-        from unified_sender.security.encryption import EncryptionService
+        from mercury.security.encryption import EncryptionService
         
         service = EncryptionService(password="test-password")
         
@@ -35,7 +35,7 @@ class TestEncryption:
     
     def test_encrypt_if_needed(self):
         """Test conditional encryption."""
-        from unified_sender.security.encryption import EncryptionService
+        from mercury.security.encryption import EncryptionService
         
         service = EncryptionService(password="test-password")
         
@@ -58,7 +58,7 @@ class TestEmailValidation:
     
     def test_valid_email(self):
         """Test valid email addresses."""
-        from unified_sender.utils.validation import validate_email, is_valid_email
+        from mercury.utils.validation import validate_email, is_valid_email
         
         result = validate_email("test@example.com")
         assert result.is_valid
@@ -69,7 +69,7 @@ class TestEmailValidation:
     
     def test_invalid_email(self):
         """Test invalid email addresses."""
-        from unified_sender.utils.validation import validate_email, is_valid_email
+        from mercury.utils.validation import validate_email, is_valid_email
         
         result = validate_email("not-an-email")
         assert not result.is_valid
@@ -80,7 +80,7 @@ class TestEmailValidation:
     
     def test_batch_validation(self):
         """Test batch email validation."""
-        from unified_sender.utils.validation import validate_emails_batch
+        from mercury.utils.validation import validate_emails_batch
         
         emails = [
             "valid1@example.com",
@@ -101,7 +101,7 @@ class TestTrackingService:
     
     def test_generate_tracking_pixel(self):
         """Test tracking pixel generation."""
-        from unified_sender.services.tracking_service import TrackingService
+        from mercury.services.tracking_service import TrackingService
         
         service = TrackingService(base_url="https://example.com")
         email_id = service.generate_email_id("test@example.com")
@@ -114,7 +114,7 @@ class TestTrackingService:
     
     def test_wrap_link(self):
         """Test link wrapping for click tracking."""
-        from unified_sender.services.tracking_service import TrackingService
+        from mercury.services.tracking_service import TrackingService
         
         service = TrackingService(base_url="https://example.com")
         
@@ -128,7 +128,7 @@ class TestTrackingService:
     
     def test_inject_tracking(self):
         """Test tracking injection into HTML."""
-        from unified_sender.services.tracking_service import TrackingService
+        from mercury.services.tracking_service import TrackingService
         
         service = TrackingService(base_url="https://example.com")
         
@@ -151,7 +151,7 @@ class TestBounceService:
     
     def test_categorize_hard_bounce(self):
         """Test hard bounce categorization."""
-        from unified_sender.services.bounce_service import BounceService, BounceType, BounceCategory
+        from mercury.services.bounce_service import BounceService, BounceType, BounceCategory
         
         service = BounceService()
         
@@ -165,7 +165,7 @@ class TestBounceService:
     
     def test_categorize_soft_bounce(self):
         """Test soft bounce categorization."""
-        from unified_sender.services.bounce_service import BounceService, BounceType, BounceCategory
+        from mercury.services.bounce_service import BounceService, BounceType, BounceCategory
         
         service = BounceService()
         
@@ -179,7 +179,7 @@ class TestBounceService:
     
     def test_filter_recipients(self):
         """Test suppression list filtering."""
-        from unified_sender.services.bounce_service import BounceService
+        from mercury.services.bounce_service import BounceService
         
         service = BounceService()
         service.add_to_suppression_list("bad@example.com")
@@ -200,7 +200,7 @@ class TestWebhookService:
     
     def test_register_webhook(self):
         """Test webhook registration."""
-        from unified_sender.services.webhook_service import WebhookService, WebhookEvent
+        from mercury.services.webhook_service import WebhookService, WebhookEvent
         
         service = WebhookService()
         
@@ -216,7 +216,7 @@ class TestWebhookService:
     
     def test_signature_generation(self):
         """Test HMAC signature generation."""
-        from unified_sender.services.webhook_service import WebhookService
+        from mercury.services.webhook_service import WebhookService
         
         service = WebhookService()
         
@@ -234,7 +234,7 @@ class TestSchedulerService:
     
     def test_schedule_once(self):
         """Test one-time scheduling."""
-        from unified_sender.services.scheduler_service import SchedulerService, ScheduleType
+        from mercury.services.scheduler_service import SchedulerService, ScheduleType
         from datetime import timedelta
         
         service = SchedulerService(use_async=False)
@@ -263,7 +263,7 @@ class TestSchedulerService:
     
     def test_job_management(self):
         """Test job pause/resume."""
-        from unified_sender.services.scheduler_service import SchedulerService
+        from mercury.services.scheduler_service import SchedulerService
         from datetime import timedelta
         
         service = SchedulerService(use_async=False)
@@ -297,7 +297,7 @@ class TestAsyncFileIO:
     @pytest.mark.asyncio
     async def test_async_write_read(self, tmp_path):
         """Test async file write and read."""
-        from unified_sender.utils.async_io import async_write_file, async_read_file
+        from mercury.utils.async_io import async_write_file, async_read_file
         
         test_file = tmp_path / "test.txt"
         content = "Hello, async world!"
@@ -310,7 +310,7 @@ class TestAsyncFileIO:
     @pytest.mark.asyncio
     async def test_async_file_logger(self, tmp_path):
         """Test async file logger."""
-        from unified_sender.utils.async_io import AsyncFileLogger
+        from mercury.utils.async_io import AsyncFileLogger
         
         log_file = tmp_path / "test.log"
         
@@ -332,7 +332,7 @@ class TestStructuredLogging:
     
     def test_configure_logging(self):
         """Test logging configuration."""
-        from unified_sender.utils.logging_config import configure_logging, get_logger
+        from mercury.utils.logging_config import configure_logging, get_logger
         
         configure_logging(level="DEBUG", json_output=False)
         
@@ -341,7 +341,7 @@ class TestStructuredLogging:
     
     def test_email_send_logger(self):
         """Test specialized email logger."""
-        from unified_sender.utils.logging_config import EmailSendLogger
+        from mercury.utils.logging_config import EmailSendLogger
         
         logger = EmailSendLogger(campaign_id="test_campaign")
         

@@ -3,8 +3,8 @@
 import pytest
 from datetime import datetime, UTC
 
-from unified_sender.engine.error_aggregator import ErrorAggregator, ErrorGroup
-from unified_sender.exceptions import (
+from mercury.engine.error_aggregator import ErrorAggregator, ErrorGroup
+from mercury.exceptions import (
     SMTPConnectionError,
     SMTPAuthenticationError,
     SMTPMailboxError,

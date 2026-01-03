@@ -1,7 +1,7 @@
 """Tests for template engine."""
 
 import pytest
-from unified_sender.features.template_engine import TemplateEngine
+from mercury.features.template_engine import TemplateEngine
 
 
 def test_template_engine_basic():

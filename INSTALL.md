@@ -169,7 +169,7 @@ ExecStart=/opt/mercury/venv/bin/gunicorn \
     --timeout 120 \
     --access-logfile /var/log/mercury/access.log \
     --error-logfile /var/log/mercury/error.log \
-    "unified_sender.web:create_app()"
+    "mercury.web:create_app()"
 ExecReload=/bin/kill -s HUP $MAINPID
 Restart=always
 RestartSec=5

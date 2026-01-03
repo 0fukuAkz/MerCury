@@ -2,7 +2,7 @@
 
 import pytest
 from unittest.mock import patch, Mock, MagicMock
-from unified_sender.web.app import create_app
+from mercury.web.app import create_app
 
 @pytest.fixture
 def app():
@@ -17,7 +17,7 @@ def client(app):
 
 @pytest.fixture
 def mock_auth():
-    with patch('unified_sender.web.app.current_user') as mock_user:
+    with patch('mercury.web.app.current_user') as mock_user:
         mock_user.is_authenticated = True
         yield mock_user
 
@@ -25,15 +25,15 @@ def test_health_detailed_success(client, mock_auth):
     """Test detailed health check with all components healthy."""
     
     # Mock DB
-    with patch('unified_sender.data.database.get_engine') as mock_get_engine:
+    with patch('mercury.data.database.get_engine') as mock_get_engine:
         mock_engine = MagicMock()
         mock_get_engine.return_value = mock_engine
         mock_conn = MagicMock()
         mock_engine.connect.return_value.__enter__.return_value = mock_conn
         
         # Mock SMTP
-        with patch('unified_sender.data.database.get_session_direct') as mock_limit_session, \
-             patch('unified_sender.data.repositories.SMTPRepository') as MockRepo:
+        with patch('mercury.data.database.get_session_direct') as mock_limit_session, \
+             patch('mercury.data.repositories.SMTPRepository') as MockRepo:
             
             mock_session = Mock()
             mock_limit_session.return_value = mock_session
@@ -60,12 +60,12 @@ def test_health_detailed_failures(client, mock_auth):
     """Test detailed health check with component failures."""
     
     # Mock DB Failure
-    with patch('unified_sender.data.database.get_engine') as mock_get_engine:
+    with patch('mercury.data.database.get_engine') as mock_get_engine:
         # If we use side_effect here, connect isn't called
         mock_get_engine.side_effect = Exception("DB Connection Failed")
         
         # Mock SMTP Failure
-        with patch('unified_sender.data.database.get_session_direct') as mock_limit_session:
+        with patch('mercury.data.database.get_session_direct') as mock_limit_session:
              mock_limit_session.side_effect = Exception("SMTP DB Failed")
              
              # Mock Disk Warning (low space)
@@ -93,7 +93,7 @@ def test_health_detailed_failures(client, mock_auth):
 def test_readiness_probe(client):
     """Test readiness probe endpoint."""
     # /ready checks DB using local import
-    with patch('unified_sender.data.database.get_engine') as mock_get_engine:
+    with patch('mercury.data.database.get_engine') as mock_get_engine:
         
         mock_engine = MagicMock()
         mock_get_engine.return_value = mock_engine

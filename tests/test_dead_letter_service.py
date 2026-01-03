@@ -3,9 +3,9 @@
 import pytest
 from datetime import datetime, UTC
 
-from unified_sender.services.dead_letter_service import DeadLetterService
-from unified_sender.data.repositories.dead_letter import DeadLetterRepository
-from unified_sender.data.models.dead_letter import DeadLetter
+from mercury.services.dead_letter_service import DeadLetterService
+from mercury.data.repositories.dead_letter import DeadLetterRepository
+from mercury.data.models.dead_letter import DeadLetter
 
 
 class TestDeadLetterService:

@@ -9,5 +9,5 @@ services:
     environment:
       - FLASK_ENV=development
       - FLASK_DEBUG=1
-      - DATABASE_URL=sqlite:////app/instance/unified_sender.db
+      - DATABASE_URL=sqlite:////app/instance/mercury.db
     restart: unless-stopped

@@ -2,7 +2,7 @@
 
 import pytest
 
-from unified_sender.exceptions import (
+from mercury.exceptions import (
     UnifiedSenderException,
     SMTPException,
     TransientSMTPError,

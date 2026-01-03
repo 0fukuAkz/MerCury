@@ -3,14 +3,14 @@
 import pytest
 import os
 from unittest.mock import patch, Mock, MagicMock, mock_open, AsyncMock
-from unified_sender.services.campaign_service import CampaignService, CampaignConfig
-from unified_sender.services.smtp_service import SMTPService
-from unified_sender.data.models import Campaign, SMTPServer
+from mercury.services.campaign_service import CampaignService, CampaignConfig
+from mercury.services.smtp_service import SMTPService
+from mercury.data.models import Campaign, SMTPServer
 
 @pytest.fixture
 def mock_db_session():
-    with patch('unified_sender.services.campaign_service.get_session_direct') as mock_get, \
-         patch('unified_sender.services.smtp_service.get_session_direct') as mock_get_smtp:
+    with patch('mercury.services.campaign_service.get_session_direct') as mock_get, \
+         patch('mercury.services.smtp_service.get_session_direct') as mock_get_smtp:
         session = Mock()
         mock_get.return_value = session
         mock_get_smtp.return_value = session
@@ -18,18 +18,18 @@ def mock_db_session():
 
 @pytest.fixture
 def mock_repo():
-    with patch('unified_sender.services.campaign_service.CampaignRepository') as MockRepo:
+    with patch('mercury.services.campaign_service.CampaignRepository') as MockRepo:
         yield MockRepo
 
 @pytest.fixture
 def mock_smtp_repo():
-    with patch('unified_sender.services.smtp_service.SMTPRepository') as MockRepo:
+    with patch('mercury.services.smtp_service.SMTPRepository') as MockRepo:
         yield MockRepo
 
 # --- CampaignService Tests ---
 
 def test_campaign_service_initialization():
-    with patch('unified_sender.services.campaign_service.init_db') as mock_init:
+    with patch('mercury.services.campaign_service.init_db') as mock_init:
         service = CampaignService()
         service.initialize()
         mock_init.assert_called_once()
@@ -135,7 +135,7 @@ async def test_run_campaign_flow():
     
     recipients = [{'email': 'a@b.com'}, {'email': 'c@d.com'}]
     
-    with patch('unified_sender.services.campaign_service.AsyncFileLogger') as MockLogger:
+    with patch('mercury.services.campaign_service.AsyncFileLogger') as MockLogger:
         # Mock async context manager for logger
         mock_logger_instance = AsyncMock()
         MockLogger.return_value.__aenter__.return_value = mock_logger_instance
@@ -193,7 +193,7 @@ async def test_smtp_service_test_connection_success():
     service = SMTPService()
     service.load_from_config([{'name': 's1', 'host': 'h1'}])
     
-    with patch('unified_sender.engine.connection_pool.AsyncSMTPConnection') as MockConn:
+    with patch('mercury.engine.connection_pool.AsyncSMTPConnection') as MockConn:
         mock_conn_instance = AsyncMock()
         MockConn.return_value = mock_conn_instance
         
@@ -209,7 +209,7 @@ async def test_smtp_service_test_connection_fail():
     service = SMTPService()
     service.load_from_config([{'name': 's1', 'host': 'h1'}])
     
-    with patch('unified_sender.engine.connection_pool.AsyncSMTPConnection') as MockConn:
+    with patch('mercury.engine.connection_pool.AsyncSMTPConnection') as MockConn:
         mock_conn_instance = AsyncMock()
         MockConn.return_value = mock_conn_instance
         mock_conn_instance.connect.side_effect = Exception("Conn Fail")

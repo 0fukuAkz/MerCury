@@ -26,7 +26,7 @@ def main():
     project_root = Path(__file__).parent.parent
     sys.path.insert(0, str(project_root / "src"))
     
-    print("🚀 Unified Sender - Test Suite")
+    print("🚀 MerCury - Test Suite")
     print("=" * 60)
     
     results = {}
@@ -51,7 +51,7 @@ def main():
     
     # 4. Unit tests
     results['tests'] = run_command(
-        ['pytest', '-v', '--cov=src/unified_sender', '--cov-report=term-missing'],
+        ['pytest', '-v', '--cov=src/mercury', '--cov-report=term-missing'],
         "Unit Tests (Pytest)"
     )
     

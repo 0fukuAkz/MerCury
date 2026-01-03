@@ -3,7 +3,7 @@
 import pytest
 from pathlib import Path
 
-from unified_sender.utils.validation import (
+from mercury.utils.validation import (
     validate_email,
     validate_emails_batch,
     is_valid_email,
@@ -11,7 +11,7 @@ from unified_sender.utils.validation import (
     extract_domain,
     EmailValidationResult
 )
-from unified_sender.utils.validators import (
+from mercury.utils.validators import (
     validate_file_path,
     validate_url,
     validate_port,
@@ -19,7 +19,7 @@ from unified_sender.utils.validators import (
     validate_rate_limit,
     validate_concurrency
 )
-from unified_sender.exceptions import ValidationException, InvalidConfigValueError
+from mercury.exceptions import ValidationException, InvalidConfigValueError
 
 
 class TestEmailValidation:

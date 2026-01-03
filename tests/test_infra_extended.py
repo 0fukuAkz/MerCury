@@ -4,24 +4,24 @@ import asyncio
 from unittest.mock import MagicMock, AsyncMock, patch, mock_open
 import aiofiles
 
-from unified_sender.services.smtp_service import SMTPService
-from unified_sender.utils.async_io import (
+from mercury.services.smtp_service import SMTPService
+from mercury.utils.async_io import (
     async_write_line, async_write_file, async_read_file, 
     async_read_lines, async_iter_lines, async_file_exists, 
     async_append_json_line, AsyncFileLogger
 )
-from unified_sender.engine.connection_pool import SMTPServerConfig, SMTPConnectionPool
+from mercury.engine.connection_pool import SMTPServerConfig, SMTPConnectionPool
 
 class TestSMTPServiceExtended:
     
     @pytest.fixture
     def mock_repo(self):
-        with patch('unified_sender.services.smtp_service.SMTPRepository') as mock:
+        with patch('mercury.services.smtp_service.SMTPRepository') as mock:
             yield mock
 
     @pytest.fixture
     def mock_session(self):
-        with patch('unified_sender.services.smtp_service.get_session_direct') as mock:
+        with patch('mercury.services.smtp_service.get_session_direct') as mock:
             msg = MagicMock()
             mock.return_value = msg
             yield msg
@@ -58,7 +58,7 @@ class TestSMTPServiceExtended:
         service = SMTPService()
         service.load_from_config([{'name': 's1', 'host': 'h1'}])
         
-        with patch('unified_sender.engine.connection_pool.AsyncSMTPConnection') as MockConn:
+        with patch('mercury.engine.connection_pool.AsyncSMTPConnection') as MockConn:
             conn_instance = AsyncMock()
             MockConn.return_value = conn_instance
             
@@ -73,7 +73,7 @@ class TestSMTPServiceExtended:
         service = SMTPService()
         service.load_from_config([{'name': 's1', 'host': 'h1'}])
         
-        with patch('unified_sender.engine.connection_pool.AsyncSMTPConnection') as MockConn:
+        with patch('mercury.engine.connection_pool.AsyncSMTPConnection') as MockConn:
             conn_instance = AsyncMock()
             conn_instance.connect.side_effect = Exception("Connection failed")
             MockConn.return_value = conn_instance

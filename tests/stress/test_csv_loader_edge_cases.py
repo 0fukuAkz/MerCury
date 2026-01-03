@@ -2,7 +2,7 @@
 import pytest
 import csv
 import os
-from unified_sender.services.campaign_service import CampaignService
+from mercury.services.campaign_service import CampaignService
 
 def test_csv_loader_case_mismatch(tmp_path):
     """

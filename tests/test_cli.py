@@ -5,7 +5,7 @@ from unittest.mock import patch, Mock, MagicMock
 from click.testing import CliRunner
 import pytest
 
-from unified_sender.cli.main import cli, main
+from mercury.cli.main import cli, main
 
 @pytest.fixture
 def runner():
@@ -50,7 +50,7 @@ def test_check_valid_config(runner):
         with open('data/recipients.csv', 'w') as f: f.write("a\nb")
         with open('c.yaml', 'w') as f: f.write("") # Create dummy config file
             
-        with patch('unified_sender.services.campaign_service.load_campaign_from_yaml') as mock_load:
+        with patch('mercury.services.campaign_service.load_campaign_from_yaml') as mock_load:
             config = Mock()
             config.name = "Test"
             config.from_email = "f@e.com"
@@ -68,7 +68,7 @@ def test_check_valid_config(runner):
 
 def test_check_invalid_config(runner):
     with runner.isolated_filesystem():
-        with patch('unified_sender.services.campaign_service.load_campaign_from_yaml') as mock_load:
+        with patch('mercury.services.campaign_service.load_campaign_from_yaml') as mock_load:
             config = Mock()
             config.name = "" # invalid
             config.from_email = "" 
@@ -95,8 +95,8 @@ def test_test_smtp_success(runner):
     with runner.isolated_filesystem():
         with open('c.yaml', 'w') as f: f.write("")
         
-        with patch('unified_sender.services.campaign_service.load_campaign_from_yaml') as mock_load, \
-             patch('unified_sender.services.smtp_service.SMTPService') as MockService, \
+        with patch('mercury.services.campaign_service.load_campaign_from_yaml') as mock_load, \
+             patch('mercury.services.smtp_service.SMTPService') as MockService, \
              patch('asyncio.run') as mock_async_run:
             
             config = Mock()
@@ -114,7 +114,7 @@ def test_test_smtp_success(runner):
 def test_test_smtp_no_servers(runner):
     with runner.isolated_filesystem():
         with open('c.yaml', 'w') as f: f.write("")
-        with patch('unified_sender.services.campaign_service.load_campaign_from_yaml') as mock_load:
+        with patch('mercury.services.campaign_service.load_campaign_from_yaml') as mock_load:
             config = Mock()
             config.smtp_configs = []
             mock_load.return_value = config
@@ -129,8 +129,8 @@ def test_send_preview(runner):
     with runner.isolated_filesystem():
         with open('c.yaml', 'w') as f: f.write("")
         
-        with patch('unified_sender.services.campaign_service.load_campaign_from_yaml') as mock_load, \
-             patch('unified_sender.services.campaign_service.CampaignService') as MockService:
+        with patch('mercury.services.campaign_service.load_campaign_from_yaml') as mock_load, \
+             patch('mercury.services.campaign_service.CampaignService') as MockService:
             
             config = Mock()
             config.recipients_path = "r.csv"
@@ -147,8 +147,8 @@ def test_send_preview(runner):
 def test_send_cancel(runner):
     with runner.isolated_filesystem():
         with open('c.yaml', 'w') as f: f.write("")
-        with patch('unified_sender.services.campaign_service.load_campaign_from_yaml') as mock_load, \
-             patch('unified_sender.services.campaign_service.CampaignService') as MockService:
+        with patch('mercury.services.campaign_service.load_campaign_from_yaml') as mock_load, \
+             patch('mercury.services.campaign_service.CampaignService') as MockService:
              
             config = Mock()
             config.recipients_path = "r.csv"
@@ -164,8 +164,8 @@ def test_send_cancel(runner):
 def test_send_success(runner):
     with runner.isolated_filesystem():
         with open('c.yaml', 'w') as f: f.write("")
-        with patch('unified_sender.services.campaign_service.load_campaign_from_yaml') as mock_load, \
-             patch('unified_sender.services.campaign_service.CampaignService') as MockService, \
+        with patch('mercury.services.campaign_service.load_campaign_from_yaml') as mock_load, \
+             patch('mercury.services.campaign_service.CampaignService') as MockService, \
              patch('asyncio.run') as mock_run:
              
             config = Mock()
@@ -212,8 +212,8 @@ def test_show_config(runner):
 # Test 'start' command
 
 def test_start_server(runner):
-    with patch('unified_sender.web.app.create_app') as mock_create, \
-         patch('unified_sender.web.app.socketio', new=Mock()) as mock_socketio:
+    with patch('mercury.web.app.create_app') as mock_create, \
+         patch('mercury.web.app.socketio', new=Mock()) as mock_socketio:
         
         mock_app = Mock()
         mock_create.return_value = mock_app
@@ -223,8 +223,8 @@ def test_start_server(runner):
         mock_socketio.run.assert_called()
 
 def test_start_server_browser(runner):
-    with patch('unified_sender.web.app.create_app') as mock_create, \
-         patch('unified_sender.web.app.socketio', new=None), \
+    with patch('mercury.web.app.create_app') as mock_create, \
+         patch('mercury.web.app.socketio', new=None), \
          patch('webbrowser.open') as mock_browser:
         
         mock_app = Mock()
@@ -236,6 +236,6 @@ def test_start_server_browser(runner):
 
 # Test main entry point
 def test_main():
-    with patch('unified_sender.cli.main.cli') as mock_cli:
+    with patch('mercury.cli.main.cli') as mock_cli:
         main()
         mock_cli.assert_called()

@@ -4,8 +4,8 @@ import pytest
 import asyncio
 from datetime import datetime, UTC
 
-from unified_sender.engine.rate_limiter import RateLimiter, RateLimiterConfig
-from unified_sender.exceptions import RateLimitException
+from mercury.engine.rate_limiter import RateLimiter, RateLimiterConfig
+from mercury.exceptions import RateLimitException
 
 
 @pytest.mark.asyncio

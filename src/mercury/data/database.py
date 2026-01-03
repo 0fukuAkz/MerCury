@@ -17,7 +17,7 @@ def get_engine(db_url: str = None):
     
     if _engine is None:
         if db_url is None:
-            db_path = os.environ.get("DATABASE_URL", "sqlite:///logs/unified_sender.db")
+            db_path = os.environ.get("DATABASE_URL", "sqlite:///logs/mercury.db")
         else:
             db_path = db_url
         

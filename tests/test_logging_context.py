@@ -4,7 +4,7 @@ import pytest
 import logging
 import json
 from unittest.mock import patch, MagicMock, Mock
-from unified_sender.utils.logging_context import (
+from mercury.utils.logging_context import (
     ContextLogger,
     get_context_logger,
     log_email_operation,
@@ -99,7 +99,7 @@ async def test_log_email_operation_decorator():
         return "ok"
     
     # Mock get_context_logger to assert calls
-    with patch('unified_sender.utils.logging_context.get_context_logger') as mock_get:
+    with patch('mercury.utils.logging_context.get_context_logger') as mock_get:
         mock_logger = Mock()
         mock_get.return_value = mock_logger
         
@@ -125,7 +125,7 @@ async def test_log_email_operation_decorator():
         assert isinstance(err_call[1]['error'], ValueError)
 
 def test_email_operation_context_success():
-    with patch('unified_sender.utils.logging_context.get_context_logger') as mock_get:
+    with patch('mercury.utils.logging_context.get_context_logger') as mock_get:
         mock_logger = Mock()
         mock_get.return_value = mock_logger
         
@@ -139,7 +139,7 @@ def test_email_operation_context_success():
         assert "duration_seconds" in end_call[1]
 
 def test_email_operation_context_failure():
-    with patch('unified_sender.utils.logging_context.get_context_logger') as mock_get:
+    with patch('mercury.utils.logging_context.get_context_logger') as mock_get:
         mock_logger = Mock()
         mock_get.return_value = mock_logger
         

@@ -5,10 +5,10 @@ import os
 from unittest.mock import MagicMock, patch
 from flask import Flask
 
-from unified_sender.web.app import create_app
-from unified_sender.app_context import AppContext
-from unified_sender.data.models import User, Campaign, SMTPServer
-from unified_sender.security.auth import hash_password
+from mercury.web.app import create_app
+from mercury.app_context import AppContext
+from mercury.data.models import User, Campaign, SMTPServer
+from mercury.security.auth import hash_password
 
 @pytest.fixture
 def app_with_context(db_engine, db_session):
@@ -25,16 +25,16 @@ def app_with_context(db_engine, db_session):
     TestSession = sessionmaker(bind=db_engine)
     
     # We need to patch get_app_context because accessible globally
-    with patch('unified_sender.web.app.get_app_context', return_value=mock_context), \
-         patch('unified_sender.data.database.get_session_direct', side_effect=TestSession), \
-         patch('unified_sender.services.smtp_service.get_session_direct', side_effect=TestSession), \
-         patch('unified_sender.services.campaign_service.get_session_direct', side_effect=TestSession), \
-         patch('unified_sender.web.routes.api.get_session_direct', side_effect=TestSession), \
-         patch('unified_sender.web.app.get_session_direct', side_effect=TestSession), \
+    with patch('mercury.web.app.get_app_context', return_value=mock_context), \
+         patch('mercury.data.database.get_session_direct', side_effect=TestSession), \
+         patch('mercury.services.smtp_service.get_session_direct', side_effect=TestSession), \
+         patch('mercury.services.campaign_service.get_session_direct', side_effect=TestSession), \
+         patch('mercury.web.routes.api.get_session_direct', side_effect=TestSession), \
+         patch('mercury.web.app.get_session_direct', side_effect=TestSession), \
          patch.dict(os.environ, {'API_KEYS': 'test_api_key'}):
         
         # Patch init_db inside create_app to avoid recreating tables
-        with patch('unified_sender.data.database.init_db'):
+        with patch('mercury.data.database.init_db'):
              app = create_app(config={'TESTING': True, 'WTF_CSRF_ENABLED': False}, app_context=mock_context)
              
              # Also patch dependencies used in routes import

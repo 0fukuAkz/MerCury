@@ -5,15 +5,15 @@ import asyncio
 from datetime import datetime, UTC
 from unittest.mock import Mock, AsyncMock, patch, MagicMock
 
-from unified_sender.engine.async_sender import (
+from mercury.engine.async_sender import (
     AsyncEmailSender,
     EmailResult,
     BulkSendResult,
     categorize_smtp_error
 )
-from unified_sender.engine.connection_pool import SMTPServerConfig, SMTPConnectionPool
-from unified_sender.engine.rate_limiter import RateLimiter, RateLimiterConfig
-from unified_sender.exceptions import (
+from mercury.engine.connection_pool import SMTPServerConfig, SMTPConnectionPool
+from mercury.engine.rate_limiter import RateLimiter, RateLimiterConfig
+from mercury.exceptions import (
     SMTPConnectionError,
     SMTPAuthenticationError,
     SMTPRateLimitError,

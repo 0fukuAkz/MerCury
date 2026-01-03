@@ -2,7 +2,7 @@
 
 import pytest
 from unittest.mock import patch, Mock
-from unified_sender.web.app import create_app, socketio
+from mercury.web.app import create_app, socketio
 
 from flask_socketio import SocketIO
 
@@ -14,9 +14,9 @@ def socketio_instance():
 @pytest.fixture
 def socket_app(mock_user_loader, socketio_instance):
     """Create app with Socket.IO for tests."""
-    with patch('unified_sender.web.app.init_auth'), \
-         patch('unified_sender.web.app.get_app_context') as mock_ctx_getter, \
-         patch('unified_sender.web.app.register_auth_routes'):
+    with patch('mercury.web.app.init_auth'), \
+         patch('mercury.web.app.get_app_context') as mock_ctx_getter, \
+         patch('mercury.web.app.register_auth_routes'):
          
         # Mock limiter
         mock_ctx = Mock()
@@ -42,22 +42,22 @@ def socket_app(mock_user_loader, socketio_instance):
 @pytest.fixture
 def auth_client_socket(socket_app):
     """Authenticated Flask test client."""
-    with patch('unified_sender.web.app.api_key_or_login_required', side_effect=lambda f: f):
+    with patch('mercury.web.app.api_key_or_login_required', side_effect=lambda f: f):
         pass
         
     return socket_app.test_client()
 
 @pytest.fixture
 def mock_user_loader():
-    with patch('unified_sender.security.auth.get_user_by_id') as mock_get:
-        from unified_sender.security.auth import User as AuthUser
+    with patch('mercury.security.auth.get_user_by_id') as mock_get:
+        from mercury.security.auth import User as AuthUser
         user = AuthUser(id="1", username="admin", password_hash="hash", is_admin=True)
         mock_get.side_effect = lambda uid: user if str(uid) == "1" else None
         yield mock_get
 
 def test_socket_connect_authenticated(socket_app, socketio_instance):
     """Test socket connection with authenticated user."""
-    with patch('unified_sender.web.app.current_user') as mock_user:
+    with patch('mercury.web.app.current_user') as mock_user:
         mock_user.is_authenticated = True
         mock_user.username = "admin"
         
@@ -70,7 +70,7 @@ def test_socket_connect_authenticated(socket_app, socketio_instance):
 
 def test_socket_connect_unauthenticated(socket_app, socketio_instance):
     """Test connection rejection for unauthenticated user."""
-    with patch('unified_sender.web.app.current_user') as mock_user:
+    with patch('mercury.web.app.current_user') as mock_user:
         mock_user.is_authenticated = False
         
         try:
@@ -81,8 +81,8 @@ def test_socket_connect_unauthenticated(socket_app, socketio_instance):
 
 def test_socket_campaign_events(socket_app, socketio_instance):
     """Test campaign control events."""
-    with patch('unified_sender.web.app.current_user') as mock_user, \
-         patch('unified_sender.web.app.get_app_context'): 
+    with patch('mercury.web.app.current_user') as mock_user, \
+         patch('mercury.web.app.get_app_context'): 
         
         mock_user.is_authenticated = True
         mock_user.username = "admin"

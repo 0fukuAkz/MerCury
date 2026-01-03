@@ -126,6 +126,6 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
     return app
 
 if __name__ == '__main__':
-    # Allow running directly with python -m unified_sender.web.app
+    # Allow running directly with python -m mercury.web.app
     app = create_app(config={'DEBUG': True})
     socketio.run(app, host='0.0.0.0', port=5000, allow_unsafe_werkzeug=True)
