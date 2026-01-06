@@ -6,11 +6,11 @@
 aiosmtplib==3.0.2
 pyyaml==6.0.1
 click==8.1.7
-pydantic==2.5.3
-pydantic-settings==2.1.0
+pydantic>=2.10.0
+pydantic-settings>=2.6.0
 
 # Database - SQLAlchemy ORM and migrations
-sqlalchemy==2.0.25
+sqlalchemy>=2.0.36
 alembic==1.13.1
 
 # Web Framework - Flask with WebSocket support
@@ -28,7 +28,7 @@ bcrypt==4.1.2
 
 # Document Generation - PDFs, DOCX, QR codes
 qrcode[pil]==7.4.2
-pillow==10.1.0
+pillow==10.4.0
 reportlab==4.0.9
 python-docx==1.1.0
 weasyprint==60.2
@@ -57,5 +57,5 @@ pysocks==1.7.1
 rich==13.7.0
 
 # Optional: Better performance
-uvloop==0.19.0; sys_platform != 'win32'
-orjson==3.9.12
+uvloop>=0.21.0; sys_platform != 'win32'
+orjson>=3.10.0

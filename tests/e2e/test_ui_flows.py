@@ -1,5 +1,14 @@
 import pytest
-from playwright.sync_api import Page, expect
+
+try:
+    from playwright.sync_api import Page, expect
+    HAS_PLAYWRIGHT = True
+except ImportError:
+    HAS_PLAYWRIGHT = False
+    Page = None  # type: ignore
+    expect = None  # type: ignore
+
+pytestmark = pytest.mark.skipif(not HAS_PLAYWRIGHT, reason="playwright not installed")
 
 def test_login_flow(page: Page, base_url):
     """Test successful login and redirect to dashboard."""
