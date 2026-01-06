@@ -1,4 +1,4 @@
-"""Unified Email Sender CLI - Simple, English-like commands."""
+"""MerCury Email Platform CLI - Simple, English-like commands."""
 
 import asyncio
 import os
@@ -18,13 +18,13 @@ def banner():
     """Print banner."""
     click.echo(click.style("""
 +====================================================================+
-|            Unified Email Sender - Production Platform              |
+|            MerCury Email Platform - Production Platform              |
 +====================================================================+
 """, fg='cyan'))
 
 
 @click.group()
-@click.version_option(version='2.0.0', prog_name='sender')
+@click.version_option(version='2.0.0', prog_name='mercury')
 @click.option('-v', '--verbose', is_flag=True, help='Detailed output')
 @click.option('-q', '--quiet', is_flag=True, help='Minimal output')
 @click.pass_context
@@ -34,15 +34,15 @@ def cli(ctx, verbose, quiet):
     
     \b
     QUICK START:
-      sender new project           Create config files
-      sender check config.yaml     Validate setup
-      sender test config.yaml      Test SMTP
-      sender send config.yaml      Send emails
+      mercury new project           Create config files
+      mercury check config.yaml     Validate setup
+      mercury test config.yaml      Test SMTP
+      mercury send config.yaml      Send emails
     
     \b
     MORE COMMANDS:
-      sender show stats            View statistics
-      sender start server          Web dashboard
+      mercury show stats            View statistics
+      mercury start server          Web dashboard
     """
     ctx.ensure_object(dict)
     ctx.obj['verbose'] = verbose
@@ -94,8 +94,8 @@ def _new_project(force):
 Next steps:
   1. Edit config/campaign.yaml
   2. Add recipients to data/recipients.csv
-  3. Run: sender check config/campaign.yaml
-  4. Run: sender send config/campaign.yaml --preview
+  3. Run: mercury check config/campaign.yaml
+  4. Run: mercury send config/campaign.yaml --preview
 """)
 
 
@@ -193,7 +193,7 @@ def check(config_file):
     
     \b
     EXAMPLE:
-      sender check config/campaign.yaml
+      mercury check config/campaign.yaml
     """
     from ..services.campaign_service import load_campaign_from_yaml
     
@@ -259,8 +259,8 @@ def test(config_file, server):
     
     \b
     EXAMPLES:
-      sender test config/campaign.yaml
-      sender test config.yaml --server primary
+      mercury test config/campaign.yaml
+      mercury test config.yaml --server primary
     """
     from ..services.campaign_service import load_campaign_from_yaml
     from ..services.smtp_service import SMTPService
@@ -312,9 +312,9 @@ def send(ctx, config_file, preview, limit, yes):
     
     \b
     EXAMPLES:
-      sender send config.yaml --preview
-      sender send config.yaml --to 10
-      sender send config.yaml --yes
+      mercury send config.yaml --preview
+      mercury send config.yaml --to 10
+      mercury send config.yaml --yes
     """
     from ..services.campaign_service import CampaignService, load_campaign_from_yaml
     
@@ -335,9 +335,9 @@ def send(ctx, config_file, preview, limit, yes):
         sys.exit(1)
     
     if config.recipients_path.endswith('.csv'):
-        recipients = service.load_recipients_from_csv(config.recipients_path)
+        recipients = list(service.load_recipients_from_csv(config.recipients_path, email_column=config.email_column))
     else:
-        recipients = service.load_recipients_from_text(config.recipients_path)
+        recipients = list(service.load_recipients_from_text(config.recipients_path))
     
     if limit:
         recipients = recipients[:limit]
@@ -400,10 +400,10 @@ def show(what, file):
     
     \b
     EXAMPLES:
-      sender show stats
-      sender show logs
-      sender show failed
-      sender show config
+      mercury show stats
+      mercury show logs
+      mercury show failed
+      mercury show config
     """
     if what == 'stats':
         _show_stats()
@@ -471,9 +471,9 @@ def generate():
     
     \b
     EXAMPLES:
-      sender generate qr "https://example.com"
-      sender generate pdf input.html output.pdf
-      sender generate image input.html output.png
+      mercury generate qr "https://example.com"
+      mercury generate pdf input.html output.pdf
+      mercury generate image input.html output.png
     """
     pass
 
@@ -567,7 +567,7 @@ def start(what, port, open_browser):
 
 def main():
     """Main entry point."""
-    cli(prog_name='sender')
+    cli(prog_name='mercury')
 
 
 if __name__ == '__main__':

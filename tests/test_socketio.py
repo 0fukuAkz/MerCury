@@ -1,22 +1,21 @@
 """Tests for Socket.IO events."""
 
 import pytest
-from unittest.mock import patch, Mock
+from unittest.mock import patch, Mock, MagicMock
 from mercury.web.app import create_app, socketio
 
 from flask_socketio import SocketIO
 
 @pytest.fixture
 def socketio_instance():
-    """Create a real SocketIO instance."""
-    return SocketIO()
+    """Get the application SocketIO instance."""
+    from mercury.web.extensions import socketio
+    return socketio
 
 @pytest.fixture
 def socket_app(mock_user_loader, socketio_instance):
     """Create app with Socket.IO for tests."""
-    with patch('mercury.web.app.init_auth'), \
-         patch('mercury.web.app.get_app_context') as mock_ctx_getter, \
-         patch('mercury.web.app.register_auth_routes'):
+    with patch('mercury.web.app.get_app_context') as mock_ctx_getter:
          
         # Mock limiter
         mock_ctx = Mock()
@@ -34,7 +33,11 @@ def socket_app(mock_user_loader, socketio_instance):
         app.config['SECRET_KEY'] = 'test-key'
         app.config['TESTING'] = True
         
-        # Initialize socketio with app since we mocked context.initialize
+        # socketio is initialized in create_app via extensions
+        # socketio_instance.init_app(app) # No need to re-init if create_app does it properly?
+        # Actually create_app calls ctx.initialize(app) which calls socketio.init_app(app)
+        # But we mocked ctx.initialize.
+        # So we MUST init it manually here if we mocked the caller.
         socketio_instance.init_app(app)
         
         return app
@@ -57,9 +60,12 @@ def mock_user_loader():
 
 def test_socket_connect_authenticated(socket_app, socketio_instance):
     """Test socket connection with authenticated user."""
-    with patch('mercury.web.app.current_user') as mock_user:
+    with patch('flask_login.utils._get_user') as mock_user_getter:
+        mock_user = MagicMock()
         mock_user.is_authenticated = True
+        mock_user.is_active = True
         mock_user.username = "admin"
+        mock_user_getter.return_value = mock_user
         
         client = socketio_instance.test_client(socket_app)
         assert client.is_connected()
@@ -70,8 +76,11 @@ def test_socket_connect_authenticated(socket_app, socketio_instance):
 
 def test_socket_connect_unauthenticated(socket_app, socketio_instance):
     """Test connection rejection for unauthenticated user."""
-    with patch('mercury.web.app.current_user') as mock_user:
+    with patch('flask_login.utils._get_user') as mock_user_getter:
+        mock_user = MagicMock()
         mock_user.is_authenticated = False
+        mock_user.is_active = True
+        mock_user_getter.return_value = mock_user
         
         try:
             client = socketio_instance.test_client(socket_app)
@@ -81,11 +90,14 @@ def test_socket_connect_unauthenticated(socket_app, socketio_instance):
 
 def test_socket_campaign_events(socket_app, socketio_instance):
     """Test campaign control events."""
-    with patch('mercury.web.app.current_user') as mock_user, \
+    with patch('flask_login.utils._get_user') as mock_user_getter, \
          patch('mercury.web.app.get_app_context'): 
         
+        mock_user = MagicMock()
         mock_user.is_authenticated = True
+        mock_user.is_active = True
         mock_user.username = "admin"
+        mock_user_getter.return_value = mock_user
         
         client = socketio_instance.test_client(socket_app)
         

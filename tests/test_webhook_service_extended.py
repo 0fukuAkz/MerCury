@@ -11,8 +11,7 @@ def webhook_service():
     """Create a WebhookService instance for testing."""
     service = WebhookService()
     yield service
-    # Cleanup currently not implemented in service but good practice
-    # await service.close() 
+    # Cleanup properly required but difficult with current asyncio/pytest setup on Windows
 
 @pytest.mark.asyncio
 class TestWebhookServiceExtended:

@@ -26,6 +26,7 @@ class EmailConfig:
     subject: str = ""
     from_email: str = ""
     from_name: str = ""
+    from_emails: Optional[List[str]] = None
     reply_to: str = ""
     template_path: Optional[str] = None
     placeholders_path: Optional[str] = None
@@ -58,6 +59,7 @@ class EmailConfig:
     subjects: Optional[List[str]] = None
     from_names: Optional[List[str]] = None
     templates: Optional[List[str]] = None
+    links: Optional[List[str]] = None
     rotation_strategy: str = "round_robin"
 
 
@@ -114,8 +116,14 @@ class EmailService:
         if config.from_names and len(config.from_names) > 1:
             self._rotation_manager.register('from_names', config.from_names, strategy)
         
+        if config.from_emails and len(config.from_emails) > 1:
+            self._rotation_manager.register('from_emails', config.from_emails, strategy)
+        
         if config.templates and len(config.templates) > 1:
             self._rotation_manager.register('templates', config.templates, strategy)
+        
+        if config.links and len(config.links) > 0:
+            self._rotation_manager.register('links', config.links, strategy)
         
         # Setup attachment generator
         self._attachment_generator = AttachmentGenerator(GeneratorConfig())
@@ -193,6 +201,12 @@ class EmailService:
             else:
                 from_name = self.config.from_name
         
+        if from_email is None:
+            if self._rotation_manager and self._rotation_manager.is_registered('from_emails'):
+                from_email = self._rotation_manager.get_next('from_emails', self.config.from_email)
+            else:
+                from_email = self.config.from_email
+        
         # Render template
         if html_body is None and self._template_engine:
             # Check for template rotation
@@ -227,11 +241,17 @@ class EmailService:
         
         # Generate attachments if configured
         if attachments is None and self.config.attachment_type:
+            # Apply placeholders to attachment path if present
+            current_attachment_path = self.config.attachment_path
+            if current_attachment_path and placeholders:
+                for key, value in placeholders.items():
+                    current_attachment_path = current_attachment_path.replace(f"{{{{{key}}}}}", str(value))
+
             attachment_data, filename, content_type = self._attachment_generator.generate_attachment(
                 attachment_type=self.config.attachment_type,
                 content=html_body,
                 placeholders=placeholders,
-                template_path=self.config.attachment_path,
+                template_path=current_attachment_path,
                 link=link
             )
             attachments = [{
@@ -285,12 +305,18 @@ class EmailService:
         
         async def send_wrapper(index: int, recipient_data: Dict[str, Any]) -> EmailResult:
             async with semaphore:
+                # Get link rotation if available
+                link_to_use = None
+                if self._rotation_manager and self._rotation_manager.is_registered('links'):
+                    link_to_use = self._rotation_manager.get_next('links')
+
                 # Use send_single to ensure full feature support (rotation, tracking, etc.)
                 result = await self.send_single(
                     recipient=recipient_data['email'],
                     subject=subject, # Passes None implies use config/rotation
                     html_body=None,  # Force template rendering
-                    placeholders=recipient_data
+                    placeholders=recipient_data,
+                    link=link_to_use
                 )
                 
                 if progress_callback:

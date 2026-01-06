@@ -1,0 +1,158 @@
+# MerCury Complete Configuration
+# This file documents all available configuration options.
+
+# ==========================================
+# Campaign Identity
+# ==========================================
+campaign:
+  name: "My Email Campaign"
+  description: "Campaign description"
+
+# ==========================================
+# SMTP Providers (Sending Infrastructure)
+# ==========================================
+# Configure multiple providers for load balancing and failover.
+smtp_providers:
+  # Primary Provider (High volume)
+  - name: "primary"
+    host: "smtp.gmail.com"
+    port: 587
+    username: "${SMTP_USER}" # Uses environment variables
+    password: "${SMTP_PASS}"
+    use_tls: true
+    timeout: 30
+    # Load Balancing Weights:
+    # Higher weight = more emails sent through this provider.
+    weight: 2.0 
+    # Rate Limits (Provider specific):
+    max_per_minute: 100
+    max_per_hour: 5000
+
+  # Secondary Provider (Backup / Split traffic)
+  #- name: "secondary"
+  #  host: "smtp.other.com"
+  #  port: 465
+  #  username: "apikey"
+  #  password: "${SECONDARY_API_KEY}"
+  #  use_ssl: true       # Note: Port 465 usually requires use_ssl: true
+  #  weight: 1.0         # Sends 50% less volume than primary
+  #  priority: 0         # Lower priority providers are used if higher ones fail (0 is default/highest)
+
+# ==========================================
+# Email Content & A/B Testing
+# ==========================================
+email:
+  # Subject Line Rotation (A/B Testing)
+  # randomly rotates or round-robins between these options.
+  subject: "Hello {{first_name}}!"
+  subjects:
+    - "Hello {{first_name}}!"
+    - "Important Update for {{first_name}}"
+    - "News: Our latest features"
+
+  # Sender Identity Rotation
+  # Rotates the "From" name to make emails feel more personal.
+  from_name: "MerCury Team"
+  from_names:
+    - "MerCury Team"
+    - "Support Team"
+    - "The Newsletter"
+
+  # Static Sender Email (Must be verified in your SMTP provider)
+  from_email: "sender@example.com"
+  
+  # specific reply-to address
+  reply_to: "reply@example.com"
+
+# ==========================================
+# Templates
+# ==========================================
+template:
+  # Main HTML template path
+  html: "templates/email.html"
+  
+  # Text version (optional, best practice for deliverability)
+  # text: "templates/email.txt"
+
+  # Template Variants (A/B Testing)
+  # If provided, these will rotate with the subjects
+  variants:
+    - "templates/email.html"
+    - "templates/email_variant_b.html"
+
+# ==========================================
+# Recipients
+# ==========================================
+recipients:
+  # Path to CSV or TXT file
+  source: "data/recipients.csv"
+  
+  # Which column contains the email address (default: email)
+  email_column: "email"
+  
+  # Checks email syntax (valid format) before sending
+  validate: true
+  
+  # Removes duplicate email addresses from the list
+  deduplicate: true
+
+# ==========================================
+# Sending Control & Performance
+# ==========================================
+sending:
+  # DRY RUN: Set to true to simulate sending without actual delivery
+  # Useful for testing checking logs/rendering.
+  dry_run: true
+
+  # Performance Tuning
+  concurrency: 50          # Number of parallel connections/tasks
+  chunk_size: 1000         # Process recipients in batches of this size
+  pause_between_chunks: 10 # Seconds to wait between batches (throttle)
+
+  # Global Rate Limiting (Across all providers)
+  rate_per_minute: 300
+  rate_per_hour: 10000
+
+# ==========================================
+# Advanced Features
+# ==========================================
+features:
+  # Generates a QR code image attachment or embed
+  qr_codes: false
+  
+  # converts the entire email HTML to an image (anti-bot)
+  # Note: Impacts accessibility and deliverability
+  send_as_image: false
+  
+  # Setup general attachments for all emails
+  # attachment_path: "data/brochure.pdf"
+  
+  # Generate personalized PDF attachments
+  pdf_attachments: false
+  
+  # Generate personalized DOCX attachments
+  docx_attachments: false
+
+# ==========================================
+# Dynamic Content & Placeholders
+# ==========================================
+# Define static values available to all templates as {{key}}
+placeholders:
+  path: "config/placeholders.yaml" # Load extra placeholders from file
+  static:
+    company_name: "Your Company"
+    support_email: "support@example.com"
+
+# Link Rotation
+# Use {{link}} in templates to rotate through these URLs
+links:
+  - "https://example.com/link1"
+  - "https://example.com/link2"
+
+# ==========================================
+# Strategy Configuration
+# ==========================================
+smtp_rotation:
+  # Strategy for rotating subjects, templates, links, etc.
+  # Options: round_robin, random, weighted, sequential
+  strategy: "round_robin"

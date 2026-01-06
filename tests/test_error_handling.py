@@ -64,12 +64,12 @@ class TestCampaignServiceErrors:
             # Verify session closed even after error
             mock_session.close.assert_called_once()
 
-    def test_run_campaign_no_service(self, service):
+    @pytest.mark.asyncio
+    async def test_run_campaign_no_service(self, service):
         """Verify RuntimeError if email service not configured."""
         service.email_service = None
         with pytest.raises(RuntimeError, match="Email service not configured"):
-            import asyncio
-            asyncio.run(service.run_campaign([]))
+            await service.run_campaign([])
 
     @pytest.mark.asyncio
     async def test_run_campaign_db_commit_error(self, service):

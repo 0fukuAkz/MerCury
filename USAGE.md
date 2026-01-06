@@ -28,7 +28,7 @@ Complete guide to using MerCury for email campaign automation.
 ```bash
 python run.py
 # or
-sender start server
+mercury start server
 ```
 
 ### 2. Access Web UI
@@ -76,47 +76,47 @@ Default credentials:
 
 ```bash
 # Create new project with all files
-sender new project
+mercury new project
 
 # Create specific files
-sender new config
-sender new template
+mercury new config
+mercury new template
 ```
 
 ### Configuration
 
 ```bash
 # Validate configuration
-sender check config/campaign.yaml
+mercury check config/campaign.yaml
 
 # Test SMTP connections
-sender test config/campaign.yaml
+mercury test config/campaign.yaml
 ```
 
 ### Sending
 
 ```bash
 # Preview campaign (dry run)
-sender send config/campaign.yaml --preview
+mercury send config/campaign.yaml --preview
 
 # Send to first N recipients only
-sender send config/campaign.yaml --to 10
+mercury send config/campaign.yaml --to 10
 
 # Send full campaign
-sender send config/campaign.yaml
+mercury send config/campaign.yaml
 ```
 
 ### Monitoring
 
 ```bash
 # View statistics
-sender show stats
+mercury show stats
 
 # View recent logs
-sender show logs
+mercury show logs
 
 # Start web dashboard
-sender start server
+mercury start server
 ```
 
 ---

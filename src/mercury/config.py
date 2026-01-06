@@ -187,8 +187,8 @@ class FeaturesConfig:
 
 
 @dataclass
-class UnifiedConfig:
-    """Complete unified configuration."""
+class MercuryConfig:
+    """Complete mercury configuration."""
     campaign_name: str = "Unnamed Campaign"
     campaign_description: str = ""
     
@@ -199,11 +199,13 @@ class UnifiedConfig:
     sending: SendingConfig = field(default_factory=SendingConfig)
     features: FeaturesConfig = field(default_factory=FeaturesConfig)
     
+    links: List[str] = field(default_factory=list)
+    
     placeholders_path: str = "config/placeholders.yaml"
     placeholders: Dict[str, str] = field(default_factory=dict)
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'UnifiedConfig':
+    def from_dict(cls, data: Dict[str, Any]) -> 'MercuryConfig':
         """Create from dictionary."""
         campaign = data.get('campaign', {})
         email = data.get('email', {})
@@ -268,12 +270,14 @@ class UnifiedConfig:
                 attachment_path=features.get('attachment_path', '')
             ),
             
+            links=data.get('links', []),
+            
             placeholders_path=data.get('placeholders', {}).get('path', 'config/placeholders.yaml'),
             placeholders=data.get('placeholders', {}).get('static', {})
         )
     
     @classmethod
-    def from_yaml(cls, config_path: str) -> 'UnifiedConfig':
+    def from_yaml(cls, config_path: str) -> 'MercuryConfig':
         """Load configuration from YAML file."""
         data = load_yaml_config(config_path)
         return cls.from_dict(data)
@@ -315,7 +319,7 @@ class UnifiedConfig:
 
 # Default configuration template
 DEFAULT_CONFIG = """
-# Unified Email Sender - Campaign Configuration
+# MerCury Email Platform - Campaign Configuration
 # Documentation: https://github.com/mercury/mercury
 
 campaign:
@@ -352,6 +356,11 @@ recipients:
   email_column: email
   validate: true
   deduplicate: true
+
+links:
+  - "https://example.com/link1"
+  - "https://example.com/link2"
+  - "https://example.com/link3"
 
 placeholders:
   path: config/placeholders.yaml

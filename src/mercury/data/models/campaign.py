@@ -32,7 +32,7 @@ class CampaignType(str, Enum):
 
 
 class Campaign(Base, BaseModel):
-    """Campaign model with full unified features."""
+    """Campaign model with full MerCury features."""
     
     __tablename__ = 'campaigns'
     

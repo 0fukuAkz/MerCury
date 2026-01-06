@@ -1,9 +1,9 @@
-# Unified Sender - Development Makefile
+# MerCury - Development Makefile
 
 .PHONY: help install install-dev test test-cov test-fast lint format type-check security clean run dev
 
 help:
-	@echo "Unified Sender Development Commands"
+	@echo "MerCury Development Commands"
 	@echo ""
 	@echo "Setup:"
 	@echo "  make install      - Install production dependencies"
@@ -73,7 +73,7 @@ pre-commit:
 # Development
 
 dev:
-	python -m unified_sender.web.app
+	python -m mercury.web.app
 
 run:
 	sender --help
@@ -99,7 +99,7 @@ db-rollback:
 	alembic downgrade -1
 
 db-reset:
-	rm -f unified_sender.db
+	rm -f mercury.db
 	alembic upgrade head
 
 # Documentation (if needed)

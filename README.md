@@ -1,6 +1,6 @@
-# Sender
+# MerCury
 
-Simple email automation. Send campaigns the easy way.
+Complete email automation. Send campaigns the easy way.
 
 **v2.0.0** - Complete rewrite with English-like commands.
 
@@ -11,39 +11,39 @@ Simple email automation. Send campaigns the easy way.
 pip install -e .
 
 # Create project files
-sender new project
+mercury new project
 
 # Edit your config
 notepad config/campaign.yaml
 
 # Check configuration
-sender check config/campaign.yaml
+mercury check config/campaign.yaml
 
 # Test SMTP connection
-sender test config/campaign.yaml
+mercury test config/campaign.yaml
 
 # Preview (no actual sending)
-sender send config/campaign.yaml --preview
+mercury send config/campaign.yaml --preview
 
 # Send for real
-sender send config/campaign.yaml
+mercury send config/campaign.yaml
 ```
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `sender new project` | Create config, template, and recipients files |
-| `sender new config` | Create config file only |
-| `sender new template` | Create email template |
-| `sender check <config>` | Validate your configuration |
-| `sender test <config>` | Test SMTP connections |
-| `sender send <config>` | Send your campaign |
-| `sender send <config> --preview` | Preview without sending |
-| `sender send <config> --to 10` | Send to first 10 only |
-| `sender show stats` | View sending statistics |
-| `sender show logs` | View recent log entries |
-| `sender start server` | Launch web dashboard |
+| `mercury new project` | Create config, template, and recipients files |
+| `mercury new config` | Create config file only |
+| `mercury new template` | Create email template |
+| `mercury check <config>` | Validate your configuration |
+| `mercury test <config>` | Test SMTP connections |
+| `mercury send <config>` | Send your campaign |
+| `mercury send <config> --preview` | Preview without sending |
+| `mercury send <config> --to 10` | Send to first 10 only |
+| `mercury show stats` | View sending statistics |
+| `mercury show logs` | View recent log entries |
+| `mercury start server` | Launch web dashboard |
 
 ## Configuration
 
@@ -129,7 +129,7 @@ Create `templates/email.html`:
 ## Web Dashboard
 
 ```bash
-sender start server
+mercury start server
 ```
 
 Open http://localhost:8080

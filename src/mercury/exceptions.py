@@ -1,10 +1,10 @@
-"""Custom exceptions for Unified Sender."""
+"""Custom exceptions for MerCury."""
 
 from typing import Optional, Dict, Any
 
 
-class UnifiedSenderException(Exception):
-    """Base exception for all Unified Sender errors."""
+class MercuryException(Exception):
+    """Base exception for all MerCury errors."""
     
     def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
         """
@@ -29,7 +29,7 @@ class UnifiedSenderException(Exception):
 
 # Configuration Errors
 
-class ConfigurationException(UnifiedSenderException):
+class ConfigurationException(MercuryException):
     """Error in configuration (YAML, settings, etc.)."""
     pass
 
@@ -46,7 +46,7 @@ class MissingConfigError(ConfigurationException):
 
 # Validation Errors
 
-class ValidationException(UnifiedSenderException):
+class ValidationException(MercuryException):
     """Input validation failed."""
     pass
 
@@ -68,7 +68,7 @@ class InvalidTemplateError(ValidationException):
 
 # SMTP Errors
 
-class SMTPException(UnifiedSenderException):
+class SMTPException(MercuryException):
     """Base SMTP error."""
     
     def __init__(
@@ -140,7 +140,7 @@ class SMTPMailboxError(PermanentSMTPError):
 
 # Database Errors
 
-class DatabaseException(UnifiedSenderException):
+class DatabaseException(MercuryException):
     """Database operation failed."""
     pass
 
@@ -157,7 +157,7 @@ class DuplicateRecordError(DatabaseException):
 
 # Campaign Errors
 
-class CampaignException(UnifiedSenderException):
+class CampaignException(MercuryException):
     """Campaign-related error."""
     pass
 
@@ -179,7 +179,7 @@ class CampaignInvalidStateError(CampaignException):
 
 # Template Errors
 
-class TemplateException(UnifiedSenderException):
+class TemplateException(MercuryException):
     """Template rendering error."""
     pass
 
@@ -201,7 +201,7 @@ class PlaceholderError(TemplateException):
 
 # Feature Errors
 
-class FeatureException(UnifiedSenderException):
+class FeatureException(MercuryException):
     """Feature-specific error."""
     pass
 
@@ -223,7 +223,7 @@ class TrackingError(FeatureException):
 
 # Rate Limiting Errors
 
-class RateLimitException(UnifiedSenderException):
+class RateLimitException(MercuryException):
     """Rate limit exceeded."""
     
     def __init__(
@@ -250,7 +250,7 @@ class RateLimitException(UnifiedSenderException):
 
 # Security Errors
 
-class SecurityException(UnifiedSenderException):
+class SecurityException(MercuryException):
     """Security-related error."""
     pass
 
@@ -272,7 +272,7 @@ class EncryptionError(SecurityException):
 
 # Webhook Errors
 
-class WebhookException(UnifiedSenderException):
+class WebhookException(MercuryException):
     """Webhook-related error."""
     pass
 

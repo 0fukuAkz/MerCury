@@ -126,6 +126,14 @@ class SMTPServer(Base, BaseModel):
             'from_name': self.from_name,
         }
     
+    def to_dict(self) -> dict:
+        """Convert to dictionary excluding sensitive fields."""
+        result = super().to_dict()
+        # Remove protected fields
+        result.pop('password', None)
+        result.pop('_password', None)
+        return result
+
     def __repr__(self):
         return f"<SMTPServer(id={self.id}, name='{self.name}', host='{self.host}')>"
 

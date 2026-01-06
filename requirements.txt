@@ -1,4 +1,4 @@
-# Unified Email Sender - Production Dependencies
+# MerCury Email Platform - Production Dependencies
 # Pinned versions for stability and security
 # Updated: 2024-12-14
 

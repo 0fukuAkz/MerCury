@@ -101,7 +101,7 @@ all = [
 ]
 
 [project.scripts]
-sender = "mercury.cli.main:main"
+mercury = "mercury.cli.main:main"
 
 [project.urls]
 Homepage = "https://github.com/mercury/mercury"

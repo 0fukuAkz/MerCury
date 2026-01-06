@@ -1,4 +1,4 @@
-"""SQLAlchemy models for unified sender."""
+"""SQLAlchemy models for MerCury."""
 
 from .base import BaseModel
 from .campaign import Campaign, CampaignStatus, CampaignType

@@ -143,7 +143,69 @@ def sample_recipients() -> list[dict]:
 #     # Cancel all pending tasks
 #     tasks = [t for t in asyncio.all_tasks() if not t.done()]
 #     for task in tasks:
-#         task.cancel()
 #     if tasks:
 #         await asyncio.gather(*tasks, return_exceptions=True)
+
+
+# Web Fixtures
+
+@pytest.fixture
+def app(db_engine):
+    """Create Flask application fixture."""
+    from mercury.web.app import create_app
+    from unittest.mock import patch, MagicMock
+    from mercury.app_context import AppContext
+    import os
+    
+    mock_context = MagicMock(spec=AppContext)
+    mock_context.limiter = MagicMock()
+    mock_context.limiter.limit = lambda x: lambda f: f
+    mock_context.socketio = MagicMock()
+
+    # Create a factory for sessions bound to the test engine
+    from sqlalchemy.orm import sessionmaker
+    TestSession = sessionmaker(bind=db_engine)
+
+    # Patch DB init and Admin creation
+    with patch('mercury.web.app.init_db'), \
+         patch('mercury.web.app.UserRepository') as MockRepo, \
+         patch('mercury.web.app.get_app_context', return_value=mock_context), \
+         patch('mercury.data.database.get_session_direct', side_effect=TestSession), \
+         patch('mercury.services.smtp_service.get_session_direct', side_effect=TestSession), \
+         patch('mercury.services.campaign_service.get_session_direct', side_effect=TestSession), \
+         patch('mercury.web.routes.api.get_session_direct', side_effect=TestSession), \
+         patch('mercury.web.app.get_session_direct', side_effect=TestSession), \
+         patch.dict(os.environ, {'API_KEYS': 'test_api_key'}):
+         
+        MockRepo.return_value.get_admins.return_value = [MagicMock()]
+        
+        app = create_app(config={'TESTING': True, 'WTF_CSRF_ENABLED': False})
+        yield app
+
+@pytest.fixture
+def client(app):
+    """Create test client."""
+    return app.test_client()
+
+@pytest.fixture
+def admin_user(db_session):
+    """Create and return an admin user."""
+    from mercury.security.auth import hash_password
+    u = User(username="admin", email="admin@test.com", is_admin=True, is_active=True)
+    u.password_hash = hash_password("password")
+    u.api_key = "test_api_key"
+    try:
+        db_session.add(u)
+        db_session.commit()
+    except Exception:
+        db_session.rollback()
+        # User might already exist if session shared or cleanup failed
+        # Retrieve existing
+        u = db_session.query(User).filter_by(username="admin").first()
+    return u
+
+@pytest.fixture
+def auth_headers(admin_user):
+    """Return headers for authenticated API requests."""
+    return {'X-API-Key': admin_user.api_key}
 

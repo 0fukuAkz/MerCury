@@ -10,56 +10,6 @@ from mercury.app_context import AppContext
 from mercury.data.models import User, Campaign, SMTPServer
 from mercury.security.auth import hash_password
 
-@pytest.fixture
-def app_with_context(db_engine, db_session):
-    """Create Flask app with mock context and DB session."""
-    mock_context = MagicMock(spec=AppContext)
-    mock_context.limiter = MagicMock()
-    # Allow rate limiter to pass through
-    mock_context.limiter.limit = lambda x: lambda f: f
-    mock_context.socketio = MagicMock()
-    
-    # Create a factory for sessions bound to the test engine
-    # This ensures app gets NEW sessions but they share the same memory DB
-    from sqlalchemy.orm import sessionmaker
-    TestSession = sessionmaker(bind=db_engine)
-    
-    # We need to patch get_app_context because accessible globally
-    with patch('mercury.web.app.get_app_context', return_value=mock_context), \
-         patch('mercury.data.database.get_session_direct', side_effect=TestSession), \
-         patch('mercury.services.smtp_service.get_session_direct', side_effect=TestSession), \
-         patch('mercury.services.campaign_service.get_session_direct', side_effect=TestSession), \
-         patch('mercury.web.routes.api.get_session_direct', side_effect=TestSession), \
-         patch('mercury.web.app.get_session_direct', side_effect=TestSession), \
-         patch.dict(os.environ, {'API_KEYS': 'test_api_key'}):
-        
-        # Patch init_db inside create_app to avoid recreating tables
-        with patch('mercury.data.database.init_db'):
-             app = create_app(config={'TESTING': True, 'WTF_CSRF_ENABLED': False}, app_context=mock_context)
-             
-             # Also patch dependencies used in routes import
-             # This is tricky because routes import services which might init things
-             # We rely on mocks inside tests or service factories
-             
-             yield app
-
-@pytest.fixture
-def client(app_with_context):
-    return app_with_context.test_client()
-
-@pytest.fixture
-def admin_user(db_session):
-    u = User(username="admin", email="admin@test.com", is_admin=True, is_active=True)
-    u.password_hash = hash_password("password")
-    u.api_key = "test_api_key"
-    db_session.add(u)
-    db_session.commit()
-    return u
-
-@pytest.fixture
-def auth_headers(admin_user):
-    return {'X-API-Key': admin_user.api_key}
-
 class TestWebIntegration:
     
     def test_api_status(self, client):

@@ -12,7 +12,7 @@ from mercury.config import (
     merge_configs,
     create_default_config,
     SMTPConfig,
-    UnifiedConfig,
+    MercuryConfig,
     DEFAULT_CONFIG
 )
 
@@ -84,21 +84,21 @@ def test_smtp_config_override():
     assert config.port == 465
     assert config.use_ssl is True
 
-# Test UnifiedConfig
+# Test MercuryConfig
 
-def test_unified_config_from_dict_minimal():
+def test_mercury_config_from_dict_minimal():
     data = {
         "smtp": [{"host": "smtp.test"}],
         "email": {"from_email": "me@test.com", "subject": "Hi"},
         "template": {"html": "t.html"},
         "recipients": {"source": "r.csv"}
     }
-    config = UnifiedConfig.from_dict(data)
+    config = MercuryConfig.from_dict(data)
     assert config.campaign_name == "Unnamed Campaign"
     assert len(config.smtp_providers) == 1
     assert config.smtp_providers[0].host == "smtp.test"
 
-def test_unified_config_complex_parsing():
+def test_mercury_config_complex_parsing():
     data = {
         "campaign": {"name": "Test Campaign", "description": "Desc"},
         "email": {
@@ -109,7 +109,7 @@ def test_unified_config_complex_parsing():
         },
         "smtp_providers": {"host": "single.smtp"}  # Single dict support
     }
-    config = UnifiedConfig.from_dict(data)
+    config = MercuryConfig.from_dict(data)
     assert config.campaign_name == "Test Campaign"
     assert len(config.smtp_providers) == 1
     assert config.smtp_providers[0].host == "single.smtp"
@@ -118,14 +118,14 @@ def test_unified_config_complex_parsing():
 
 # Test Validation
 
-def test_unified_config_validation(tmp_path):
+def test_mercury_config_validation(tmp_path):
     # Setup files
     tpl = tmp_path / "t.html"
     tpl.touch()
     rcpt = tmp_path / "r.csv"
     rcpt.touch()
 
-    config = UnifiedConfig(
+    config = MercuryConfig(
         smtp_providers=[SMTPConfig(name="s1", host="h1")],
         email=type('obj', (object,), {'from_email': 'f', 'subject': 's', 'subjects': []})(),
         template=type('obj', (object,), {'html': str(tpl), 'text': '', 'variants': []})(),
@@ -134,7 +134,7 @@ def test_unified_config_validation(tmp_path):
         features=type('obj', (object,), {'qr_codes': False, 'send_as_image': False, 'pdf_attachments': False, 'docx_attachments': False, 'attachment_path': ''})()
     )
     # Re-construct proper objects using from_dict to be safe or manually access attributes if they match dataclass.
-    # Actually UnifiedConfig takes dataclass instances.
+    # Actually MercuryConfig takes dataclass instances.
     # Let's construct a valid config via from_dict for simplicity.
     
     valid_data = {
@@ -143,11 +143,11 @@ def test_unified_config_validation(tmp_path):
         "template": {"html": str(tpl)},
         "recipients": {"source": str(rcpt)}
     }
-    config = UnifiedConfig.from_dict(valid_data)
+    config = MercuryConfig.from_dict(valid_data)
     assert not config.validate()
 
-def test_unified_config_validation_failures():
-    config = UnifiedConfig()
+def test_mercury_config_validation_failures():
+    config = MercuryConfig()
     errors = config.validate()
     assert "No SMTP providers configured" in errors
     assert "from_email is required" in errors
@@ -155,25 +155,25 @@ def test_unified_config_validation_failures():
     assert "template.html is required" in errors
     assert "recipients.source is required" in errors
 
-def test_unified_config_validation_bad_smtp(tmp_path):
+def test_mercury_config_validation_bad_smtp(tmp_path):
     data = {
         "smtp": [{"name": "bad", "host": ""}],  # Empty host
         "email": {"from_email": "f", "subject": "s"},
         "template": {"html": "t.html"},
         "recipients": {"source": "r.csv"}
     }
-    config = UnifiedConfig.from_dict(data)
+    config = MercuryConfig.from_dict(data)
     errors = config.validate()
     assert any("host is required" in e for e in errors)
 
-def test_unified_config_validation_missing_files(tmp_path):
+def test_mercury_config_validation_missing_files(tmp_path):
     data = {
         "smtp": [{"host": "h"}],
         "email": {"from_email": "f", "subject": "s"},
         "template": {"html": str(tmp_path / "missing.html")},
         "recipients": {"source": str(tmp_path / "missing.csv")}
     }
-    config = UnifiedConfig.from_dict(data)
+    config = MercuryConfig.from_dict(data)
     errors = config.validate()
     assert any("Template file not found" in e for e in errors)
     assert any("Recipients file not found" in e for e in errors)
@@ -192,7 +192,7 @@ def test_load_yaml_config_missing():
     with pytest.raises(FileNotFoundError):
         load_yaml_config("nonexistent.yaml")
 
-def test_unified_config_from_yaml(tmp_path):
+def test_mercury_config_from_yaml(tmp_path):
     f = tmp_path / "campaign.yaml"
     content = """
     campaign:
@@ -202,7 +202,7 @@ def test_unified_config_from_yaml(tmp_path):
     """
     f.write_text(content, encoding="utf-8")
     
-    config = UnifiedConfig.from_yaml(str(f))
+    config = MercuryConfig.from_yaml(str(f))
     assert config.campaign_name == "YAML Campaign"
 
 # Test Default Config Creation

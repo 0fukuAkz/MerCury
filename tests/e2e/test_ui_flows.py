@@ -6,7 +6,7 @@ def test_login_flow(page: Page, base_url):
     page.goto(f"{base_url}/login")
     
     # Check title
-    expect(page).to_have_title("Login - Unified Email Sender")
+    expect(page).to_have_title("Login - MerCury")
     
     # Fill login form
     page.fill("input[name='username']", "admin")

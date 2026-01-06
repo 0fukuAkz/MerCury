@@ -2,7 +2,10 @@
 
 from flask import Blueprint, jsonify
 from sqlalchemy import text
-from ...data.database import get_engine
+from ...data.database import get_engine, get_session_direct
+from ...data.repositories import SMTPRepository
+import shutil
+import os
 
 health_bp = Blueprint('health', __name__)
 
@@ -32,3 +35,67 @@ def liveness_check():
     Always returns 200 if the application is running.
     """
     return jsonify({'alive': True}), 200
+
+@health_bp.route('/health/detailed')
+def detailed_health_check():
+    """
+    Detailed health check for all components.
+    
+    Checks:
+    - Database
+    - SMTP configurations
+    - Disk space
+    """
+    status = {
+        'status': 'healthy',
+        'components': {
+            'database': {'status': 'healthy'},
+            'smtp': {'status': 'healthy'},
+            'disk': {'status': 'healthy'}
+        }
+    }
+    
+    # Check Database
+    try:
+        engine = get_engine()
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+    except Exception as e:
+        status['status'] = 'degraded'
+        status['components']['database'] = {
+            'status': 'unhealthy',
+            'error': str(e)
+        }
+        
+    # Check SMTP (can we read config?)
+    try:
+        session = get_session_direct()
+        try:
+            repo = SMTPRepository(session)
+            servers = repo.get_active()
+            status['components']['smtp']['count'] = len(servers)
+        finally:
+            session.close()
+    except Exception as e:
+        # Don't fail overall health if just SMTP list fails, but mark degraded
+        status['status'] = 'degraded'
+        status['components']['smtp'] = {
+            'status': 'unknown',
+            'error': str(e)
+        }
+
+    # Check Disk Space
+    try:
+        total, used, free = shutil.disk_usage("/")
+        status['components']['disk']['free_gb'] = round(free / (1024**3), 2)
+        
+        if free < 1 * (1024**3): # Less than 1GB
+            status['status'] = 'degraded'
+            status['components']['disk']['status'] = 'warning'
+    except Exception as e:
+        status['components']['disk'] = {
+            'status': 'unknown',
+            'error': str(e)
+        }
+        
+    return jsonify(status), 200

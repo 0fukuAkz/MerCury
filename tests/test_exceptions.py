@@ -3,7 +3,7 @@
 import pytest
 
 from mercury.exceptions import (
-    UnifiedSenderException,
+    MercuryException,
     SMTPException,
     TransientSMTPError,
     PermanentSMTPError,
@@ -23,7 +23,7 @@ class TestExceptionHierarchy:
     
     def test_base_exception(self):
         """Test base exception."""
-        exc = UnifiedSenderException("Test error", details={'key': 'value'})
+        exc = MercuryException("Test error", details={'key': 'value'})
         
         assert str(exc) == "Test error"
         assert exc.message == "Test error"

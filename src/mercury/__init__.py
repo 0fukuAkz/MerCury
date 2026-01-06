@@ -1,5 +1,5 @@
 """
-Unified Email Sender - Production-grade email automation platform.
+MerCury Email Platform - Production-grade email automation platform.
 
 Features:
 - High-performance async sending (100-300 emails/second)
@@ -32,7 +32,7 @@ from .services import (
 
 # Export main exceptions for convenience
 from .exceptions import (
-    UnifiedSenderException,
+    MercuryException,
     ConfigurationException,
     ValidationException,
     SMTPException,
@@ -51,7 +51,7 @@ __all__ = [
     "BounceService",
     "WebhookService",
     "SchedulerService",
-    "UnifiedSenderException",
+    "MercuryException",
     "ConfigurationException",
     "ValidationException",
     "SMTPException",

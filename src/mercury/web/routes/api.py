@@ -48,7 +48,7 @@ def api_list_campaigns():
 @limiter.limit("10/minute")
 def api_create_campaign():
     """Create a new email campaign."""
-    data = request.json
+    data = request.get_json(silent=True) or {}
     
     if not data.get('name'):
         return jsonify({'error': 'Campaign name required'}), 400
@@ -127,7 +127,7 @@ def api_list_smtp():
 @limiter.limit("10/minute")
 def api_add_smtp():
     """Add a new SMTP server configuration."""
-    data = request.json
+    data = request.get_json(silent=True) or {}
     
     if not data.get('host'):
         return jsonify({'error': 'Host required'}), 400
@@ -191,7 +191,7 @@ def api_list_templates():
 @limiter.limit("20/minute")
 def api_preview_template():
     """Preview template with sample data."""
-    data = request.json
+    data = request.get_json(silent=True) or {}
     
     engine = TemplateEngine(html_content=data.get('html', ''))
     preview = engine.preview(
@@ -265,7 +265,7 @@ def api_list_webhooks():
 @limiter.limit("10/minute")
 def api_register_webhook():
     """Register new webhook."""
-    data = request.json
+    data = request.get_json(silent=True) or {}
     
     if not data.get('url'):
         return jsonify({'error': 'Webhook URL required'}), 400
@@ -330,7 +330,7 @@ def api_create_scheduled_job():
     from datetime import datetime
     import uuid
     
-    data = request.json
+    data = request.get_json(silent=True) or {}
     
     if not data.get('name'):
         return jsonify({'error': 'Job name is required'}), 400
@@ -475,7 +475,7 @@ def api_add_to_suppression():
     """Add email to suppression list."""
     from ...services.bounce_service import BounceService
     
-    data = request.json
+    data = request.get_json(silent=True) or {}
     email = data.get('email', '').lower().strip()
     
     if not email:

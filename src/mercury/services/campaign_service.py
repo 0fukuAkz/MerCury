@@ -45,6 +45,7 @@ class CampaignConfig:
     from_email: str = ""
     from_name: str = ""
     from_names: Optional[List[str]] = None
+    from_emails: Optional[List[str]] = None
     reply_to: str = ""
     
     # Template
@@ -53,6 +54,7 @@ class CampaignConfig:
     
     # Recipients
     recipients_path: str = ""
+    email_column: str = "email"
     validate_emails: bool = True
     deduplicate: bool = True
     
@@ -73,6 +75,9 @@ class CampaignConfig:
     send_as_image: bool = False
     attachment_type: Optional[str] = None
     attachment_path: Optional[str] = None
+    
+    # Links
+    links: Optional[List[str]] = None
     
     # Static placeholders
     placeholders: Optional[Dict[str, str]] = None
@@ -146,8 +151,10 @@ class CampaignService:
             attachment_path=config.attachment_path,
             subjects=config.subjects,
             from_names=config.from_names,
+            from_emails=config.from_emails,
             templates=config.templates,
-            rotation_strategy=config.smtp_rotation
+            rotation_strategy=config.smtp_rotation,
+            links=config.links
         ))
         
         # Add static placeholders
@@ -176,7 +183,8 @@ class CampaignService:
                 rate_per_hour=config.rate_per_hour,
                 enable_qr_code=config.enable_qr_code,
                 convert_to_image=config.send_as_image,
-                smtp_rotation_strategy=config.smtp_rotation
+                smtp_rotation_strategy=config.smtp_rotation,
+                settings={'links': config.links} if config.links else {}
             )
             
             repo = CampaignRepository(session)
@@ -549,12 +557,14 @@ def load_campaign_from_yaml(yaml_path: str) -> CampaignConfig:
         from_email=email.get('from_email', ''),
         from_name=email.get('from_name', ''),
         from_names=email.get('from_names', []),
+        from_emails=email.get('from_emails', []),
         reply_to=email.get('reply_to', ''),
         
         template_path=template.get('html', template.get('path', '')),
         templates=template.get('variants', []),
         
         recipients_path=recipients.get('source', recipients.get('path', '')),
+        email_column=recipients.get('email_column', 'email'),
         validate_emails=recipients.get('validate', True),
         deduplicate=recipients.get('deduplicate', True),
         
@@ -572,6 +582,8 @@ def load_campaign_from_yaml(yaml_path: str) -> CampaignConfig:
         send_as_image=features.get('send_as_image', False),
         attachment_type=features.get('attachment_type'),
         attachment_path=features.get('attachment_path'),
+        
+        links=data.get('links', []),
         
         placeholders=placeholders,
         placeholders_path=placeholders_path
