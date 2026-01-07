@@ -17,7 +17,9 @@ def get_engine(db_url: str = None):
     
     if _engine is None:
         if db_url is None:
-            db_path = os.environ.get("DATABASE_URL", "sqlite:///logs/mercury.db")
+            # Use app_dirs to determine correct path (local or system user data)
+            from mercury.utils.app_dirs import get_db_path
+            db_path = get_db_path()
         else:
             db_path = db_url
         

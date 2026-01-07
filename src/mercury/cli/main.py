@@ -10,6 +10,7 @@ import click
 from tqdm import tqdm
 
 from ..utils.logging_config import configure_logging
+from ..utils.app_dirs import get_log_dir
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,8 @@ def cli(ctx, verbose, quiet):
     ctx.obj['quiet'] = quiet
     
     level = 'WARNING' if quiet else ('DEBUG' if verbose else 'INFO')
-    configure_logging(level=level)
+    log_file = get_log_dir() / "mercury.log"
+    configure_logging(level=level, log_file=str(log_file))
 
 
 # =============================================================================

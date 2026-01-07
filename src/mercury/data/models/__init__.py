@@ -7,6 +7,10 @@ from .template import Template
 from .recipient import RecipientList, Recipient, RecipientStatus
 from .email_log import EmailLog, EmailStatus
 from .user import User
+from .identity import FromEmail, SenderName
+from .identity import FromEmail, SenderName
+from .settings import GlobalSetting
+from .dead_letter import DeadLetter
 
 __all__ = [
     "BaseModel",
@@ -22,5 +26,9 @@ __all__ = [
     "EmailLog",
     "EmailStatus",
     "User",
+    "FromEmail",
+    "SenderName",
+    "GlobalSetting",
+    "DeadLetter",
 ]
 

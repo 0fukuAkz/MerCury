@@ -11,7 +11,7 @@
                 <h5 class="card-title mb-0">QR Code Generator</h5>
             </div>
             <div class="card-body">
-                <form action="{{ url_for('tools.generate_qr') }}" method="POST" target="_blank">
+                <form action="{{ url_for('tools.generate_qr') }}" method="POST">
                     <div class="mb-3">
                         <label for="qrData" class="form-label">Text or URL</label>
                         <input type="text" class="form-control" id="qrData" name="data" required
@@ -30,7 +30,7 @@
                 <h5 class="card-title mb-0">Document Converter</h5>
             </div>
             <div class="card-body">
-                <form action="{{ url_for('tools.render_content') }}" method="POST" target="_blank">
+                <form action="{{ url_for('tools.render_content') }}" method="POST">
                     <div class="mb-3">
                         <label for="renderContent" class="form-label">HTML Content</label>
                         <textarea class="form-control" id="renderContent" name="content" rows="6" required

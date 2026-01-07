@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block title %}MerCury - Sender Identities{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Sender Identities</h1>
+    <p class="page-description">Manage pools of 'From' addresses and Sender names for rotation.</p>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+{% for category, message in messages %}
+<div class="card"
+    style="border-left: 4px solid var(--{{ 'success' if category=='success' else 'error' }}); padding: 1rem;">
+    <div class="text-{{ 'success' if category=='success' else 'error' }}">{{ message }}</div>
+</div>
+{% endfor %}
+{% endif %}
+{% endwith %}
+
+<div class="layout-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
+
+    <!-- From Emails Column -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title" style="color: var(--neon-cyan);">From Emails</h2>
+            <span class="badge badge-info">{{ emails|length }} Total</span>
+        </div>
+
+        <form action="{{ url_for('senders.add_email') }}" method="POST" class="mb-4"
+            style="background: var(--bg-tertiary); padding: 1rem; border-radius: var(--radius);">
+            <div class="form-group">
+                <input type="email" name="email" class="form-input" placeholder="new@example.com" required>
+            </div>
+            <div class="form-group" style="display: flex; gap: 0.5rem;">
+                <input type="text" name="tags" class="form-input" placeholder="Tags (comma separated)">
+                <button type="submit" class="btn btn-primary">Add</button>
+            </div>
+        </form>
+
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Email</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for email in emails %}
+                <tr>
+                    <td>
+                        <div class="font-mono">{{ email.email }}</div>
+                        <div class="text-muted" style="font-size: 0.75rem;">
+                            {% for tag in email.tags %}#{{ tag }} {% endfor %}
+                        </div>
+                    </td>
+                    <td>
+                        {% if email.is_active %}
+                        <span class="badge badge-success">Active</span>
+                        {% else %}
+                        <span class="badge badge-error">Inactive</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <form action="{{ url_for('senders.toggle_email', id=email.id) }}" method="POST"
+                                style="display:inline;">
+                                <button type="submit" class="btn btn-secondary"
+                                    style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+                                    {{ 'Disable' if email.is_active else 'Enable' }}
+                                </button>
+                            </form>
+                            <form action="{{ url_for('senders.delete_email', id=email.id) }}" method="POST"
+                                style="display:inline;" onsubmit="return confirm('Delete this email?');">
+                                <button type="submit" class="btn btn-secondary"
+                                    style="padding: 0.25rem 0.5rem; font-size: 0.75rem; color: var(--error); border-color: var(--error);">
+                                    Del
+                                </button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="3" class="text-muted" style="text-align: center;">No emails configured.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Sender Names Column -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title" style="color: var(--neon-pink);">Sender Names</h2>
+            <span class="badge badge-info">{{ names|length }} Total</span>
+        </div>
+
+        <form action="{{ url_for('senders.add_name') }}" method="POST" class="mb-4"
+            style="background: var(--bg-tertiary); padding: 1rem; border-radius: var(--radius);">
+            <div class="form-group">
+                <input type="text" name="name" class="form-input" placeholder="John Doe" required>
+            </div>
+            <div class="form-group" style="display: flex; gap: 0.5rem;">
+                <input type="text" name="tags" class="form-input" placeholder="Tags (comma separated)">
+                <button type="submit" class="btn btn-primary">Add</button>
+            </div>
+        </form>
+
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for name in names %}
+                <tr>
+                    <td>
+                        <div>{{ name.name }}</div>
+                        <div class="text-muted" style="font-size: 0.75rem;">
+                            {% for tag in name.tags %}#{{ tag }} {% endfor %}
+                        </div>
+                    </td>
+                    <td>
+                        {% if name.is_active %}
+                        <span class="badge badge-success">Active</span>
+                        {% else %}
+                        <span class="badge badge-error">Inactive</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <form action="{{ url_for('senders.toggle_name', id=name.id) }}" method="POST"
+                                style="display:inline;">
+                                <button type="submit" class="btn btn-secondary"
+                                    style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+                                    {{ 'Disable' if name.is_active else 'Enable' }}
+                                </button>
+                            </form>
+                            <form action="{{ url_for('senders.delete_name', id=name.id) }}" method="POST"
+                                style="display:inline;" onsubmit="return confirm('Delete this name?');">
+                                <button type="submit" class="btn btn-secondary"
+                                    style="padding: 0.25rem 0.5rem; font-size: 0.75rem; color: var(--error); border-color: var(--error);">
+                                    Del
+                                </button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="3" class="text-muted" style="text-align: center;">No names configured.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+</div>
+{% endblock %}

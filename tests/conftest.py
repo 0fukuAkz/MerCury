@@ -175,6 +175,8 @@ def app(db_engine):
          patch('mercury.services.campaign_service.get_session_direct', side_effect=TestSession), \
          patch('mercury.web.routes.api.get_session_direct', side_effect=TestSession), \
          patch('mercury.web.app.get_session_direct', side_effect=TestSession), \
+         patch('mercury.services.identity_service.get_session_direct', side_effect=TestSession), \
+         patch('mercury.services.settings_service.get_session_direct', side_effect=TestSession), \
          patch.dict(os.environ, {'API_KEYS': 'test_api_key'}):
          
         MockRepo.return_value.get_admins.return_value = [MagicMock()]

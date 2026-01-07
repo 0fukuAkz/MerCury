@@ -7,6 +7,8 @@ from .tracking_service import TrackingService
 from .bounce_service import BounceService
 from .webhook_service import WebhookService, WebhookEvent
 from .scheduler_service import SchedulerService, schedule_campaign
+from .identity_service import IdentityService
+from .settings_service import SettingsService
 
 __all__ = [
     "CampaignService",
@@ -17,5 +19,7 @@ __all__ = [
     "WebhookService",
     "WebhookEvent",
     "SchedulerService",
-    "schedule_campaign"
+    "schedule_campaign",
+    "IdentityService",
+    "SettingsService"
 ]

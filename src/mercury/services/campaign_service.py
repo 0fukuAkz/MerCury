@@ -124,6 +124,48 @@ class CampaignService:
     
     def load_config(self, config: CampaignConfig):
         """Load campaign configuration."""
+        from .identity_service import IdentityService
+        from .settings_service import SettingsService
+
+        # Apply Global Settings
+        # Only override if campaign config doesn't specify strict limits (0 usually means unlimited or default)
+        # But here 0 might mean "use system default" or "unlimited". 
+        # For safety in this system, we assume 0 means "inherit global default".
+        global_settings = SettingsService.get_settings()
+        
+        if config.rate_per_hour <= 0:
+            config.rate_per_hour = global_settings.hourly_limit
+            
+        # If rate_per_minute is also 0, we can approximate or leave it to token bucket logic
+        # But let's leave it as is, rate limiter handles per-hour fine.
+
+        # Apply Identity Defaults
+        # If no "From" identity specified at all, use the pool
+        if not config.from_email and not config.from_emails:
+            active_emails = IdentityService.get_emails(active_only=True)
+            if active_emails:
+                if len(active_emails) == 1:
+                    config.from_email = active_emails[0].email
+                else:
+                    # Enable rotation
+                    config.from_emails = [e.email for e in active_emails]
+                    # Set a default for single-send contexts
+                    config.from_email = active_emails[0].email
+                    logger.info(f"Using {len(active_emails)} From-Emails from identity pool")
+
+        if not config.from_name and not config.from_names:
+            active_names = IdentityService.get_names(active_only=True)
+            if active_names:
+                if len(active_names) == 1:
+                    config.from_name = active_names[0].name
+                else:
+                    config.from_names = [n.name for n in active_names]
+                    config.from_name = active_names[0].name
+                    logger.info(f"Using {len(active_names)} Sender Names from identity pool")
+
+        if not config.reply_to and global_settings.default_reply_to:
+            config.reply_to = global_settings.default_reply_to
+
         self.config = config
         
         # Load SMTP servers

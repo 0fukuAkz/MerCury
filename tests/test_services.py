@@ -135,10 +135,14 @@ async def test_run_campaign_flow():
     
     recipients = [{'email': 'a@b.com'}, {'email': 'c@d.com'}]
     
-    with patch('mercury.services.campaign_service.AsyncFileLogger') as MockLogger:
+    with patch('mercury.services.campaign_service.AsyncFileLogger') as MockLogger, \
+         patch('mercury.services.campaign_service.get_session_direct') as mock_session:
         # Mock async context manager for logger
         mock_logger_instance = AsyncMock()
         MockLogger.return_value.__aenter__.return_value = mock_logger_instance
+        
+        # Mock session
+        mock_session.return_value = Mock()
         
         stats = await service.run_campaign(recipients, log_path="logs")
         

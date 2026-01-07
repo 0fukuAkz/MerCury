@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}MerCury - Global Settings{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Global Settings</h1>
+    <p class="page-description">Configure application-wide defaults and limits.</p>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+{% for category, message in messages %}
+<div class="card"
+    style="border-left: 4px solid var(--{{ 'success' if category=='success' else 'error' }}); padding: 1rem;">
+    <div class="text-{{ 'success' if category=='success' else 'error' }}">{{ message }}</div>
+</div>
+{% endfor %}
+{% endif %}
+{% endwith %}
+
+<form method="POST">
+    <!-- General Settings -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title" style="color: var(--neon-cyan);">General Settings (Safe)</h2>
+        </div>
+
+        <div class="stats-grid">
+            <div class="form-group">
+                <label class="form-label">Daily Sending Limit</label>
+                <input type="number" name="daily_limit" class="form-input" value="{{ settings.daily_limit }}">
+                <div class="text-muted" style="font-size: 0.75rem; margin-top: 0.25rem;">Best for warming up new
+                    domains.</div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Hourly Sending Limit</label>
+                <input type="number" name="hourly_limit" class="form-input" value="{{ settings.hourly_limit }}">
+                <div class="text-muted" style="font-size: 0.75rem; margin-top: 0.25rem;">Helps avoid provider rate
+                    limits.</div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Min Delay (seconds)</label>
+                <input type="number" step="0.1" name="min_delay" class="form-input" value="{{ settings.min_delay }}">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Max Delay (seconds)</label>
+                <input type="number" step="0.1" name="max_delay" class="form-input" value="{{ settings.max_delay }}">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Default Reply-To</label>
+            <input type="email" name="default_reply_to" class="form-input" value="{{ settings.default_reply_to or '' }}"
+                placeholder="support@example.com">
+        </div>
+    </div>
+
+    <!-- Advanced Settings -->
+    <div class="card" style="border-color: var(--warning);">
+        <div class="card-header">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2" width="24" height="24">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z">
+                    </path>
+                    <line x1="12" y1="9" x2="12" y2="13"></line>
+                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                </svg>
+                <h2 class="card-title" style="color: var(--warning);">Advanced Configuration (Expert)</h2>
+            </div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="form-group">
+                <label class="form-label">SMTP Timeout (s)</label>
+                <input type="number" name="smtp_timeout" class="form-input" value="{{ settings.smtp_timeout }}">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">DNS Timeout (s)</label>
+                <input type="number" name="dns_timeout" class="form-input" value="{{ settings.dns_timeout }}">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Max Retries</label>
+                <input type="number" name="max_retries" class="form-input" value="{{ settings.max_retries }}">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Retry Base Delay (s)</label>
+                <input type="number" name="retry_delay_base" class="form-input" value="{{ settings.retry_delay_base }}">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Max Concurrency</label>
+                <input type="number" name="max_concurrency" class="form-input" value="{{ settings.max_concurrency }}">
+                <div class="text-error" style="font-size: 0.75rem; margin-top: 0.25rem;">Warning: High concurrency
+                    triggers spam filters.</div>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                <input type="checkbox" name="proxy_enabled" {% if settings.proxy_enabled %}checked{% endif %}>
+                Enable Proxy Support
+            </label>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Proxy List</label>
+            <textarea name="proxy_list" class="form-input" rows="5"
+                placeholder="http://user:pass@ip:port&#10;socks5://ip:port">{{ proxy_text }}</textarea>
+            <div class="text-muted" style="font-size: 0.75rem; margin-top: 0.25rem;">One proxy per line. Supports HTTP
+                and SOCKS5.</div>
+        </div>
+    </div>
+
+    <div style="display: flex; justify-content: flex-end; gap: 1rem;">
+        <a href="/" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+    </div>
+</form>
+{% endblock %}

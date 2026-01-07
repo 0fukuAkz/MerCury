@@ -59,3 +59,7 @@ rich==13.7.0
 # Optional: Better performance
 uvloop>=0.21.0; sys_platform != 'win32'
 orjson>=3.10.0
+
+# Native GUI and packaging
+pywebview>=6.1
+platformdirs>=4.0.0
