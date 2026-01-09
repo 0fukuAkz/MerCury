@@ -106,6 +106,38 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
         try:
             init_db()
             
+            # --- Auto-Migration for Global Settings ---
+            # Ideally use Alembic, but for this standalone app, we do a quick robust check.
+            from sqlalchemy import text
+            from ..data.database import get_engine
+            
+            engine = get_engine()
+            with engine.connect() as conn:
+                # Check for new 'global_settings' columns
+                try:
+                    # SQLite pragmas to check columns
+                    result = conn.execute(text("PRAGMA table_info(global_settings)"))
+                    columns = [row[1] for row in result.fetchall()] # row is (cid, name, type, ...)
+                    
+                    migration_ops = [
+                        ("batch_size", "INTEGER DEFAULT 1000"),
+                        ("default_sender_name", "VARCHAR(255)"),
+                        ("default_test_email", "VARCHAR(255)"),
+                        ("log_retention_days", "INTEGER DEFAULT 30"),
+                        ("log_level", "VARCHAR(20) DEFAULT 'INFO'"),
+                        ("ui_theme", "VARCHAR(20) DEFAULT 'dark'")
+                    ]
+                    
+                    for col_name, col_def in migration_ops:
+                        if col_name not in columns:
+                            logger.info(f"Migrating DB: Adding column {col_name} to global_settings")
+                            conn.execute(text(f"ALTER TABLE global_settings ADD COLUMN {col_name} {col_def}"))
+                            conn.commit()
+                            
+                except Exception as ex:
+                    logger.warning(f"Migration check failed (might be fresh DB): {ex}")
+            # ------------------------------------------
+            
             # Create default admin if none exists
             session = get_session_direct()
             try:
