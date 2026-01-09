@@ -30,6 +30,16 @@ def index():
                 'dns_timeout': int(request.form.get('dns_timeout', 5)),
                 'proxy_enabled': request.form.get('proxy_enabled') == 'on',
                 'proxy_list': request.form.get('proxy_list', '').splitlines(),
+                
+                # Defaults
+                'batch_size': int(request.form.get('batch_size', 1000)),
+                'default_sender_name': request.form.get('default_sender_name', ''),
+                'default_test_email': request.form.get('default_test_email', ''),
+                
+                # Logging & UI
+                'log_retention_days': int(request.form.get('log_retention_days', 30)),
+                'log_level': request.form.get('log_level', 'INFO'),
+                'ui_theme': request.form.get('ui_theme', 'dark'),
             }
             
             SettingsService.update_settings(data)

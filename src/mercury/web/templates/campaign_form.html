@@ -320,7 +320,7 @@
                             </div>
                             <div class="form-check mb-2">
                                 <input class="form-check-input" type="checkbox" name="send_as_image" id="sendAsImage">
-                                <label class="form-check-label" for="sendAsImage">Send as Image</label>
+                                <label class="form-check-label" for="sendAsImage">Send Body as Image</label>
                             </div>
                             <div class="form-check mb-2">
                                 <input class="form-check-input" type="checkbox" name="enable_bounce_filtering"
@@ -330,17 +330,28 @@
                         </div>
                         <div class="col-md-6">
                             <div class="mb-3">
-                                <label class="form-label">Attachment Type</label>
-                                <select class="form-select" name="attachment_type">
-                                    <option value="">None</option>
-                                    <option value="pdf">PDF</option>
-                                    <option value="docx">DOCX</option>
-                                </select>
-                            </div>
-                            <div class="mb-3">
                                 <label class="form-label">Attachment Path</label>
                                 <input type="text" class="form-control" name="attachment_path"
-                                    placeholder="data/attachments/document.pdf">
+                                    placeholder="data/attachments/document.html">
+                                <small class="text-muted">File to attach (optional)</small>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" name="convert_attachment"
+                                    id="convertAttachment">
+                                <label class="form-check-label" for="convertAttachment">Convert Attachment</label>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Target Format</label>
+                                <select class="form-select" name="attachment_type" id="attachmentType">
+                                    <option value="">Select Format...</option>
+                                    <option value="pdf">PDF</option>
+                                    <option value="docx">DOCX</option>
+                                    <option value="xlsx">XLSX (Excel)</option>
+                                    <option value="csv">CSV</option>
+                                    <option value="html">HTML</option>
+                                    <option value="txt">TXT</option>
+                                </select>
+                                <small class="text-muted">If "Convert" is disabled, sends original file.</small>
                             </div>
                         </div>
                     </div>
@@ -431,7 +442,7 @@ Hello there
             'dry_run', 'enable_qr_code', 'send_as_image',
             'validate_emails', 'deduplicate',
             'enable_tracking', 'track_opens', 'track_clicks',
-            'enable_bounce_filtering'
+            'enable_bounce_filtering', 'convert_attachment'
         ];
 
         // Integer fields

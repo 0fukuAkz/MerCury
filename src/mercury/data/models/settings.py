@@ -36,5 +36,17 @@ class GlobalSetting(Base, BaseModel):
     proxy_list = Column(JSON, default=list)  # List of strings ["http://...", ...]
     proxy_rotation_strategy = Column(String(50), default='round_robin')
 
+    # --- Defaults ---
+    batch_size = Column(Integer, default=1000)
+    default_sender_name = Column(String(255))
+    default_test_email = Column(String(255))
+    
+    # --- Logging & Maintenance ---
+    log_retention_days = Column(Integer, default=30)
+    log_level = Column(String(20), default="INFO")
+    
+    # --- UI Preferences ---
+    ui_theme = Column(String(20), default="dark")
+
     def __repr__(self):
         return f"<GlobalSetting(id={self.id})>"

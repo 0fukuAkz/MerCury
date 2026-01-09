@@ -11,13 +11,13 @@
                 <h5 class="card-title mb-0">QR Code Generator</h5>
             </div>
             <div class="card-body">
-                <form action="{{ url_for('tools.generate_qr') }}" method="POST">
+                <form id="qrForm" action="{{ url_for('tools.generate_qr') }}" method="POST">
                     <div class="mb-3">
                         <label for="qrData" class="form-label">Text or URL</label>
                         <input type="text" class="form-control" id="qrData" name="data" required
                             placeholder="https://example.com">
                     </div>
-                    <button type="submit" class="btn btn-primary">Generate QR Code</button>
+                    <button type="submit" class="btn btn-primary" id="qrBtn">Generate QR Code</button>
                 </form>
             </div>
         </div>
@@ -30,7 +30,7 @@
                 <h5 class="card-title mb-0">Document Converter</h5>
             </div>
             <div class="card-body">
-                <form action="{{ url_for('tools.render_content') }}" method="POST">
+                <form id="converterForm" action="{{ url_for('tools.render_content') }}" method="POST">
                     <div class="mb-3">
                         <label for="renderContent" class="form-label">HTML Content</label>
                         <textarea class="form-control" id="renderContent" name="content" rows="6" required
@@ -48,10 +48,81 @@
                             <label class="form-check-label" for="formatImage">Image (PNG)</label>
                         </div>
                     </div>
-                    <button type="submit" class="btn btn-primary">Convert & Download</button>
+                    <button type="submit" class="btn btn-primary" id="convertBtn">Convert & Download</button>
                 </form>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        function handleDownload(formId, btnId) {
+            const form = document.getElementById(formId);
+            const btn = document.getElementById(btnId);
+
+            if (!form) return;
+
+            form.addEventListener('submit', async function (e) {
+                e.preventDefault();
+
+                const originalText = btn.innerHTML;
+                btn.innerHTML = 'Processing...';
+                btn.disabled = true;
+
+                try {
+                    const formData = new FormData(form);
+                    const response = await fetch(form.action, {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (!response.ok) {
+                        const err = await response.json();
+                        throw new Error(err.error || 'Request failed');
+                    }
+
+                    // Get filename from header or default
+                    let filename = 'download';
+                    const disposition = response.headers.get('content-disposition');
+                    if (disposition && disposition.indexOf('attachment') !== -1) {
+                        const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
+                        if (matches != null && matches[1]) {
+                            filename = matches[1].replace(/['"]/g, '');
+                        }
+                    }
+
+                    // Default filenames per form type if header parsing fails or is missing
+                    if (filename === 'download') {
+                        if (formId === 'qrForm') filename = 'qrcode.png';
+                        else if (formId === 'converterForm') {
+                            const format = formData.get('format');
+                            filename = format === 'pdf' ? 'document.pdf' : 'image.png';
+                        }
+                    }
+
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+
+                } catch (error) {
+                    alert('Error: ' + error.message);
+                    console.error('Download error:', error);
+                } finally {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }
+            });
+        }
+
+        handleDownload('qrForm', 'qrBtn');
+        handleDownload('converterForm', 'convertBtn');
+    });
+</script>
 {% endblock %}

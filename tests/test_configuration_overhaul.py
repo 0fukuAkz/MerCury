@@ -59,7 +59,18 @@ def test_settings_service(app):
             'max_concurrency': 10
         })
         assert updated.daily_limit == 1000
+        assert updated.daily_limit == 1000
         assert updated.max_concurrency == 10
+
+        # Update new fields
+        updated_new = SettingsService.update_settings({
+            'ui_theme': 'light',
+            'batch_size': 500,
+            'log_level': 'DEBUG'
+        })
+        assert updated_new.ui_theme == 'light'
+        assert updated_new.batch_size == 500
+        assert updated_new.log_level == 'DEBUG'
         
         # Verify persistence
         refetched = SettingsService.get_settings()

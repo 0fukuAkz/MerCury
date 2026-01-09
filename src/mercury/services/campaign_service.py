@@ -73,6 +73,7 @@ class CampaignConfig:
     # Features
     enable_qr_code: bool = False
     send_as_image: bool = False
+    convert_attachment: bool = False
     attachment_type: Optional[str] = None
     attachment_path: Optional[str] = None
     
@@ -189,6 +190,7 @@ class CampaignService:
             rate_per_hour=config.rate_per_hour,
             enable_qr_code=config.enable_qr_code,
             send_as_image=config.send_as_image,
+            convert_attachment=config.convert_attachment,
             attachment_type=config.attachment_type,
             attachment_path=config.attachment_path,
             subjects=config.subjects,
@@ -622,6 +624,7 @@ def load_campaign_from_yaml(yaml_path: str) -> CampaignConfig:
         
         enable_qr_code=features.get('qr_codes', False),
         send_as_image=features.get('send_as_image', False),
+        convert_attachment=features.get('convert_attachment', False),
         attachment_type=features.get('attachment_type'),
         attachment_path=features.get('attachment_path'),
         
