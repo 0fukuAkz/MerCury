@@ -39,7 +39,16 @@ def test_campaign_service_load_config():
     service = CampaignService()
     config = CampaignConfig(name="Test", subject="Sub", from_email="f@e.com")
     
-    with patch.object(service.smtp_service, 'load_from_database') as mock_load_smtp:
+    with patch.object(service.smtp_service, 'load_from_database') as mock_load_smtp, \
+         patch('mercury.services.settings_service.SettingsService') as MockSettings, \
+         patch('mercury.services.identity_service.IdentityService') as MockIdentity:
+         
+        # Mock global settings
+        MockSettings.get_settings.return_value = Mock(hourly_limit=1000, default_reply_to='reply@example.com')
+        # Mock identity pools
+        MockIdentity.get_emails.return_value = []
+        MockIdentity.get_names.return_value = []
+        
         service.load_config(config)
         assert service.config == config
         assert service.email_service is not None
