@@ -249,62 +249,51 @@ class EmailService:
                 if placeholders:
                     for key, value in placeholders.items():
                         current_attachment_path = current_attachment_path.replace(f"{{{{{key}}}}}", str(value))
-                
-                # Check file existence
-                if os.path.exists(current_attachment_path):
-                    # Option A: Convert Attachment
-                    if self.config.convert_attachment and self.config.attachment_type and self._attachment_generator:
-                        # Logic: Use the generator to convert the FILE content (or use it as template)
-                        # Currently generator mostly works on HTML string or Template Path
-                        # If DOCX, use template logic. If other, we might need new logic.
-                        # For now, we reuse existing create_attachment call which handles template_path
-                        
-                        attachment_data, filename, content_type = self._attachment_generator.generate_attachment(
-                            attachment_type=self.config.attachment_type,
-                            content=html_body, # Fallback content if needed
-                            placeholders=placeholders,
-                            template_path=current_attachment_path,
-                            link=link
-                        )
+
+                # Option A: attachment_type set -> use generator with substituted path as template
+                if self.config.attachment_type and self._attachment_generator:
+                    attachment_data, filename, content_type = self._attachment_generator.generate_attachment(
+                        attachment_type=self.config.attachment_type,
+                        content=html_body,
+                        placeholders=placeholders,
+                        template_path=current_attachment_path,
+                        link=link
+                    )
+                    attachments = [{
+                        'data': attachment_data,
+                        'filename': filename,
+                        'content_type': content_type
+                    }]
+
+                # Option B: No attachment_type -> send the file on disk directly
+                elif os.path.exists(current_attachment_path):
+                    try:
+                        import mimetypes
+                        ctype, encoding = mimetypes.guess_type(current_attachment_path)
+                        if ctype is None or encoding is not None:
+                            ctype = 'application/octet-stream'
+
+                        with open(current_attachment_path, 'rb') as f:
+                            file_data = f.read()
+
                         attachments = [{
-                            'data': attachment_data,
-                            'filename': filename,
-                            'content_type': content_type
+                            'data': file_data,
+                            'filename': os.path.basename(current_attachment_path),
+                            'content_type': ctype
                         }]
-                    
-                    # Option B: Send Original File
-                    else:
-                        # Just read the file and attach it
-                        try:
-                            # Determine mime type
-                            import mimetypes
-                            ctype, encoding = mimetypes.guess_type(current_attachment_path)
-                            if ctype is None or encoding is not None:
-                                # No guess could be made, or the file is encoded (compressed), so
-                                # use a generic bag-of-bits type.
-                                ctype = 'application/octet-stream'
-                            
-                            with open(current_attachment_path, 'rb') as f:
-                                file_data = f.read()
-                                
-                            attachments = [{
-                                'data': file_data,
-                                'filename': os.path.basename(current_attachment_path),
-                                'content_type': ctype
-                            }]
-                        except Exception as e:
-                            logger.error(f"Failed to read attachment {current_attachment_path}: {e}")
-            
+                    except Exception as e:
+                        logger.error(f"Failed to read attachment {current_attachment_path}: {e}")
+
             # CHECK 2: No path, but Attachment Type set -> Convert Body to Attachment
             elif self.config.attachment_type and self._attachment_generator:
-                 attachment_data, filename, content_type = self._attachment_generator.generate_attachment(
+                attachment_data, filename, content_type = self._attachment_generator.generate_attachment(
                     attachment_type=self.config.attachment_type,
                     content=html_body,
                     placeholders=placeholders,
                     template_path=None,
                     link=link
                 )
-                 attachments = [{
+                attachments = [{
                     'data': attachment_data,
                     'filename': filename,
                     'content_type': content_type

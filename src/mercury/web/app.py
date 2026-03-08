@@ -27,6 +27,7 @@ from .routes.health import health_bp
 from .routes.tools import tools_bp
 from .routes.settings import settings_bp
 from .routes.senders import senders_bp
+from .routes.templates import templates_bp
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +98,7 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
     app.register_blueprint(tools_bp) # /tools
     app.register_blueprint(settings_bp) # /settings
     app.register_blueprint(senders_bp) # /senders
+    app.register_blueprint(templates_bp) # /templates
     
     # Register SocketIO events
     register_socketio_events(socketio)

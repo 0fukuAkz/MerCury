@@ -29,12 +29,6 @@ def smtp_servers():
     """SMTP servers management page."""
     return render_template('smtp.html')
 
-@views_bp.route('/templates')
-@login_required
-def templates():
-    """Email templates management page."""
-    return render_template('templates.html')
-
 @views_bp.route('/logs')
 @login_required
 def logs():

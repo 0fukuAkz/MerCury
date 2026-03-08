@@ -571,6 +571,17 @@
         </aside>
 
         <main class="main">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            <div style="margin-bottom: 1.5rem;">
+                {% for category, message in messages %}
+                <div class="card" style="border-left: 4px solid var(--{{ 'success' if category=='success' else ('warning' if category=='info' else 'error') }}); padding: 1rem; margin-bottom: 0.5rem;">
+                    <div class="text-{{ 'success' if category=='success' else ('warning' if category=='info' else 'error') }}">{{ message }}</div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% endwith %}
             {% block content %}{% endblock %}
         </main>
     </div>

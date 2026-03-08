@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc -l /c/Users/user/Desktop/Projects/git/MerCury/tests/test_*.py)",
+      "Bash(wc -l /c/Users/user/Desktop/Projects/git/MerCury/src/mercury/**/*.py)",
+      "Bash(python -m pytest --collect-only -q)",
+      "Bash(python -c \"from playwright.sync_api import sync_playwright; print\\(''Playwright is installed''\\)\")",
+      "Bash(python -m pytest tests/e2e/ -v --tb=short)",
+      "Bash(python -m pytest tests/e2e/ -v --tb=short --no-cov)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(python -m pytest tests/ -x --ignore=tests/e2e -q)"
+    ]
+  }
+}

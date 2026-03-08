@@ -12,27 +12,36 @@
     <!-- Editor -->
     <div class="card">
         <div class="card-header">
-            <h2 class="card-title">Template Editor</h2>
+            <h2 class="card-title" id="editor-title">Template Editor</h2>
         </div>
-        <div class="form-group">
-            <label class="form-label">Template Name</label>
-            <input type="text" class="form-input" id="template-name" placeholder="My Template">
-        </div>
-        <div class="form-group">
-            <label class="form-label">HTML Content</label>
-            <textarea class="form-input" id="template-html" rows="20"
-                style="font-family: 'JetBrains Mono', monospace; font-size: 0.875rem;" placeholder="<html>
+        <!-- Hidden form that submits to the server -->
+        <form id="template-form" action="{{ url_for('templates.save') }}" method="POST">
+            <input type="hidden" name="template_id" id="template-id" value="">
+            <div class="form-group">
+                <label class="form-label">Template Name</label>
+                <input type="text" class="form-input" name="name" id="template-name" placeholder="My Template" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Subject Line</label>
+                <input type="text" class="form-input" name="subject" id="template-subject" placeholder="Hello {% raw %}{{first_name}}{% endraw %}!">
+            </div>
+            <div class="form-group">
+                <label class="form-label">HTML Content</label>
+                <textarea class="form-input" name="html_content" id="template-html" rows="16"
+                    style="font-family: 'JetBrains Mono', monospace; font-size: 0.875rem;" placeholder="<html>
 <body>
     <h1>Hello {{first_name}}!</h1>
     <p>Email: {{email}}</p>
     <p>Date: {{date_formatted}}</p>
 </body>
 </html>"></textarea>
-        </div>
-        <div class="flex gap-4">
-            <button class="btn btn-primary" onclick="previewTemplate()">Preview</button>
-            <button class="btn btn-secondary" onclick="saveTemplate()">Save Template</button>
-        </div>
+            </div>
+            <div class="flex gap-4">
+                <button type="button" class="btn btn-primary" onclick="previewTemplate()">Preview</button>
+                <button type="submit" class="btn btn-secondary">Save Template</button>
+                <button type="button" class="btn btn-secondary" id="cancel-edit-btn" onclick="cancelEdit()" style="display:none; color: var(--warning); border-color: var(--warning);">Cancel Edit</button>
+            </div>
+        </form>
     </div>
 
     <!-- Preview -->
@@ -44,7 +53,7 @@
                     value="test@example.com">
             </div>
         </div>
-        <div id="preview-frame" style="background: white; border-radius: 8px; min-height: 400px; padding: 1rem;">
+        <div id="preview-frame" style="background: white; color: #1a1a2e; border-radius: 8px; min-height: 400px; padding: 1rem;">
             <p class="text-muted">Click "Preview" to see rendered template</p>
         </div>
 
@@ -57,6 +66,73 @@
     </div>
 </div>
 
+<!-- Saved Templates -->
+<div class="card mt-4">
+    <div class="card-header">
+        <h2 class="card-title" style="color: var(--neon-cyan);">Saved Templates</h2>
+        <span class="badge badge-info">{{ templates|length }} Total</span>
+    </div>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Subject</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for tpl in templates %}
+            <tr>
+                <td>
+                    <div class="font-mono">{{ tpl.name }}</div>
+                    <div class="text-muted" style="font-size: 0.75rem;">
+                        Created {{ tpl.created_at.strftime('%Y-%m-%d') if tpl.created_at else '' }}
+                    </div>
+                </td>
+                <td>
+                    <div class="text-muted" style="font-size: 0.875rem;">{{ tpl.subject or '—' }}</div>
+                </td>
+                <td>
+                    {% if tpl.is_active %}
+                    <span class="badge badge-success">Active</span>
+                    {% else %}
+                    <span class="badge badge-error">Inactive</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button type="button" class="btn btn-secondary"
+                            style="padding: 0.25rem 0.5rem; font-size: 0.75rem;"
+                            data-id="{{ tpl.id }}"
+                            onclick="editTemplate(this)">
+                            Edit
+                        </button>
+                        <form action="{{ url_for('templates.toggle', id=tpl.id) }}" method="POST" style="display:inline;">
+                            <button type="submit" class="btn btn-secondary"
+                                style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+                                {{ 'Disable' if tpl.is_active else 'Enable' }}
+                            </button>
+                        </form>
+                        <form action="{{ url_for('templates.delete', id=tpl.id) }}" method="POST" style="display:inline;"
+                            onsubmit="return confirm('Delete this template?');">
+                            <button type="submit" class="btn btn-secondary"
+                                style="padding: 0.25rem 0.5rem; font-size: 0.75rem; color: var(--error); border-color: var(--error);">
+                                Del
+                            </button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="4" class="text-muted" style="text-align: center;">No templates saved yet.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
 <!-- Available Placeholders -->
 <div class="card mt-4">
     <div class="card-header">
@@ -67,64 +143,75 @@
             <h4 style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.5rem;">
                 Recipient</h4>
             <code class="font-mono"
-                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{email}}</code>
+                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{% raw %}{{email}}{% endraw %}</code>
             <code class="font-mono"
-                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{first_name}}</code>
+                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{% raw %}{{first_name}}{% endraw %}</code>
             <code class="font-mono"
-                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{last_name}}</code>
+                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{% raw %}{{last_name}}{% endraw %}</code>
             <code class="font-mono"
-                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{full_name}}</code>
+                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{% raw %}{{full_name}}{% endraw %}</code>
             <code class="font-mono"
-                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{domain}}</code>
+                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{% raw %}{{domain}}{% endraw %}</code>
             <code class="font-mono"
-                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{domain_name}}</code>
+                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{% raw %}{{domain_name}}{% endraw %}</code>
         </div>
         <div>
             <h4 style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.5rem;">
                 Date/Time</h4>
             <code class="font-mono"
-                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{date}}</code>
+                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{% raw %}{{date}}{% endraw %}</code>
             <code class="font-mono"
-                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{date_formatted}}</code>
+                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{% raw %}{{date_formatted}}{% endraw %}</code>
             <code class="font-mono"
-                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{time}}</code>
+                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{% raw %}{{time}}{% endraw %}</code>
             <code class="font-mono"
-                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{year}}</code>
+                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{% raw %}{{year}}{% endraw %}</code>
             <code class="font-mono"
-                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{month_name}}</code>
+                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{% raw %}{{month_name}}{% endraw %}</code>
             <code class="font-mono"
-                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{day_name}}</code>
+                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{% raw %}{{day_name}}{% endraw %}</code>
         </div>
         <div>
             <h4 style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.5rem;">
                 Random</h4>
             <code class="font-mono"
-                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{random_name}}</code>
+                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{% raw %}{{random_name}}{% endraw %}</code>
             <code class="font-mono"
-                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{random_company}}</code>
+                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{% raw %}{{random_company}}{% endraw %}</code>
             <code class="font-mono"
-                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{random_phone}}</code>
+                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{% raw %}{{random_phone}}{% endraw %}</code>
             <code class="font-mono"
-                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{uuid}}</code>
+                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{% raw %}{{uuid}}{% endraw %}</code>
             <code class="font-mono"
-                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{random_number}}</code>
+                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{% raw %}{{random_number}}{% endraw %}</code>
         </div>
         <div>
             <h4 style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.5rem;">
                 Features</h4>
             <code class="font-mono"
-                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{ '{{' }}link{{ '}}' }}</code>
+                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{% raw %}{{link}}{% endraw %}</code>
             <code class="font-mono"
-                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{ '{{' }}qr_code{{ '}}' }}</code>
+                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{% raw %}{{qr_code}}{% endraw %}</code>
             <code class="font-mono"
-                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{ '{{' }}if:placeholder{{ '}}' }}...{{ '{{' }}endif{{ '}}' }}</code>
+                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{% raw %}{{if:placeholder}}...{{endif}}{% endraw %}</code>
             <code class="font-mono"
-                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{{ '{{' }}include:file.html{{ '}}' }}</code>
+                style="display: block; margin-bottom: 0.25rem; color: var(--accent-primary);">{% raw %}{{include:file.html}}{% endraw %}</code>
         </div>
     </div>
 </div>
 
 <script>
+    // Template data for edit operations
+    var TEMPLATES = {
+        {% for tpl in templates %}
+        {{ tpl.id }}: {
+            name: {{ tpl.name|tojson }},
+            subject: {{ (tpl.subject or '')|tojson }},
+            html_content: {{ (tpl.html_content or '')|tojson }}
+        }{{ ',' if not loop.last }}
+        {% endfor %}
+    };
+
     async function previewTemplate() {
         const html = document.getElementById('template-html').value;
         const recipient = document.getElementById('preview-email').value;
@@ -143,7 +230,7 @@
             const placeholdersList = document.getElementById('placeholders-list');
             if (data.placeholders && data.placeholders.length > 0) {
                 placeholdersList.innerHTML = data.placeholders.map(p =>
-                    `<span class="badge badge-info">{{ '${' }}${p}{{ '}' }}</span>`
+                    '<span class="badge badge-info">' + p + '</span>'
                 ).join('');
             } else {
                 placeholdersList.innerHTML = '<span class="text-muted">None detected</span>';
@@ -153,17 +240,26 @@
         }
     }
 
-    async function saveTemplate() {
-        const name = document.getElementById('template-name').value;
-        const html = document.getElementById('template-html').value;
+    function editTemplate(btn) {
+        var id = btn.getAttribute('data-id');
+        var tpl = TEMPLATES[id];
+        if (!tpl) return;
+        document.getElementById('template-id').value = id;
+        document.getElementById('template-name').value = tpl.name;
+        document.getElementById('template-subject').value = tpl.subject;
+        document.getElementById('template-html').value = tpl.html_content;
+        document.getElementById('editor-title').textContent = 'Edit Template';
+        document.getElementById('cancel-edit-btn').style.display = '';
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
 
-        if (!name) {
-            alert('Please enter a template name');
-            return;
-        }
-
-        // Save template API would be implemented here
-        alert('Template saved! (API implementation pending)');
+    function cancelEdit() {
+        document.getElementById('template-id').value = '';
+        document.getElementById('template-name').value = '';
+        document.getElementById('template-subject').value = '';
+        document.getElementById('template-html').value = '';
+        document.getElementById('editor-title').textContent = 'Template Editor';
+        document.getElementById('cancel-edit-btn').style.display = 'none';
     }
 </script>
 {% endblock %}

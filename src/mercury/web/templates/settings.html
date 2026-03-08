@@ -8,16 +8,6 @@
     <p class="page-description">Manage system-wide defaults, connections, and behaviors.</p>
 </div>
 
-{% with messages = get_flashed_messages(with_categories=true) %}
-{% if messages %}
-{% for category, message in messages %}
-<div class="alert alert-{{ 'success' if category=='success' else 'danger' }} mb-4" role="alert">
-    {{ message }}
-</div>
-{% endfor %}
-{% endif %}
-{% endwith %}
-
 <form method="POST" id="settingsForm">
     <div class="row">
         <!-- Sidebar Navigation -->

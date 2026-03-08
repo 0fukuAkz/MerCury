@@ -58,4 +58,4 @@ def test_campaign_page_access(page: Page, base_url):
     # Check header
     expect(page.locator("h1")).to_contain_text("Campaigns")
     # Check for 'New Campaign' button
-    expect(page.locator("a.btn-primary")).to_contain_text("New Campaign")
+    expect(page.get_by_role("link", name="New Campaign")).to_be_visible()

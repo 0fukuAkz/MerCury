@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "flask-dev",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "mercury.web.app"],
+      "port": 5000
+    },
+    {
+      "name": "cli-dashboard",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "mercury", "start", "server", "--port", "8080"],
+      "port": 8080
+    }
+  ]
+}

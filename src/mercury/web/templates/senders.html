@@ -8,17 +8,6 @@
     <p class="page-description">Manage pools of 'From' addresses and Sender names for rotation.</p>
 </div>
 
-{% with messages = get_flashed_messages(with_categories=true) %}
-{% if messages %}
-{% for category, message in messages %}
-<div class="card"
-    style="border-left: 4px solid var(--{{ 'success' if category=='success' else 'error' }}); padding: 1rem;">
-    <div class="text-{{ 'success' if category=='success' else 'error' }}">{{ message }}</div>
-</div>
-{% endfor %}
-{% endif %}
-{% endwith %}
-
 <div class="layout-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
 
     <!-- From Emails Column -->

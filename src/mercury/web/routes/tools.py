@@ -8,9 +8,14 @@ from ...features.generators import AttachmentGenerator, GeneratorConfig
 
 tools_bp = Blueprint('tools', __name__, url_prefix='/tools')
 
-# Initialize generator with default config
-# In a real app, this might come from app config
-generator = AttachmentGenerator(GeneratorConfig())
+# Lazy-initialized generator to avoid loading WeasyPrint at import time
+_generator = None
+
+def _get_generator():
+    global _generator
+    if _generator is None:
+        _generator = AttachmentGenerator(GeneratorConfig())
+    return _generator
 
 @tools_bp.route('/')
 @login_required
@@ -27,7 +32,7 @@ def generate_qr():
         return jsonify({'error': 'Data is required'}), 400
     
     try:
-        qr_bytes = generator.qr.generate(data)
+        qr_bytes = _get_generator().qr.generate(data)
         
         return send_file(
             io.BytesIO(qr_bytes),
@@ -50,11 +55,11 @@ def render_content():
         
     try:
         if format_type == 'pdf':
-            data = generator.pdf.generate_from_html(content)
+            data = _get_generator().pdf.generate_from_html(content)
             mimetype = 'application/pdf'
             filename = 'document.pdf'
         elif format_type == 'image':
-            data = generator.image.generate_from_html(content)
+            data = _get_generator().image.generate_from_html(content)
             mimetype = 'image/png'
             filename = 'image.png'
         else:
