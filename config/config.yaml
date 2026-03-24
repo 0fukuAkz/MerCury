@@ -5,8 +5,8 @@
 # Campaign Identity
 # ==========================================
 campaign:
-  name: "My Email Campaign"
-  description: "Campaign description"
+  name: "CLI Professional Outreach"
+  description: "Automated outreach handled via CLI (Merged)"
 
 # ==========================================
 # SMTP Providers (Sending Infrastructure)
@@ -27,6 +27,17 @@ smtp_providers:
     # Rate Limits (Provider specific):
     max_per_minute: 100
     max_per_hour: 5000
+
+  # CLI Primary Provider
+  - name: "cli-primary"
+    host: "smtp.gmail.com"
+    port: 587
+    username: "${CLI_SMTP_USER}"
+    password: "${CLI_SMTP_PASS}"
+    use_tls: true
+    weight: 2.0
+    max_per_minute: 60
+    max_per_hour: 3000
 
   # Secondary Provider (Backup / Split traffic)
   #- name: "secondary"
@@ -59,7 +70,7 @@ email:
     - "The Newsletter"
 
   # Static Sender Email (Must be verified in your SMTP provider)
-  from_email: "sender@example.com"
+  from_email: "outreach@example.com"
   
   # specific reply-to address
   reply_to: "reply@example.com"
@@ -79,13 +90,15 @@ template:
   variants:
     - "templates/email.html"
     - "templates/email_variant_b.html"
+    - "templates/cli_template.html"
 
 # ==========================================
 # Recipients
 # ==========================================
 recipients:
   # Path to CSV or TXT file
-  source: "data/recipients.csv"
+  source: "data/cli_recipients.csv" # Main CLI source
+  # alt_source: "data/recipients.csv"
   
   # Which column contains the email address (default: email)
   email_column: "email"
@@ -105,9 +118,9 @@ sending:
   dry_run: true
 
   # Performance Tuning
-  concurrency: 50          # Number of parallel connections/tasks
-  chunk_size: 1000         # Process recipients in batches of this size
-  pause_between_chunks: 10 # Seconds to wait between batches (throttle)
+  concurrency: 100
+  chunk_size: 1000
+  pause_between_chunks: 5
 
   # Global Rate Limiting (Across all providers)
   rate_per_minute: 300

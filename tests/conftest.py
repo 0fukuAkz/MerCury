@@ -174,6 +174,7 @@ def app(db_engine):
          patch('mercury.services.smtp_service.get_session_direct', side_effect=TestSession), \
          patch('mercury.services.campaign_service.get_session_direct', side_effect=TestSession), \
          patch('mercury.web.routes.api.get_session_direct', side_effect=TestSession), \
+         patch('mercury.web.routes.templates.get_session_direct', side_effect=TestSession), \
          patch('mercury.web.app.get_session_direct', side_effect=TestSession), \
          patch('mercury.services.identity_service.get_session_direct', side_effect=TestSession), \
          patch('mercury.services.settings_service.get_session_direct', side_effect=TestSession), \

@@ -25,21 +25,30 @@ if HAS_PLAYWRIGHT:
     @pytest.fixture(scope="session")
     def flask_server():
         """Start Flask server in a separate thread."""
-        # Use a file-based DB for E2E sharing between thread and main process
-        db_path = "e2e_test.db"
-        os.environ["DATABASE_URL"] = f"sqlite:///{db_path}"
-        os.environ["FLASK_ENV"] = "testing"
+        db_path = os.path.abspath("e2e_test.db")
+        # Do NOT set global os.environ["DATABASE_URL"] here to avoid polluting other tests
         
-        app = create_app(config={
+        app_config = {
             'TESTING': True,
             'SQLALCHEMY_DATABASE_URI': f"sqlite:///{db_path}",
-            'WTF_CSRF_ENABLED': False  # Disable CSRF for easier testing
-        })
+            'WTF_CSRF_ENABLED': False,
+            'SECRET_KEY': 'e2e-secret'
+        }
         
-        # Initialize DB with admin user
+        from mercury.web.app import create_app
+        app = create_app(config=app_config)
+        
+        # Initialize DB with admin user using the specific app context
         with app.app_context():
-            init_db()
-            session = get_session_direct()
+            from mercury.data.database import init_db
+            from sqlalchemy.orm import sessionmaker
+            
+            # Use init_db to create tables and return the engine
+            engine = init_db(db_url=f"sqlite:///{db_path}")
+            
+            Session = sessionmaker(bind=engine)
+            session = Session()
+            
             if not session.query(User).filter_by(username="admin").first():
                 admin = User(
                     username="admin", 
@@ -50,10 +59,18 @@ if HAS_PLAYWRIGHT:
                 admin.password_hash = hash_password("password")
                 session.add(admin)
                 session.commit()
+            
+            user_count = session.query(User).count()
+            print(f"DEBUG: E2E DB initialized. User count: {user_count}")
             session.close()
+            engine.dispose()
 
-        # Run server
-        server_thread = threading.Thread(target=app.run, kwargs={'host': HOST, 'port': PORT, 'use_reloader': False})
+        # Run server using a wrapper that ensures the right config is used
+        def run_app():
+            # Set the env var ONLY inside the thread if necessary, but app is already configured
+            app.run(host=HOST, port=PORT, use_reloader=False, threaded=True)
+
+        server_thread = threading.Thread(target=run_app)
         server_thread.daemon = True
         server_thread.start()
         

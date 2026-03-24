@@ -1,4 +1,5 @@
 import pytest
+import re
 
 try:
     from playwright.sync_api import Page, expect
@@ -19,13 +20,13 @@ def test_login_flow(page: Page, base_url):
     
     # Fill login form
     page.fill("input[name='username']", "admin")
-    page.fill("input[name='password']", "password")
+    page.fill("input[name='password']", "admin") # Default from app.py
     
     # Click login
     page.click("button[type='submit']")
     
-    # Should redirect to dashboard
-    expect(page).to_have_url(f"{base_url}/")
+    # Should redirect to dashboard - handle optional trailing slash
+    expect(page).to_have_url(re.compile(rf"{base_url}/?$"))
     expect(page.locator("h1")).to_contain_text("Dashboard")
 
 def test_login_failure(page: Page, base_url):
@@ -46,11 +47,11 @@ def test_campaign_page_access(page: Page, base_url):
     # Login first
     page.goto(f"{base_url}/login")
     page.fill("input[name='username']", "admin")
-    page.fill("input[name='password']", "password")
+    page.fill("input[name='password']", "admin") # Default from app.py
     page.click("button[type='submit']")
     
-    # Wait for dashboard
-    expect(page).to_have_url(f"{base_url}/")
+    # Wait for dashboard - handle optional trailing slash
+    expect(page).to_have_url(re.compile(rf"{base_url}/?$"))
     
     # Navigate to campaigns
     page.click("a[href='/campaigns']")
