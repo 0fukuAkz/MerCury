@@ -38,6 +38,6 @@ RUN pip install -e .
 # Expose the Flask port
 EXPOSE 5000
 
-# Define the command to run the application
-# Note: For production, use Gunicorn with Gevent/Eventlet for SocketIO support
-CMD ["flask", "run", "--host=0.0.0.0", "--port=5000"]
+# Define the command to run the application (Production Server)
+# Use Gunicorn with Eventlet worker for high-performance SocketIO support
+CMD ["gunicorn", "--worker-class", "eventlet", "-w", "1", "--bind", "0.0.0.0:5000", "--log-level", "info", "--access-logfile", "-", "mercury.web.app:create_app()"]

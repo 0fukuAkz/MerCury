@@ -3,11 +3,25 @@ services:
     build: .
     ports:
       - "5000:5000"
-    volumes:
-      - .:/app
-      - /app/venv
     environment:
-      - FLASK_ENV=development
-      - FLASK_DEBUG=1
-      - DATABASE_URL=sqlite:////app/instance/mercury.db
+      - FLASK_ENV=production
+      - FLASK_DEBUG=0
+      - DATABASE_URL=postgresql://mercury:mercury@db:5432/mercury
+      - SECRET_KEY=${SECRET_KEY:-prod-secret-key-change-this}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
+    depends_on:
+      - db
     restart: unless-stopped
+
+  db:
+    image: postgres:15-alpine
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=mercury
+      - POSTGRES_PASSWORD=mercury
+      - POSTGRES_DB=mercury
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

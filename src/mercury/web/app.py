@@ -42,15 +42,25 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
     Returns:
         Configured Flask application
     """
-    # Initialize logging
-    log_file = get_log_dir() / "mercury.log"
-    configure_logging(log_file=str(log_file))
-    
     app = Flask(__name__)
     
     # Configuration
+    app.config['ENV'] = os.environ.get('FLASK_ENV', 'development')
+    app.config['DEBUG'] = os.environ.get('FLASK_DEBUG', '0').lower() in ('true', '1')
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-prod')
     app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload
+    
+    # Force JSON output in production for structured logging (Docker/CloudWatch/ELK)
+    is_prod = app.config['ENV'] == 'production'
+    json_logging = os.environ.get('LOG_JSON_OUTPUT', str(is_prod)).lower() == 'true'
+    
+    # Initialize logging
+    log_file = get_log_dir() / "mercury.log"
+    configure_logging(
+        level=os.environ.get('LOG_LEVEL', 'INFO'),
+        json_output=json_logging,
+        log_file=str(log_file)
+    )
     
     if config:
         app.config.update(config)
@@ -152,10 +162,12 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
                         is_admin=True,
                         is_active=True
                     )
-                    admin.password_hash = hash_password("admin")
+                    # Use environment variable for initial password, fallback to 'admin'
+                    initial_password = os.environ.get("ADMIN_PASSWORD", "admin")
+                    admin.password_hash = hash_password(initial_password)
                     session.add(admin)
                     session.commit()
-                    logger.info("Created default user: admin / admin")
+                    logger.info(f"Created default admin user (Password source: {'ENV' if 'ADMIN_PASSWORD' in os.environ else 'Default'})")
             finally:
                 session.close()
 
