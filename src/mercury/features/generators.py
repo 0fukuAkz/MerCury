@@ -464,7 +464,7 @@ class ImageGenerator:
         # Try to load a font
         try:
             font = ImageFont.truetype("arial.ttf", 14)
-        except:
+        except (OSError, IOError):
             font = ImageFont.load_default()
         
         # Draw text
