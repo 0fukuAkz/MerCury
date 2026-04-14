@@ -1,9 +1,7 @@
 """Error aggregation for bulk operations."""
 
-import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime, UTC
-from collections import defaultdict
 from dataclasses import dataclass, field
 
 from ..exceptions import categorize_exception
@@ -235,8 +233,6 @@ class ErrorAggregator:
         
         # High failure rate
         if summary.total_errors > 100:
-            failure_rate = (summary.total_errors / 
-                          (summary.total_errors + 1)) * 100  # Approximate
             recommendations.append(
                 f"📊 High error count ({summary.total_errors}) - review configuration"
             )

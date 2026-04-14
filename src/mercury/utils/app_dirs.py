@@ -1,7 +1,7 @@
 import sys
 import os
 from pathlib import Path
-from platformdirs import user_data_dir, user_log_dir, user_config_dir
+from platformdirs import user_data_dir, user_log_dir
 
 APP_NAME = "MerCury"
 APP_AUTHOR = "MerCuryTeam"  # Needed for Windows paths

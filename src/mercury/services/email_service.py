@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 from ..engine.async_sender import AsyncEmailSender, EmailResult, BulkSendResult
 from ..engine.rate_limiter import RateLimiter, RateLimiterConfig
-from ..engine.retry_queue import RetryQueue, RetryConfig
+from ..engine.retry_queue import RetryQueue
 from ..features.template_engine import TemplateEngine
 from ..features.generators import AttachmentGenerator, GeneratorConfig
 from ..features.rotation import RotationManager, RotationStrategy

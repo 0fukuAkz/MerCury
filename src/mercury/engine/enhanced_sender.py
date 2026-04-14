@@ -1,16 +1,14 @@
 """Enhanced async email sender with advanced error handling."""
 
 import asyncio
-import logging
-from typing import Optional, Dict, Any, List, Callable, Awaitable, Tuple
+from typing import Optional, Dict, Any, List, Tuple
 from datetime import datetime, UTC
 import uuid
 
 from .async_sender import AsyncEmailSender, EmailResult, BulkSendResult
-from .error_recovery import ErrorRecoveryManager, ErrorRecoveryDecision, RecoveryStrategy
+from .error_recovery import ErrorRecoveryManager, RecoveryStrategy
 from .error_aggregator import ErrorAggregator
 from ..services.dead_letter_service import DeadLetterService
-from ..exceptions import PermanentSMTPError, is_transient_error
 from ..utils.logging_context import get_context_logger, EmailOperationContext
 
 logger = get_context_logger(__name__)
@@ -226,8 +224,6 @@ class EnhancedAsyncEmailSender(AsyncEmailSender):
         self._current_aggregator = aggregator
         
         # Override send method to collect errors
-        original_results: List[EmailResult] = []
-        
         async def send_with_aggregation(recipient_data: Dict[str, Any], index: int):
             recipient_email = recipient_data.get('email')
             correlation_id = str(uuid.uuid4())

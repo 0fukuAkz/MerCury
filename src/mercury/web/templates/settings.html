@@ -1,280 +1,579 @@
 {% extends "base.html" %}
 
-{% block title %}Global Settings - MerCury{% endblock %}
+{% block title %}Configuration Center - MerCury{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* ── Layout ── */
+    .cfg-layout {
+        display: grid;
+        grid-template-columns: 220px 1fr;
+        gap: 1.75rem;
+        align-items: start;
+    }
+    @media (max-width: 780px) {
+        .cfg-layout { grid-template-columns: 1fr; }
+        .cfg-sidebar { position: static !important; }
+    }
+
+    /* ── Sidebar ── */
+    .cfg-sidebar {
+        position: sticky;
+        top: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .cfg-tab-btn {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: var(--radius);
+        color: var(--text-secondary);
+        font-family: inherit;
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        text-align: left;
+        transition: all 0.18s;
+        width: 100%;
+    }
+    .cfg-tab-btn svg { width: 17px; height: 17px; flex-shrink: 0; }
+    .cfg-tab-btn:hover {
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
+        border-color: var(--border-color);
+    }
+    .cfg-tab-btn.active {
+        background: rgba(0,255,255,0.08);
+        border-color: var(--neon-cyan);
+        color: var(--neon-cyan);
+        box-shadow: 0 0 10px rgba(0,255,255,0.12);
+    }
+    .cfg-tab-btn.active svg { stroke: var(--neon-cyan); }
+
+    .cfg-sidebar-divider {
+        height: 1px;
+        background: var(--border-color);
+        margin: 0.5rem 0;
+    }
+
+    .cfg-save-area {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        margin-top: 1rem;
+    }
+
+    /* ── Panels ── */
+    .cfg-panel { display: none; }
+    .cfg-panel.active { display: block; }
+
+    /* ── Section heading ── */
+    .cfg-section-title {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--neon-cyan);
+        margin: 0 0 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+    }
+    .cfg-section-title::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: var(--border-color);
+    }
+
+    /* ── Field grid ── */
+    .field-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.25rem;
+    }
+    .field-grid.single { grid-template-columns: 1fr; }
+    @media (max-width: 540px) { .field-grid { grid-template-columns: 1fr; } }
+
+    .field-hint {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        margin-top: 0.35rem;
+    }
+
+    /* ── Toggle switch ── */
+    .toggle-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.875rem 1rem;
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius);
+        cursor: pointer;
+        transition: border-color 0.2s;
+    }
+    .toggle-row:hover { border-color: var(--neon-cyan); }
+
+    .toggle-info { display: flex; flex-direction: column; gap: 0.2rem; }
+    .toggle-label { font-size: 0.875rem; font-weight: 500; color: var(--text-primary); }
+    .toggle-desc  { font-size: 0.75rem; color: var(--text-muted); }
+
+    .toggle-switch { position: relative; width: 40px; height: 22px; flex-shrink: 0; }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .toggle-track {
+        position: absolute; inset: 0;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 22px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .toggle-track::after {
+        content: '';
+        position: absolute;
+        left: 3px; top: 50%;
+        transform: translateY(-50%);
+        width: 14px; height: 14px;
+        border-radius: 50%;
+        background: var(--text-muted);
+        transition: all 0.2s;
+    }
+    .toggle-switch input:checked + .toggle-track {
+        background: rgba(0,255,255,0.15);
+        border-color: var(--neon-cyan);
+    }
+    .toggle-switch input:checked + .toggle-track::after {
+        left: calc(100% - 17px);
+        background: var(--neon-cyan);
+        box-shadow: 0 0 6px rgba(0,255,255,0.6);
+    }
+
+    /* ── Warning card accent ── */
+    .card-warn { border-left: 3px solid var(--warning) !important; }
+    .card-warn .card-title { color: var(--warning); }
+
+    /* ── Log level pills ── */
+    .log-level-picker { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .log-level-opt input[type="radio"] { display: none; }
+    .log-level-opt label {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.5rem 1rem;
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius);
+        font-size: 0.8125rem;
+        color: var(--text-secondary);
+        cursor: pointer;
+        user-select: none;
+        transition: all 0.18s;
+    }
+    .log-level-opt label:hover { border-color: var(--text-secondary); color: var(--text-primary); }
+    .log-level-opt input:checked + label {
+        border-color: var(--neon-cyan);
+        color: var(--neon-cyan);
+        background: rgba(0,255,255,0.07);
+        box-shadow: 0 0 8px rgba(0,255,255,0.15);
+    }
+
+    /* ── Number input with unit suffix ── */
+    .input-with-unit { position: relative; }
+    .input-with-unit .form-input { padding-right: 3rem; }
+    .input-unit {
+        position: absolute;
+        right: 0.875rem; top: 50%;
+        transform: translateY(-50%);
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        pointer-events: none;
+        font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* ── Select ── */
+    select.form-input { appearance: none; cursor: pointer; }
+
+    /* ── Dirty indicator banner ── */
+    #dirtyBanner {
+        display: none;
+        position: fixed;
+        bottom: 1.5rem; left: 50%; transform: translateX(-50%);
+        background: var(--bg-secondary);
+        border: 1px solid var(--neon-cyan);
+        box-shadow: var(--glow-cyan);
+        border-radius: var(--radius);
+        padding: 0.75rem 1.5rem;
+        font-size: 0.875rem;
+        color: var(--neon-cyan);
+        display: none;
+        align-items: center;
+        gap: 1rem;
+        z-index: 100;
+        white-space: nowrap;
+    }
+    #dirtyBanner.show { display: flex; }
+
+    textarea.form-input {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.8rem;
+        resize: vertical;
+        line-height: 1.55;
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="page-header mb-4">
+<div class="page-header">
     <h1 class="page-title">Configuration Center</h1>
     <p class="page-description">Manage system-wide defaults, connections, and behaviors.</p>
 </div>
 
 <form method="POST" id="settingsForm">
-    <div class="row">
-        <!-- Sidebar Navigation -->
-        <div class="col-md-3 mb-4">
-            <div class="list-group sticky-top" style="top: 20px;" id="settingsTabs" role="tablist">
-                <a class="list-group-item list-group-item-action active d-flex justify-content-between align-items-center"
-                    id="general-tab" data-bs-toggle="list" href="#general" role="tab">
-                    <span>
-                        <i class="fas fa-sliders-h me-2"></i> General
-                    </span>
-                </a>
-                <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
-                    id="sending-tab" data-bs-toggle="list" href="#sending" role="tab">
-                    <span>
-                        <i class="fas fa-paper-plane me-2"></i> Sending Engine
-                    </span>
-                </a>
-                <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
-                    id="connectivity-tab" data-bs-toggle="list" href="#connectivity" role="tab">
-                    <span>
-                        <i class="fas fa-network-wired me-2"></i> Proxies & SMTP
-                    </span>
-                </a>
-                <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
-                    id="system-tab" data-bs-toggle="list" href="#system" role="tab">
-                    <span>
-                        <i class="fas fa-server me-2"></i> System & Logs
-                    </span>
-                </a>
+<div class="cfg-layout">
+
+    <!-- ── Sidebar ── -->
+    <aside class="cfg-sidebar">
+        <button type="button" class="cfg-tab-btn active" data-tab="general">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
+                <path d="M12 2v2M12 20v2M2 12h2M20 12h2"/>
+            </svg>
+            General
+        </button>
+        <button type="button" class="cfg-tab-btn" data-tab="sending">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="22" y1="2" x2="11" y2="13"/>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>
+            Sending Engine
+        </button>
+        <button type="button" class="cfg-tab-btn" data-tab="connectivity">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="2" width="20" height="8" rx="2"/>
+                <rect x="2" y="14" width="20" height="8" rx="2"/>
+                <line x1="6" y1="6" x2="6.01" y2="6"/>
+                <line x1="6" y1="18" x2="6.01" y2="18"/>
+            </svg>
+            Proxies &amp; SMTP
+        </button>
+        <button type="button" class="cfg-tab-btn" data-tab="system">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+            System &amp; Logs
+        </button>
+
+        <div class="cfg-sidebar-divider"></div>
+
+        <div class="cfg-save-area">
+            <button type="submit" class="btn btn-primary">
+                <svg style="width:15px;height:15px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                    <polyline points="17 21 17 13 7 13 7 21"/>
+                    <polyline points="7 3 7 8 15 8"/>
+                </svg>
+                Save Changes
+            </button>
+            <button type="button" class="btn btn-secondary" onclick="window.history.back()">
+                Cancel
+            </button>
+        </div>
+    </aside>
+
+    <!-- ── Panels ── -->
+    <div>
+
+        <!-- General -->
+        <div class="cfg-panel active" id="panel-general">
+
+            <div class="card" style="margin-bottom:1.5rem;">
+                <div class="card-header">
+                    <h5 class="card-title">Application Defaults</h5>
+                </div>
+                <div class="field-grid" style="margin-bottom:1.25rem;">
+                    <div>
+                        <label class="form-label">Default Sender Name</label>
+                        <input type="text" class="form-input" name="default_sender_name"
+                            value="{{ settings.default_sender_name or '' }}" placeholder="My Company">
+                        <p class="field-hint">Fallback if no name specified in campaign</p>
+                    </div>
+                    <div>
+                        <label class="form-label">Default Reply-To</label>
+                        <input type="email" class="form-input" name="default_reply_to"
+                            value="{{ settings.default_reply_to or '' }}" placeholder="support@example.com">
+                    </div>
+                </div>
+                <div class="field-grid single">
+                    <div>
+                        <label class="form-label">Test Email Recipient</label>
+                        <input type="email" class="form-input" name="default_test_email"
+                            value="{{ settings.default_test_email or '' }}" placeholder="you@example.com">
+                        <p class="field-hint">Default address used for "Send Test" actions</p>
+                    </div>
+                </div>
             </div>
 
-            <div class="mt-4">
-                <button type="submit" class="btn btn-primary w-100 btn-lg">
-                    <i class="fas fa-save me-2"></i> Save Changes
-                </button>
-                <button type="button" class="btn btn-outline-secondary w-100 mt-2" onclick="window.history.back()">
-                    Cancel
-                </button>
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title">Interface Preferences</h5>
+                </div>
+                <div class="field-grid" style="max-width:320px;">
+                    <div>
+                        <label class="form-label">Theme</label>
+                        <select class="form-input" name="ui_theme">
+                            <option value="dark"  {% if settings.ui_theme == 'dark'  %}selected{% endif %}>Dark (Cyberpunk)</option>
+                            <option value="light" {% if settings.ui_theme == 'light' %}selected{% endif %}>Light (Classic)</option>
+                            <option value="auto"  {% if settings.ui_theme == 'auto'  %}selected{% endif %}>System Auto</option>
+                        </select>
+                    </div>
+                </div>
             </div>
+
         </div>
 
-        <!-- content -->
-        <div class="col-md-9">
-            <div class="tab-content" id="nav-tabContent">
+        <!-- Sending Engine -->
+        <div class="cfg-panel" id="panel-sending">
 
-                <!-- General Settings -->
-                <div class="tab-pane fade show active" id="general" role="tabpanel">
-                    <div class="card mb-4">
-                        <div class="card-header">
-                            <h5 class="card-title mb-0">Application Defaults</h5>
+            <div class="card" style="margin-bottom:1.5rem;">
+                <div class="card-header">
+                    <h5 class="card-title">Rate Limiting</h5>
+                </div>
+                <div class="cfg-section-title">Global caps</div>
+                <div class="field-grid" style="margin-bottom:1.25rem;">
+                    <div>
+                        <label class="form-label">Hourly Limit</label>
+                        <div class="input-with-unit">
+                            <input type="number" class="form-input" name="hourly_limit" value="{{ settings.hourly_limit }}">
+                            <span class="input-unit">/ hr</span>
                         </div>
-                        <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Default Sender Name</label>
-                                    <input type="text" class="form-control" name="default_sender_name"
-                                        value="{{ settings.default_sender_name or '' }}" placeholder="My Company">
-                                    <small class="text-muted">Fallback if no name specified in campaign</small>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Default Reply-To</label>
-                                    <input type="email" class="form-control" name="default_reply_to"
-                                        value="{{ settings.default_reply_to or '' }}" placeholder="support@example.com">
-                                </div>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Test Email Recipient</label>
-                                <input type="email" class="form-control" name="default_test_email"
-                                    value="{{ settings.default_test_email or '' }}">
-                                <small class="text-muted">Default address for "Send Test" actions</small>
-                            </div>
-                        </div>
+                        <p class="field-hint">Max emails across all campaigns per hour</p>
                     </div>
-
-                    <div class="card mb-4">
-                        <div class="card-header">
-                            <h5 class="card-title mb-0">Interface Preferences</h5>
-                        </div>
-                        <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Theme</label>
-                                    <select class="form-select" name="ui_theme">
-                                        <option value="dark" {% if settings.ui_theme=='dark' %}selected{% endif %}>Dark
-                                            (Cyberpunk)</option>
-                                        <option value="light" {% if settings.ui_theme=='light' %}selected{% endif %}>
-                                            Light (Classic)</option>
-                                        <option value="auto" {% if settings.ui_theme=='auto' %}selected{% endif %}>
-                                            System Auto</option>
-                                    </select>
-                                </div>
-                            </div>
+                    <div>
+                        <label class="form-label">Daily Limit</label>
+                        <div class="input-with-unit">
+                            <input type="number" class="form-input" name="daily_limit" value="{{ settings.daily_limit }}">
+                            <span class="input-unit">/ day</span>
                         </div>
                     </div>
                 </div>
-
-                <!-- Sending Engine -->
-                <div class="tab-pane fade" id="sending" role="tabpanel">
-                    <div class="card mb-4">
-                        <div class="card-header">
-                            <h5 class="card-title mb-0">Rate Limiting & Safety</h5>
-                        </div>
-                        <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Hourly Limit (Global)</label>
-                                    <input type="number" class="form-control" name="hourly_limit"
-                                        value="{{ settings.hourly_limit }}">
-                                    <small class="text-muted">Max emails across all campaigns per hour</small>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Daily Limit (Global)</label>
-                                    <input type="number" class="form-control" name="daily_limit"
-                                        value="{{ settings.daily_limit }}">
-                                </div>
-                            </div>
-                            <hr>
-                            <h6 class="text-primary">Delays & Timing</h6>
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Min Delay (sec)</label>
-                                    <input type="number" step="0.1" class="form-control" name="min_delay"
-                                        value="{{ settings.min_delay }}">
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Max Delay (sec)</label>
-                                    <input type="number" step="0.1" class="form-control" name="max_delay"
-                                        value="{{ settings.max_delay }}">
-                                </div>
-                            </div>
+                <div class="cfg-section-title">Delays &amp; timing</div>
+                <div class="field-grid">
+                    <div>
+                        <label class="form-label">Min Delay</label>
+                        <div class="input-with-unit">
+                            <input type="number" step="0.1" class="form-input" name="min_delay" value="{{ settings.min_delay }}">
+                            <span class="input-unit">sec</span>
                         </div>
                     </div>
-
-                    <div class="card mb-4 border-warning" style="border-left: 4px solid var(--warning);">
-                        <div class="card-header bg-transparent">
-                            <h5 class="card-title mb-0 text-warning">Performance Tuning (Advanced)</h5>
-                        </div>
-                        <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Max Concurrency</label>
-                                    <input type="number" class="form-control" name="max_concurrency"
-                                        value="{{ settings.max_concurrency }}">
-                                    <small class="text-muted">Simultaneous connections. High values may trigger
-                                        blocks.</small>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Default Batch Size</label>
-                                    <input type="number" class="form-control" name="batch_size"
-                                        value="{{ settings.batch_size }}">
-                                    <small class="text-muted">Emails loaded per memory chunk</small>
-                                </div>
-                            </div>
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Max Retries</label>
-                                    <input type="number" class="form-control" name="max_retries"
-                                        value="{{ settings.max_retries }}">
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Retry Base Delay (sec)</label>
-                                    <input type="number" class="form-control" name="retry_delay_base"
-                                        value="{{ settings.retry_delay_base }}">
-                                </div>
-                            </div>
+                    <div>
+                        <label class="form-label">Max Delay</label>
+                        <div class="input-with-unit">
+                            <input type="number" step="0.1" class="form-input" name="max_delay" value="{{ settings.max_delay }}">
+                            <span class="input-unit">sec</span>
                         </div>
                     </div>
                 </div>
-
-                <!-- Connectivity -->
-                <div class="tab-pane fade" id="connectivity" role="tabpanel">
-                    <div class="card mb-4">
-                        <div class="card-header">
-                            <h5 class="card-title mb-0">Proxy Configuration</h5>
-                        </div>
-                        <div class="card-body">
-                            <div class="form-check form-switch mb-3">
-                                <input class="form-check-input" type="checkbox" name="proxy_enabled" id="proxySwitch" {%
-                                    if settings.proxy_enabled %}checked{% endif %}>
-                                <label class="form-check-label" for="proxySwitch">Enable Proxy Routing</label>
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="form-label">Proxy List</label>
-                                <textarea class="form-control font-monospace" name="proxy_list" rows="6"
-                                    placeholder="usage:&#10;http://user:pass@1.2.3.4:8080&#10;socks5://1.2.3.4:1080">{{ proxy_text }}</textarea>
-                                <small class="text-muted">One proxy per line. Supports HTTP, HTTPS, SOCKS4,
-                                    SOCKS5.</small>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="card mb-4">
-                        <div class="card-header">
-                            <h5 class="card-title mb-0">Network Timeouts</h5>
-                        </div>
-                        <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">SMTP Timeout (sec)</label>
-                                    <input type="number" class="form-control" name="smtp_timeout"
-                                        value="{{ settings.smtp_timeout }}">
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">DNS Timeout (sec)</label>
-                                    <input type="number" class="form-control" name="dns_timeout"
-                                        value="{{ settings.dns_timeout }}">
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- System -->
-                <div class="tab-pane fade" id="system" role="tabpanel">
-                    <div class="card mb-4">
-                        <div class="card-header">
-                            <h5 class="card-title mb-0">Logging & Storage</h5>
-                        </div>
-                        <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Log Level</label>
-                                    <select class="form-select" name="log_level">
-                                        <option value="DEBUG" {% if settings.log_level=='DEBUG' %}selected{% endif %}>
-                                            Debug (Verbose)</option>
-                                        <option value="INFO" {% if settings.log_level=='INFO' %}selected{% endif %}>Info
-                                            (Standard)</option>
-                                        <option value="WARNING" {% if settings.log_level=='WARNING' %}selected{% endif
-                                            %}>Warning (Errors only)</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Retention Policy (Days)</label>
-                                    <input type="number" class="form-control" name="log_retention_days"
-                                        value="{{ settings.log_retention_days }}">
-                                    <small class="text-muted">Auto-delete logs older than this.</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
             </div>
+
+            <div class="card card-warn">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <svg style="width:16px;height:16px;vertical-align:-3px;margin-right:5px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                            <line x1="12" y1="9" x2="12" y2="13"/>
+                            <line x1="12" y1="17" x2="12.01" y2="17"/>
+                        </svg>
+                        Performance Tuning
+                        <span class="badge badge-warning" style="font-size:0.65rem;margin-left:0.5rem;">Advanced</span>
+                    </h5>
+                </div>
+                <div class="field-grid" style="margin-bottom:1.25rem;">
+                    <div>
+                        <label class="form-label">Max Concurrency</label>
+                        <input type="number" class="form-input" name="max_concurrency" value="{{ settings.max_concurrency }}">
+                        <p class="field-hint">Simultaneous connections. High values may trigger blocks.</p>
+                    </div>
+                    <div>
+                        <label class="form-label">Batch Size</label>
+                        <input type="number" class="form-input" name="batch_size" value="{{ settings.batch_size }}">
+                        <p class="field-hint">Emails loaded per memory chunk</p>
+                    </div>
+                </div>
+                <div class="field-grid">
+                    <div>
+                        <label class="form-label">Max Retries</label>
+                        <input type="number" class="form-input" name="max_retries" value="{{ settings.max_retries }}">
+                    </div>
+                    <div>
+                        <label class="form-label">Retry Base Delay</label>
+                        <div class="input-with-unit">
+                            <input type="number" class="form-input" name="retry_delay_base" value="{{ settings.retry_delay_base }}">
+                            <span class="input-unit">sec</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div>
-    </div>
+
+        <!-- Connectivity -->
+        <div class="cfg-panel" id="panel-connectivity">
+
+            <div class="card" style="margin-bottom:1.5rem;">
+                <div class="card-header">
+                    <h5 class="card-title">Proxy Configuration</h5>
+                </div>
+                <label class="toggle-row" for="proxySwitch" style="margin-bottom:1.25rem;">
+                    <div class="toggle-info">
+                        <span class="toggle-label">Enable Proxy Routing</span>
+                        <span class="toggle-desc">Route outbound SMTP connections through proxies</span>
+                    </div>
+                    <span class="toggle-switch">
+                        <input type="checkbox" name="proxy_enabled" id="proxySwitch" {% if settings.proxy_enabled %}checked{% endif %}>
+                        <span class="toggle-track"></span>
+                    </span>
+                </label>
+                <div>
+                    <label class="form-label">Proxy List</label>
+                    <textarea class="form-input" name="proxy_list" rows="7"
+                        placeholder="http://user:pass@1.2.3.4:8080&#10;socks5://1.2.3.4:1080&#10;https://proxy.example.com:3128">{{ proxy_text }}</textarea>
+                    <p class="field-hint">One proxy per line — supports HTTP, HTTPS, SOCKS4, SOCKS5.</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title">Network Timeouts</h5>
+                </div>
+                <div class="field-grid">
+                    <div>
+                        <label class="form-label">SMTP Timeout</label>
+                        <div class="input-with-unit">
+                            <input type="number" class="form-input" name="smtp_timeout" value="{{ settings.smtp_timeout }}">
+                            <span class="input-unit">sec</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="form-label">DNS Timeout</label>
+                        <div class="input-with-unit">
+                            <input type="number" class="form-input" name="dns_timeout" value="{{ settings.dns_timeout }}">
+                            <span class="input-unit">sec</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- System & Logs -->
+        <div class="cfg-panel" id="panel-system">
+
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title">Logging &amp; Storage</h5>
+                </div>
+                <div style="margin-bottom:1.5rem;">
+                    <label class="form-label">Log Level</label>
+                    <div class="log-level-picker">
+                        <div class="log-level-opt">
+                            <input type="radio" name="log_level" id="ll_debug" value="DEBUG" {% if settings.log_level == 'DEBUG' %}checked{% endif %}>
+                            <label for="ll_debug">
+                                <svg style="width:12px;height:12px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>
+                                    <line x1="12" y1="16" x2="12.01" y2="16"/>
+                                </svg>
+                                Debug
+                                <span style="color:var(--text-muted);font-size:0.7rem;">(verbose)</span>
+                            </label>
+                        </div>
+                        <div class="log-level-opt">
+                            <input type="radio" name="log_level" id="ll_info" value="INFO" {% if settings.log_level == 'INFO' or not settings.log_level %}checked{% endif %}>
+                            <label for="ll_info">
+                                <svg style="width:12px;height:12px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/>
+                                    <line x1="12" y1="8" x2="12.01" y2="8"/>
+                                </svg>
+                                Info
+                                <span style="color:var(--text-muted);font-size:0.7rem;">(standard)</span>
+                            </label>
+                        </div>
+                        <div class="log-level-opt">
+                            <input type="radio" name="log_level" id="ll_warn" value="WARNING" {% if settings.log_level == 'WARNING' %}checked{% endif %}>
+                            <label for="ll_warn">
+                                <svg style="width:12px;height:12px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                                    <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                                </svg>
+                                Warning
+                                <span style="color:var(--text-muted);font-size:0.7rem;">(errors only)</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="field-grid single" style="max-width:320px;">
+                    <div>
+                        <label class="form-label">Retention Policy</label>
+                        <div class="input-with-unit">
+                            <input type="number" class="form-input" name="log_retention_days" value="{{ settings.log_retention_days }}">
+                            <span class="input-unit">days</span>
+                        </div>
+                        <p class="field-hint">Auto-delete logs older than this value.</p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </div><!-- /panels -->
+</div><!-- /cfg-layout -->
 </form>
 
-<style>
-    /* Custom Tab Styles for Cyberpunk Feel */
-    .list-group-item.active {
-        background-color: var(--primary-color) !important;
-        border-color: var(--primary-color) !important;
-        color: #000 !important;
-        font-weight: 600;
-    }
+<!-- Unsaved changes banner -->
+<div id="dirtyBanner">
+    <svg style="width:15px;height:15px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>
+        <line x1="12" y1="16" x2="12.01" y2="16"/>
+    </svg>
+    Unsaved changes
+    <button type="button" class="btn btn-primary" style="padding:0.4rem 1rem;font-size:0.8rem;"
+        onclick="document.getElementById('settingsForm').submit()">Save now</button>
+    <button type="button" class="btn btn-secondary" style="padding:0.4rem 0.75rem;font-size:0.8rem;"
+        onclick="location.reload()">Discard</button>
+</div>
 
-    .list-group-item {
-        background-color: rgba(255, 255, 255, 0.05);
-        border-color: rgba(255, 255, 255, 0.1);
-        color: var(--text-color);
-        transition: all 0.2s ease;
-    }
+<script>
+    /* ── Tab switching ── */
+    const tabBtns  = document.querySelectorAll('.cfg-tab-btn');
+    const panels   = document.querySelectorAll('.cfg-panel');
 
-    .list-group-item:hover {
-        background-color: rgba(255, 255, 255, 0.1);
-        color: var(--primary-color);
-    }
-</style>
+    tabBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            tabBtns.forEach(b => b.classList.remove('active'));
+            panels.forEach(p => p.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+        });
+    });
+
+    /* ── Dirty tracker ── */
+    const banner = document.getElementById('dirtyBanner');
+    const form   = document.getElementById('settingsForm');
+    let dirty = false;
+
+    form.addEventListener('change', () => {
+        if (!dirty) { dirty = true; banner.classList.add('show'); }
+    });
+
+    form.addEventListener('submit', () => {
+        dirty = false;
+        banner.classList.remove('show');
+    });
+</script>
 {% endblock %}

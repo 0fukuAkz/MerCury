@@ -50,10 +50,9 @@ def init_db(db_url: str = None):
     """Initialize database tables."""
     engine = get_engine(db_url)
     
-    # Import all models to register them
-    from .models import (
-        Campaign, SMTPServer, Template, RecipientList, Recipient, EmailLog
-    )
+    # Import all models to register them with SQLAlchemy metadata (side-effect imports)
+    from .models import Campaign, SMTPServer, Template, RecipientList, Recipient, EmailLog
+    _ = (Campaign, SMTPServer, Template, RecipientList, Recipient, EmailLog)  # register metadata
     
     Base.metadata.create_all(bind=engine)
     return engine

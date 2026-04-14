@@ -5,7 +5,6 @@ from sqlalchemy import text
 from ...data.database import get_engine, get_session_direct
 from ...data.repositories import SMTPRepository
 import shutil
-import os
 
 health_bp = Blueprint('health', __name__)
 

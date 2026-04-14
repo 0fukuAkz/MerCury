@@ -3,9 +3,7 @@
 import random
 from typing import List, Optional
 from datetime import datetime, UTC
-from sqlalchemy import select, delete
-from sqlalchemy.orm import Session
-
+from sqlalchemy import select
 from ..data.database import get_session_direct
 from ..data.models.identity import FromEmail, SenderName
 

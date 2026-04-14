@@ -3,7 +3,7 @@
 import os
 import re
 import logging
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, List
 from dataclasses import dataclass, field
 from pathlib import Path
 

@@ -6,7 +6,7 @@ import logging
 import json
 import hmac
 import hashlib
-from typing import Optional, Dict, Any, List, Callable, Awaitable
+from typing import Optional, Dict, Any, List
 from datetime import datetime, UTC
 from dataclasses import dataclass, field
 from enum import Enum

@@ -1,7 +1,7 @@
 """Web route decorators."""
 
 from functools import wraps
-from flask import request, jsonify, current_app
+from flask import request, jsonify
 from flask_login import current_user
 
 from ..security.auth import require_api_key

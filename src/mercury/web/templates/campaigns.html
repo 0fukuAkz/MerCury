@@ -2,119 +2,470 @@
 
 {% block title %}Campaigns - MerCury{% endblock %}
 
+{% block extra_css %}
+<style>
+    /* ── Stats row ── */
+    .stats-row {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    @media (max-width: 720px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
+
+    .stat-mini {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius);
+        padding: 1rem 1.25rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+        transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .stat-mini:hover { border-color: var(--neon-cyan); box-shadow: var(--glow-cyan); }
+    .stat-mini-label {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--text-muted);
+    }
+    .stat-mini-value {
+        font-size: 1.6rem;
+        font-weight: 700;
+        font-family: 'JetBrains Mono', monospace;
+        line-height: 1;
+    }
+    .stat-mini.cyan .stat-mini-value  { color: var(--neon-cyan); }
+    .stat-mini.green .stat-mini-value { color: var(--neon-green); }
+    .stat-mini.pink .stat-mini-value  { color: var(--neon-pink); }
+    .stat-mini.warn .stat-mini-value  { color: var(--warning); }
+
+    /* ── Toolbar ── */
+    .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+        flex-wrap: wrap;
+    }
+    .search-input {
+        flex: 1;
+        min-width: 160px;
+        padding: 0.55rem 1rem;
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius);
+        color: var(--text-primary);
+        font-family: inherit;
+        font-size: 0.875rem;
+        transition: border-color 0.2s;
+    }
+    .search-input:focus { outline: none; border-color: var(--neon-cyan); }
+    .filter-select {
+        padding: 0.55rem 0.9rem;
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius);
+        color: var(--text-primary);
+        font-family: inherit;
+        font-size: 0.875rem;
+        cursor: pointer;
+        transition: border-color 0.2s;
+    }
+    .filter-select:focus { outline: none; border-color: var(--neon-cyan); }
+
+    /* ── Table ── */
+    .table-wrap { overflow: hidden; border-radius: var(--radius); }
+    .table th:first-child, .table td:first-child { padding-left: 1.5rem; }
+    .table th:last-child,  .table td:last-child  { padding-right: 1.5rem; }
+
+    .c-name { font-weight: 600; }
+    .c-desc { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem; }
+
+    /* ── Badge variants ── */
+    .badge-sending {
+        background: rgba(0, 255, 255, 0.1);
+        color: var(--neon-cyan);
+        border: 1px solid rgba(0, 255, 255, 0.4);
+        animation: pulse-border 1.6s ease-in-out infinite;
+    }
+    @keyframes pulse-border {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(0,255,255,0.4); }
+        50%       { box-shadow: 0 0 0 5px rgba(0,255,255,0); }
+    }
+    .badge-paused {
+        background: rgba(255, 107, 53, 0.12);
+        color: var(--warning);
+    }
+    .badge-scheduled {
+        background: rgba(0, 255, 255, 0.08);
+        color: var(--accent-secondary);
+    }
+
+    /* ── Progress micro-bar ── */
+    .prog-wrap { min-width: 80px; }
+    .prog-pct { font-size: 0.7rem; font-family: 'JetBrains Mono', monospace; color: var(--text-muted); }
+    .prog-bar {
+        height: 4px;
+        background: var(--bg-tertiary);
+        border-radius: 2px;
+        margin-top: 0.3rem;
+        overflow: hidden;
+    }
+    .prog-fill {
+        height: 100%;
+        background: var(--accent-gradient);
+        border-radius: 2px;
+        transition: width 0.4s ease;
+    }
+
+    /* ── Action buttons ── */
+    .act-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        padding: 0.28rem 0.55rem;
+        border-radius: var(--radius);
+        font-size: 0.7rem;
+        font-weight: 600;
+        cursor: pointer;
+        border: 1px solid var(--border-color);
+        font-family: inherit;
+        background: var(--bg-tertiary);
+        color: var(--text-muted);
+        transition: all 0.15s;
+        white-space: nowrap;
+    }
+    .act-btn:hover { color: var(--text-primary); border-color: var(--text-secondary); }
+    .act-btn.start  { color: var(--neon-green); border-color: rgba(57,255,20,0.4); }
+    .act-btn.start:hover  { background: rgba(57,255,20,0.1); box-shadow: 0 0 8px rgba(57,255,20,0.25); }
+    .act-btn.pause  { color: var(--warning); border-color: rgba(255,107,53,0.4); }
+    .act-btn.pause:hover  { background: rgba(255,107,53,0.1); }
+    .act-btn.resume { color: var(--neon-cyan); border-color: rgba(0,255,255,0.4); }
+    .act-btn.resume:hover { background: rgba(0,255,255,0.1); }
+    .act-btn.del    { color: var(--error); border-color: rgba(255,0,85,0.3); }
+    .act-btn.del:hover    { background: rgba(255,0,85,0.1); box-shadow: 0 0 8px rgba(255,0,85,0.2); }
+
+    /* ── Empty state ── */
+    .empty-state {
+        padding: 4rem 2rem;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.75rem;
+        color: var(--text-muted);
+        text-align: center;
+    }
+    .empty-state svg { opacity: 0.15; margin-bottom: 0.5rem; }
+    .empty-state h3  { font-size: 1rem; color: var(--text-secondary); margin: 0; }
+    .empty-state p   { font-size: 0.85rem; margin: 0; }
+
+    /* ── Toast ── */
+    #toast-container {
+        position: fixed;
+        bottom: 1.5rem;
+        right: 1.5rem;
+        display: flex;
+        flex-direction: column-reverse;
+        gap: 0.5rem;
+        z-index: 9998;
+    }
+    .toast {
+        padding: 0.75rem 1.1rem;
+        border-radius: var(--radius);
+        font-size: 0.8rem;
+        min-width: 220px;
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        border: 1px solid;
+        animation: toastIn 0.2s ease, toastOut 0.3s ease 2.7s forwards;
+    }
+    .toast.success { background: rgba(57,255,20,0.1);  border-color: var(--neon-green); color: var(--neon-green); }
+    .toast.error   { background: rgba(255,0,85,0.1);   border-color: var(--error);      color: var(--error); }
+    .toast.info    { background: rgba(0,255,255,0.1);  border-color: var(--neon-cyan);  color: var(--neon-cyan); }
+    @keyframes toastIn  { from { transform: translateX(110%); opacity: 0; } to { transform: none; opacity: 1; } }
+    @keyframes toastOut { from { opacity: 1; } to { opacity: 0; pointer-events: none; } }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="page-header flex justify-between items-center">
     <div>
         <h1 class="page-title">Campaigns</h1>
-        <p class="page-description">Manage your email campaigns</p>
+        <p class="page-description">Manage and monitor your email campaigns</p>
     </div>
     <a href="/campaigns/new" class="btn btn-primary">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <line x1="5" y1="12" x2="19" y2="12" />
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="12" y1="5" x2="12" y2="19"/>
+            <line x1="5" y1="12" x2="19" y2="12"/>
         </svg>
         New Campaign
     </a>
 </div>
 
-<div class="card">
+<!-- Summary stats -->
+<div class="stats-row">
+    <div class="stat-mini cyan">
+        <span class="stat-mini-label">Total</span>
+        <span class="stat-mini-value" id="st-total">—</span>
+    </div>
+    <div class="stat-mini warn">
+        <span class="stat-mini-label">Sending</span>
+        <span class="stat-mini-value" id="st-sending">—</span>
+    </div>
+    <div class="stat-mini green">
+        <span class="stat-mini-label">Completed</span>
+        <span class="stat-mini-value" id="st-completed">—</span>
+    </div>
+    <div class="stat-mini pink">
+        <span class="stat-mini-label">Failed</span>
+        <span class="stat-mini-value" id="st-failed">—</span>
+    </div>
+</div>
+
+<!-- Toolbar -->
+<div class="toolbar">
+    <input type="text" class="search-input" id="search-input"
+           placeholder="Search campaigns…" oninput="applyFilter()">
+    <select class="filter-select" id="status-filter" onchange="applyFilter()">
+        <option value="">All statuses</option>
+        <option value="draft">Draft</option>
+        <option value="scheduled">Scheduled</option>
+        <option value="sending">Sending</option>
+        <option value="paused">Paused</option>
+        <option value="completed">Completed</option>
+        <option value="failed">Failed</option>
+        <option value="cancelled">Cancelled</option>
+    </select>
+    <button class="btn btn-secondary" onclick="loadCampaigns()" title="Refresh list">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="23 4 23 10 17 10"/>
+            <polyline points="1 20 1 14 7 14"/>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+        </svg>
+        Refresh
+    </button>
+</div>
+
+<!-- Campaign table -->
+<div class="card table-wrap" style="padding: 0;">
     <table class="table">
         <thead>
             <tr>
-                <th>Name</th>
+                <th>Campaign</th>
                 <th>Type</th>
                 <th>Status</th>
-                <th>Recipients</th>
+                <th>Progress</th>
                 <th>Sent</th>
                 <th>Failed</th>
                 <th>Rate</th>
                 <th>Actions</th>
             </tr>
         </thead>
-        <tbody id="campaigns-table">
-            <tr>
-                <td colspan="8" class="text-muted" style="text-align: center;">Loading campaigns...</td>
-            </tr>
-        </tbody>
+        <tbody id="campaigns-tbody"></tbody>
     </table>
 </div>
 
+<div id="toast-container"></div>
+
 <script>
+    let allCampaigns = [];
+
+    /* ── Utilities ─────────────────────────────────────────────────────── */
+    function showToast(msg, type = 'info') {
+        const icons = {
+            success: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>',
+            error:   '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>',
+            info:    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',
+        };
+        const t = document.createElement('div');
+        t.className = `toast ${type}`;
+        t.innerHTML = (icons[type] || icons.info) + '<span></span>';
+        t.querySelector('span').textContent = msg;
+        document.getElementById('toast-container').appendChild(t);
+        setTimeout(() => t.remove(), 3200);
+    }
+
+    const STATUS_CFG = {
+        draft:     { cls: 'badge-info',      label: 'Draft' },
+        scheduled: { cls: 'badge-scheduled', label: 'Scheduled' },
+        sending:   { cls: 'badge-sending',   label: 'Sending' },
+        paused:    { cls: 'badge-paused',    label: 'Paused' },
+        completed: { cls: 'badge-success',   label: 'Completed' },
+        failed:    { cls: 'badge-error',     label: 'Failed' },
+        cancelled: { cls: 'badge-error',     label: 'Cancelled' },
+    };
+
+    /* ── Row builder (XSS-safe: server values set via textContent) ─────── */
+    function buildRow(c) {
+        const total  = c.total_recipients || 0;
+        const sent   = c.sent_count       || 0;
+        const failed = c.failed_count     || 0;
+        const pct    = total > 0 ? Math.min(100, Math.round((sent + failed) / total * 100)) : 0;
+        const sc     = STATUS_CFG[c.status] || { cls: 'badge-info', label: c.status || '—' };
+
+        const tr = document.createElement('tr');
+        tr.dataset.name   = (c.name || '').toLowerCase();
+        tr.dataset.status = (c.status || '').toLowerCase();
+
+        /* name + description */
+        const tdName = document.createElement('td');
+        const el = (tag, cls, text) => { const e = document.createElement(tag); e.className = cls; e.textContent = text; return e; };
+        tdName.appendChild(el('div', 'c-name', c.name || '(untitled)'));
+        if (c.description) {
+            const d = c.description.length > 58 ? c.description.slice(0, 58) + '…' : c.description;
+            tdName.appendChild(el('div', 'c-desc', d));
+        }
+
+        /* type */
+        const tdType = document.createElement('td');
+        tdType.style.cssText = 'color:var(--text-muted);font-size:0.8rem;';
+        tdType.textContent = c.type || 'marketing';
+
+        /* status badge */
+        const tdStatus = document.createElement('td');
+        const badge = el('span', 'badge ' + sc.cls, sc.label);
+        tdStatus.appendChild(badge);
+
+        /* progress */
+        const tdProg = document.createElement('td');
+        tdProg.innerHTML = `<div class="prog-wrap"><span class="prog-pct">${pct}%</span><div class="prog-bar"><div class="prog-fill" style="width:${pct}%"></div></div></div>`;
+
+        /* sent / failed / rate */
+        const fmtCell = (cls, val) => { const td = document.createElement('td'); td.className = cls; td.textContent = val; return td; };
+        const tdSent = fmtCell('font-mono text-success', sent.toLocaleString());
+        const tdFail = fmtCell('font-mono text-error',   failed.toLocaleString());
+        const tdRate = fmtCell('font-mono',              (c.success_rate || 0) + '%');
+
+        /* actions */
+        const tdAct = document.createElement('td');
+        const wrap  = document.createElement('div');
+        wrap.className = 'flex gap-2';
+        wrap.style.flexWrap = 'wrap';
+
+        const mkBtn = (cls, svg, label, fn) => {
+            const b = document.createElement('button');
+            b.className = `act-btn ${cls}`;
+            b.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${svg}</svg>`;
+            const txt = document.createTextNode(' ' + label);
+            b.appendChild(txt);
+            b.addEventListener('click', fn);
+            wrap.appendChild(b);
+        };
+
+        if (c.status === 'draft' || c.status === 'scheduled')
+            mkBtn('start', '<polygon points="5 3 19 12 5 21 5 3"/>', 'Start', () => startCampaign(c.id));
+        if (c.status === 'sending')
+            mkBtn('pause', '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>', 'Pause', () => pauseCampaign(c.id));
+        if (c.status === 'paused')
+            mkBtn('resume', '<polygon points="5 3 19 12 5 21 5 3"/>', 'Resume', () => resumeCampaign(c.id));
+        mkBtn('', '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>', 'Clone', () => cloneCampaign(c.id));
+        if (['draft', 'failed', 'cancelled', 'completed'].includes(c.status))
+            mkBtn('del', '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>', 'Delete', () => deleteCampaign(c.id, c.name));
+
+        tdAct.appendChild(wrap);
+        [tdName, tdType, tdStatus, tdProg, tdSent, tdFail, tdRate, tdAct].forEach(td => tr.appendChild(td));
+        return tr;
+    }
+
+    /* ── Load & render ─────────────────────────────────────────────────── */
     async function loadCampaigns() {
         try {
-            const response = await fetch('/api/campaigns');
-            const data = await response.json();
-
-            const tbody = document.getElementById('campaigns-table');
-
-            if (data.campaigns.length === 0) {
-                tbody.innerHTML = `
-                    <tr>
-                        <td colspan="8" style="text-align: center; padding: 3rem;">
-                            <p class="text-muted">No campaigns yet</p>
-                            <a href="/campaigns/new" class="btn btn-primary mt-4">Create your first campaign</a>
-                        </td>
-                    </tr>
-                `;
-                return;
-            }
-
-            tbody.innerHTML = data.campaigns.map(campaign => `
-                <tr>
-                    <td>
-                        <strong>${campaign.name}</strong>
-                        ${campaign.description ? `<br><span class="text-muted">${campaign.description.substring(0, 50)}</span>` : ''}
-                    </td>
-                    <td>${campaign.type || 'marketing'}</td>
-                    <td><span class="badge badge-${getStatusColor(campaign.status)}">${campaign.status}</span></td>
-                    <td class="font-mono">${(campaign.total_recipients || 0).toLocaleString()}</td>
-                    <td class="font-mono text-success">${(campaign.sent_count || 0).toLocaleString()}</td>
-                    <td class="font-mono text-error">${(campaign.failed_count || 0).toLocaleString()}</td>
-                    <td class="font-mono">${campaign.success_rate || 0}%</td>
-                    <td>
-                        <div class="flex gap-2">
-                            ${campaign.status === 'draft' ? `
-                                <button class="btn btn-primary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="startCampaign(${campaign.id})">Start</button>
-                            ` : ''}
-                            ${campaign.status === 'sending' ? `
-                                <button class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="pauseCampaign(${campaign.id})">Pause</button>
-                            ` : ''}
-                            ${campaign.status === 'paused' ? `
-                                <button class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="resumeCampaign(${campaign.id})">Resume</button>
-                            ` : ''}
-                        </div>
-                    </td>
-                </tr>
-            `).join('');
-        } catch (error) {
-            console.error('Failed to load campaigns:', error);
+            const res  = await fetch('/api/campaigns');
+            const data = await res.json();
+            allCampaigns = data.campaigns || [];
+            renderTable(allCampaigns);
+            updateStats(allCampaigns);
+        } catch {
+            showToast('Failed to load campaigns', 'error');
         }
     }
 
-    function getStatusColor(status) {
-        const colors = {
-            'draft': 'info',
-            'scheduled': 'info',
-            'sending': 'warning',
-            'paused': 'warning',
-            'completed': 'success',
-            'failed': 'error',
-            'cancelled': 'error'
-        };
-        return colors[status] || 'info';
+    function updateStats(list) {
+        document.getElementById('st-total').textContent     = list.length;
+        document.getElementById('st-sending').textContent   = list.filter(c => c.status === 'sending').length;
+        document.getElementById('st-completed').textContent = list.filter(c => c.status === 'completed').length;
+        document.getElementById('st-failed').textContent    = list.filter(c => c.status === 'failed').length;
     }
 
-    function startCampaign(id) {
-        socket.emit('start_campaign', { campaign_id: id });
+    function renderTable(list) {
+        const tbody = document.getElementById('campaigns-tbody');
+        tbody.innerHTML = '';
+        if (list.length === 0) {
+            const tr = document.createElement('tr');
+            const td = document.createElement('td');
+            td.colSpan = 8;
+            td.style.padding = '0';
+            td.innerHTML = `
+                <div class="empty-state">
+                    <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                        <polyline points="22 4 12 14.01 9 11.01"/>
+                    </svg>
+                    <h3>No campaigns found</h3>
+                    <p>Try a different search or create a new campaign</p>
+                    <a href="/campaigns/new" class="btn btn-primary" style="margin-top:0.5rem">New Campaign</a>
+                </div>`;
+            tr.appendChild(td);
+            tbody.appendChild(tr);
+            return;
+        }
+        list.forEach(c => tbody.appendChild(buildRow(c)));
     }
 
-    function pauseCampaign(id) {
-        socket.emit('pause_campaign', { campaign_id: id });
+    function filteredList() {
+        const q  = document.getElementById('search-input').value.toLowerCase();
+        const st = document.getElementById('status-filter').value;
+        return allCampaigns.filter(c => {
+            const matchQ = !q  || (c.name || '').toLowerCase().includes(q) || (c.description || '').toLowerCase().includes(q);
+            const matchS = !st || c.status === st;
+            return matchQ && matchS;
+        });
     }
 
-    function resumeCampaign(id) {
-        socket.emit('resume_campaign', { campaign_id: id });
+    function applyFilter() { renderTable(filteredList()); }
+
+    /* ── Actions ───────────────────────────────────────────────────────── */
+    function startCampaign(id)  { socket.emit('start_campaign',  { campaign_id: id }); showToast('Starting campaign…', 'info'); }
+    function pauseCampaign(id)  { socket.emit('pause_campaign',  { campaign_id: id }); showToast('Pausing campaign…',  'info'); }
+    function resumeCampaign(id) { socket.emit('resume_campaign', { campaign_id: id }); showToast('Resuming campaign…', 'info'); }
+
+    async function cloneCampaign(id) {
+        try {
+            const r = await fetch(`/api/campaigns/${id}/clone`, { method: 'POST' });
+            const d = await r.json();
+            if (d.success) { showToast('Campaign cloned', 'success'); loadCampaigns(); }
+            else showToast(d.error || 'Clone failed', 'error');
+        } catch { showToast('Clone failed', 'error'); }
     }
+
+    async function deleteCampaign(id, name) {
+        if (!confirm(`Delete "${name}"?\nThis cannot be undone.`)) return;
+        try {
+            const r = await fetch(`/api/campaigns/${id}`, { method: 'DELETE' });
+            const d = await r.json();
+            if (d.success) { showToast('Campaign deleted', 'success'); loadCampaigns(); }
+            else showToast(d.error || 'Delete failed', 'error');
+        } catch { showToast('Delete failed', 'error'); }
+    }
+
+    /* ── Socket live-updates ───────────────────────────────────────────── */
+    socket.on('campaign_status_update', data => {
+        const c = allCampaigns.find(x => x.id === data.campaign_id);
+        if (c) { Object.assign(c, data); renderTable(filteredList()); updateStats(allCampaigns); }
+    });
+    socket.on('campaign_progress', data => {
+        const c = allCampaigns.find(x => x.id === data.campaign_id);
+        if (c) {
+            if (data.sent    !== undefined) c.sent_count        = data.sent;
+            if (data.failed  !== undefined) c.failed_count      = data.failed;
+            if (data.total   !== undefined) c.total_recipients  = data.total;
+            renderTable(filteredList());
+        }
+    });
 
     loadCampaigns();
 </script>

@@ -15,7 +15,7 @@ from ..security.auth import get_user_by_id, hash_password
 from ..data.repositories import UserRepository
 
 # Import extensions (limiter, socketio)
-from .extensions import limiter, socketio
+from .extensions import socketio
 from .events import register_socketio_events
 
 # Import routes
@@ -112,6 +112,17 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
     
     # Register SocketIO events
     register_socketio_events(socketio)
+
+    # Inject ui_theme into every template so base.html can set data-theme
+    from ..services.settings_service import SettingsService
+
+    @app.context_processor
+    def inject_ui_theme():
+        try:
+            s = SettingsService.get_settings()
+            return {'ui_theme': s.ui_theme or 'dark'}
+        except Exception:
+            return {'ui_theme': 'dark'}
     
     # Initialize Database
     with app.app_context():

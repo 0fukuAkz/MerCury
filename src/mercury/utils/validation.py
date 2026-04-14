@@ -5,8 +5,6 @@ from typing import Optional, List, Tuple
 from dataclasses import dataclass
 from email_validator import validate_email as _validate_email, EmailNotValidError
 
-from ..exceptions import InvalidEmailError, ValidationException
-
 logger = logging.getLogger(__name__)
 
 

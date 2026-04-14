@@ -1,15 +1,9 @@
 """Error recovery strategies for email sending."""
 
-import logging
-from typing import Optional, List, Dict, Any, Callable, Awaitable
-from datetime import datetime, UTC
+from typing import Optional, List, Dict, Any
 from enum import Enum
 
 from ..exceptions import (
-    SMTPException,
-    TransientSMTPError,
-    PermanentSMTPError,
-    SMTPConnectionError,
     SMTPAuthenticationError,
     is_transient_error
 )

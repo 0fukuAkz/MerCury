@@ -2,7 +2,7 @@
 
 from typing import List, Optional
 from datetime import datetime, timedelta, UTC
-from sqlalchemy import select, and_
+from sqlalchemy import select
 
 from .base import BaseRepository
 from ..models.dead_letter import DeadLetter

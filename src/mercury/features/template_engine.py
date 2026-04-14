@@ -6,7 +6,7 @@ import logging
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
 
-from .placeholders import PlaceholderProcessor, apply_placeholders
+from .placeholders import PlaceholderProcessor
 from .generators import QRCodeGenerator, GeneratorConfig
 
 logger = logging.getLogger(__name__)

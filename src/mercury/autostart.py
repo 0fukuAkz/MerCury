@@ -36,7 +36,7 @@ def main():
     server_thread.start()
     
     # Create native window (main thread)
-    window = webview.create_window(
+    webview.create_window(
         title='MerCury',
         url=url,
         width=1280,

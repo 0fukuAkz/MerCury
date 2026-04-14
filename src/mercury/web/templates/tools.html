@@ -2,127 +2,507 @@
 
 {% block title %}Tools - MerCury{% endblock %}
 
+{% block extra_css %}
+<style>
+    .tool-card {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2rem;
+        align-items: start;
+    }
+
+    @media (max-width: 860px) {
+        .tool-card { grid-template-columns: 1fr; }
+    }
+
+    /* Preview panel */
+    .preview-panel {
+        background: var(--bg-primary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius);
+        min-height: 300px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        transition: border-color 0.3s, box-shadow 0.3s;
+    }
+
+    .preview-panel.has-content {
+        border-color: var(--neon-cyan);
+        box-shadow: var(--glow-cyan);
+        justify-content: flex-start;
+        align-items: stretch;
+    }
+
+    .preview-placeholder {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.75rem;
+        color: var(--text-muted);
+        font-size: 0.875rem;
+        padding: 2rem;
+        text-align: center;
+    }
+
+    .preview-placeholder svg {
+        width: 52px;
+        height: 52px;
+        opacity: 0.25;
+    }
+
+    .preview-body {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1.25rem;
+        min-height: 0;
+    }
+
+    .preview-body img {
+        max-width: 100%;
+        max-height: 280px;
+        object-fit: contain;
+        display: block;
+        border-radius: 2px;
+    }
+
+    .preview-body iframe {
+        width: 100%;
+        height: 380px;
+        border: none;
+        display: block;
+    }
+
+    .preview-footer {
+        padding: 0.875rem 1.25rem;
+        border-top: 1px solid var(--border-color);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        background: var(--bg-secondary);
+        flex-shrink: 0;
+    }
+
+    .preview-meta {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Segmented radio */
+    .format-picker {
+        display: flex;
+        gap: 0.625rem;
+        flex-wrap: wrap;
+    }
+
+    .format-option input[type="radio"] { display: none; }
+
+    .format-option label {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.55rem 1rem;
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius);
+        cursor: pointer;
+        font-size: 0.8125rem;
+        color: var(--text-secondary);
+        transition: all 0.2s;
+        user-select: none;
+        white-space: nowrap;
+    }
+
+    .format-option label svg { width: 13px; height: 13px; flex-shrink: 0; }
+
+    .format-option input:checked + label {
+        border-color: var(--neon-cyan);
+        color: var(--neon-cyan);
+        background: rgba(0,255,255,0.07);
+        box-shadow: 0 0 8px rgba(0,255,255,0.18);
+    }
+
+    .format-option label:hover { border-color: var(--text-secondary); color: var(--text-primary); }
+
+    /* Spinner */
+    .spinner {
+        display: inline-block;
+        width: 14px; height: 14px;
+        border: 2px solid rgba(255,255,255,0.25);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: spin 0.55s linear infinite;
+        flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Error text */
+    .tool-error {
+        color: var(--error);
+        font-size: 0.8125rem;
+        margin-top: 0.75rem;
+        display: none;
+    }
+
+    /* Textarea monospace */
+    textarea.form-input {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.8rem;
+        resize: vertical;
+        line-height: 1.55;
+    }
+
+    .section-rule {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--neon-cyan);
+        margin-bottom: 1.25rem;
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+    }
+    .section-rule::after { content:''; flex:1; height:1px; background:var(--border-color); }
+
+    .btn-sm {
+        padding: 0.45rem 0.9rem;
+        font-size: 0.8125rem;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="row">
-    <!-- QR Code Generator -->
-    <div class="col-md-6 mb-4">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="card-title mb-0">QR Code Generator</h5>
-            </div>
-            <div class="card-body">
-                <form id="qrForm" action="{{ url_for('tools.generate_qr') }}" method="POST">
-                    <div class="mb-3">
-                        <label for="qrData" class="form-label">Text or URL</label>
-                        <input type="text" class="form-control" id="qrData" name="data" required
-                            placeholder="https://example.com">
-                    </div>
-                    <button type="submit" class="btn btn-primary" id="qrBtn">Generate QR Code</button>
-                </form>
-            </div>
-        </div>
+<div class="page-header">
+    <h1 class="page-title">Tools</h1>
+    <p class="page-description">Generate QR codes and convert HTML to documents — with live preview.</p>
+</div>
+
+<!-- ── QR Code Generator ── -->
+<div class="card" style="margin-bottom:2rem;">
+    <div class="card-header">
+        <h5 class="card-title">
+            <svg style="width:17px;height:17px;vertical-align:-3px;margin-right:6px" viewBox="0 0 24 24" fill="none" stroke="var(--neon-cyan)" stroke-width="2">
+                <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+                <rect x="3" y="14" width="7" height="7"/>
+                <path d="M14 14h3v3h-3zM17 17h3v3h-3zM14 20h3"/>
+            </svg>
+            QR Code Generator
+        </h5>
+        <span class="badge badge-info">PNG</span>
     </div>
 
-    <!-- Document Renderer -->
-    <div class="col-md-6 mb-4">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="card-title mb-0">Document Converter</h5>
+    <div class="tool-card">
+
+        <!-- Form -->
+        <div>
+            <div class="section-rule">Input</div>
+            <div class="form-group">
+                <label for="qrData" class="form-label">Text or URL</label>
+                <input type="text" class="form-input" id="qrData"
+                       placeholder="https://example.com" autocomplete="off">
             </div>
-            <div class="card-body">
-                <form id="converterForm" action="{{ url_for('tools.render_content') }}" method="POST">
-                    <div class="mb-3">
-                        <label for="renderContent" class="form-label">HTML Content</label>
-                        <textarea class="form-control" id="renderContent" name="content" rows="6" required
-                            placeholder="<h1>Hello World</h1>"></textarea>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Output Format</label>
-                        <div class="form-check">
-                            <input class="form-check-input" type="radio" name="format" id="formatPdf" value="pdf"
-                                checked>
-                            <label class="form-check-label" for="formatPdf">PDF Document</label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="radio" name="format" id="formatImage" value="image">
-                            <label class="form-check-label" for="formatImage">Image (PNG)</label>
-                        </div>
-                    </div>
-                    <button type="submit" class="btn btn-primary" id="convertBtn">Convert & Download</button>
-                </form>
+            <div style="display:flex;gap:0.625rem;flex-wrap:wrap;align-items:center;">
+                <button type="button" class="btn btn-primary" id="qrBtn" onclick="generateQR()">
+                    <svg style="width:15px;height:15px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/>
+                        <line x1="8" y1="12" x2="16" y2="12"/>
+                    </svg>
+                    Generate
+                </button>
+            </div>
+            <p class="tool-error" id="qrError"></p>
+        </div>
+
+        <!-- Preview -->
+        <div class="preview-panel" id="qrPanel">
+            <div class="preview-placeholder" id="qrPlaceholder">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25">
+                    <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+                    <rect x="3" y="14" width="7" height="7"/>
+                    <path d="M14 14h3v3h-3zM17 17h3v3h-3zM14 20h3"/>
+                </svg>
+                Preview will appear here
+            </div>
+            <div class="preview-body" id="qrBody" style="display:none;">
+                <img id="qrImg" alt="Generated QR Code">
+            </div>
+            <div class="preview-footer" id="qrFooter" style="display:none;">
+                <span class="preview-meta" id="qrMeta">qrcode.png</span>
+                <div style="display:flex;gap:0.5rem;">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="downloadQR()">
+                        <svg style="width:13px;height:13px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        Download
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="clearQR()" title="Close preview" style="padding:0.45rem 0.65rem;">
+                        <svg style="width:13px;height:13px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                    </button>
+                </div>
             </div>
         </div>
+
+    </div>
+</div>
+
+<!-- ── Document Converter ── -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title">
+            <svg style="width:17px;height:17px;vertical-align:-3px;margin-right:6px" viewBox="0 0 24 24" fill="none" stroke="var(--neon-cyan)" stroke-width="2">
+                <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+            </svg>
+            Document Converter
+        </h5>
+    </div>
+
+    <div class="tool-card">
+
+        <!-- Form -->
+        <div>
+            <div class="section-rule">Input</div>
+            <div class="form-group">
+                <label for="renderContent" class="form-label">HTML Content</label>
+                <textarea class="form-input" id="renderContent" rows="11"
+                          placeholder="<h1>Hello World</h1>&#10;<p>Your content here…</p>"></textarea>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Output Format</label>
+                <div class="format-picker">
+                    <div class="format-option">
+                        <input type="radio" name="docFormat" id="formatPdf" value="pdf" checked>
+                        <label for="formatPdf">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                                <polyline points="14 2 14 8 20 8"/>
+                            </svg>
+                            PDF
+                        </label>
+                    </div>
+                    <div class="format-option">
+                        <input type="radio" name="docFormat" id="formatImage" value="image">
+                        <label for="formatImage">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                                <circle cx="8.5" cy="8.5" r="1.5"/>
+                                <polyline points="21 15 16 10 5 21"/>
+                            </svg>
+                            PNG Image
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <button type="button" class="btn btn-primary" id="convertBtn" onclick="convertDocument()">
+                <svg style="width:15px;height:15px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                </svg>
+                Convert
+            </button>
+            <p class="tool-error" id="convertError"></p>
+        </div>
+
+        <!-- Preview -->
+        <div class="preview-panel" id="docPanel">
+            <div class="preview-placeholder" id="docPlaceholder">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25">
+                    <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+                </svg>
+                Preview will appear here
+            </div>
+            <div class="preview-body" id="docBody" style="display:none; padding:0; align-items:stretch;">
+                <iframe id="docFrame" title="PDF Preview" style="display:none;"></iframe>
+                <img id="docImg" alt="Document Preview" style="display:none; max-height:380px; margin:auto; padding:1.25rem;">
+            </div>
+            <div class="preview-footer" id="docFooter" style="display:none;">
+                <span class="preview-meta" id="docMeta">document</span>
+                <div style="display:flex;gap:0.5rem;">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="downloadDoc()">
+                        <svg style="width:13px;height:13px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        Download
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="clearDoc()" title="Close preview" style="padding:0.45rem 0.65rem;">
+                        <svg style="width:13px;height:13px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
     </div>
 </div>
 
 <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        function handleDownload(formId, btnId) {
-            const form = document.getElementById(formId);
-            const btn = document.getElementById(btnId);
+    let _qrBlob = null;
+    let _docBlob = null;
+    let _docFilename = 'document.pdf';
 
-            if (!form) return;
+    /* ── QR ── */
 
-            form.addEventListener('submit', async function (e) {
-                e.preventDefault();
+    async function generateQR() {
+        const val = document.getElementById('qrData').value.trim();
+        const btn = document.getElementById('qrBtn');
+        const err = document.getElementById('qrError');
 
-                const originalText = btn.innerHTML;
-                btn.innerHTML = 'Processing...';
-                btn.disabled = true;
+        err.style.display = 'none';
+        if (!val) { err.textContent = 'Please enter text or a URL.'; err.style.display = 'block'; return; }
 
-                try {
-                    const formData = new FormData(form);
-                    const response = await fetch(form.action, {
-                        method: 'POST',
-                        body: formData
-                    });
+        const orig = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner"></span> Generating…';
+        btn.disabled = true;
 
-                    if (!response.ok) {
-                        const err = await response.json();
-                        throw new Error(err.error || 'Request failed');
-                    }
+        try {
+            const fd = new FormData();
+            fd.append('data', val);
+            const res = await fetch('{{ url_for("tools.generate_qr") }}', { method: 'POST', body: fd });
+            if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Generation failed'); }
 
-                    // Get filename from header or default
-                    let filename = 'download';
-                    const disposition = response.headers.get('content-disposition');
-                    if (disposition && disposition.indexOf('attachment') !== -1) {
-                        const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
-                        if (matches != null && matches[1]) {
-                            filename = matches[1].replace(/['"]/g, '');
-                        }
-                    }
+            _qrBlob = await res.blob();
+            const url = URL.createObjectURL(_qrBlob);
 
-                    // Default filenames per form type if header parsing fails or is missing
-                    if (filename === 'download') {
-                        if (formId === 'qrForm') filename = 'qrcode.png';
-                        else if (formId === 'converterForm') {
-                            const format = formData.get('format');
-                            filename = format === 'pdf' ? 'document.pdf' : 'image.png';
-                        }
-                    }
+            const img = document.getElementById('qrImg');
+            img.onload = () => {
+                document.getElementById('qrMeta').textContent =
+                    `qrcode.png · ${img.naturalWidth}×${img.naturalHeight}px`;
+            };
+            img.src = url;
 
-                    const blob = await response.blob();
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.style.display = 'none';
-                    a.href = url;
-                    a.download = filename;
-                    document.body.appendChild(a);
-                    a.click();
-                    window.URL.revokeObjectURL(url);
+            document.getElementById('qrPlaceholder').style.display = 'none';
+            document.getElementById('qrBody').style.display = 'flex';
+            document.getElementById('qrFooter').style.display = 'flex';
+            document.getElementById('qrPanel').classList.add('has-content');
 
-                } catch (error) {
-                    alert('Error: ' + error.message);
-                    console.error('Download error:', error);
-                } finally {
-                    btn.innerHTML = originalText;
-                    btn.disabled = false;
-                }
-            });
+        } catch (e) {
+            err.textContent = 'Error: ' + e.message;
+            err.style.display = 'block';
+        } finally {
+            btn.innerHTML = orig;
+            btn.disabled = false;
         }
+    }
 
-        handleDownload('qrForm', 'qrBtn');
-        handleDownload('converterForm', 'convertBtn');
+    function downloadQR() {
+        if (_qrBlob) _save(_qrBlob, 'qrcode.png');
+    }
+
+    document.getElementById('qrData').addEventListener('keydown', e => {
+        if (e.key === 'Enter') generateQR();
     });
+
+    /* ── Document Converter ── */
+
+    async function convertDocument() {
+        const content = document.getElementById('renderContent').value.trim();
+        const format = document.querySelector('input[name="docFormat"]:checked').value;
+        const btn = document.getElementById('convertBtn');
+        const err = document.getElementById('convertError');
+
+        err.style.display = 'none';
+        if (!content) { err.textContent = 'Please enter HTML content.'; err.style.display = 'block'; return; }
+
+        const orig = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner"></span> Converting…';
+        btn.disabled = true;
+
+        try {
+            const fd = new FormData();
+            fd.append('content', content);
+            fd.append('format', format);
+            const res = await fetch('{{ url_for("tools.render_content") }}', { method: 'POST', body: fd });
+            if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Conversion failed'); }
+
+            _docBlob = await res.blob();
+            _docFilename = format === 'pdf' ? 'document.pdf' : 'image.png';
+            const url = URL.createObjectURL(_docBlob);
+
+            const frame  = document.getElementById('docFrame');
+            const img    = document.getElementById('docImg');
+            const body   = document.getElementById('docBody');
+            const footer = document.getElementById('docFooter');
+            const meta   = document.getElementById('docMeta');
+            const panel  = document.getElementById('docPanel');
+
+            document.getElementById('docPlaceholder').style.display = 'none';
+            body.style.display = 'flex';
+            footer.style.display = 'flex';
+            panel.classList.add('has-content');
+
+            if (format === 'pdf') {
+                img.style.display = 'none';
+                frame.src = url;
+                frame.style.display = 'block';
+                meta.textContent = 'document.pdf';
+            } else {
+                frame.style.display = 'none';
+                img.src = url;
+                img.style.display = 'block';
+                img.onload = () => {
+                    meta.textContent = `image.png · ${img.naturalWidth}×${img.naturalHeight}px`;
+                };
+            }
+
+        } catch (e) {
+            err.textContent = 'Error: ' + e.message;
+            err.style.display = 'block';
+        } finally {
+            btn.innerHTML = orig;
+            btn.disabled = false;
+        }
+    }
+
+    function downloadDoc() {
+        if (_docBlob) _save(_docBlob, _docFilename);
+    }
+
+    function clearQR() {
+        _qrBlob = null;
+        const img = document.getElementById('qrImg');
+        if (img.src) { URL.revokeObjectURL(img.src); img.src = ''; }
+        document.getElementById('qrBody').style.display = 'none';
+        document.getElementById('qrFooter').style.display = 'none';
+        document.getElementById('qrPlaceholder').style.display = 'flex';
+        document.getElementById('qrPanel').classList.remove('has-content');
+    }
+
+    function clearDoc() {
+        _docBlob = null;
+        const frame = document.getElementById('docFrame');
+        const img   = document.getElementById('docImg');
+        if (frame.src) { URL.revokeObjectURL(frame.src); frame.src = ''; frame.style.display = 'none'; }
+        if (img.src)   { URL.revokeObjectURL(img.src);   img.src   = ''; img.style.display   = 'none'; }
+        document.getElementById('docBody').style.display = 'none';
+        document.getElementById('docFooter').style.display = 'none';
+        document.getElementById('docPlaceholder').style.display = 'flex';
+        document.getElementById('docPanel').classList.remove('has-content');
+    }
+
+    /* ── Shared ── */
+
+    function _save(blob, name) {
+        const a = Object.assign(document.createElement('a'), {
+            href: URL.createObjectURL(blob), download: name, style: 'display:none'
+        });
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(a.href);
+    }
 </script>
 {% endblock %}

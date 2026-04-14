@@ -22,7 +22,7 @@ PID_FILE = ROOT_DIR / "data" / ".mercury.pid"
 
 # Global for cleanup
 _app = None
-_socketio = None
+_gunicorn_proc = None
 _shutdown_event = threading.Event()
 
 
@@ -140,12 +140,13 @@ def graceful_shutdown(signum=None, frame=None):
     
     _shutdown_event.set()
     
-    # Stop SocketIO if running
-    global _socketio
-    if _socketio:
+    # Stop Gunicorn if running
+    global _gunicorn_proc
+    if _gunicorn_proc:
         try:
-            _socketio.stop()
-            print("✓ SocketIO stopped")
+            _gunicorn_proc.terminate()
+            _gunicorn_proc.wait(timeout=10)
+            print("✓ Gunicorn stopped")
         except Exception:
             pass
     
@@ -256,17 +257,28 @@ def main():
     print()
     
     try:
-        from mercury.web.app import create_app, socketio
-        
-        global _socketio
-        _socketio = socketio
-        
-        # Create application
-        app = create_app(config={'DEBUG': False})
-        
-        # Run with SocketIO support
-        socketio.run(app, host='0.0.0.0', port=5000, allow_unsafe_werkzeug=True)
-        
+        import shutil
+        gunicorn_path = shutil.which("gunicorn") or str(Path(sys.executable).parent / "gunicorn")
+
+        cmd = [
+            gunicorn_path,
+            "--worker-class", "eventlet",
+            "-w", "1",
+            "--bind", "0.0.0.0:5000",
+            "--log-level", "info",
+            "--access-logfile", "-",
+            "mercury.web.app:create_app()",
+        ]
+
+        env = {**os.environ, "PYTHONPATH": str(ROOT_DIR / "src")}
+
+        global _gunicorn_proc
+        _gunicorn_proc = subprocess.Popen(cmd, env=env)
+        _gunicorn_proc.wait()
+
+    except FileNotFoundError:
+        print("\nError: gunicorn not found. Run: pip install gunicorn eventlet")
+        sys.exit(1)
     except ImportError as e:
         print(f"\nError importing application: {e}")
         print("Dependencies might be missing. Try deleting 'venv' folder and re-running.")

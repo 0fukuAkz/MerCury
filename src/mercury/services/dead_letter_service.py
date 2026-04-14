@@ -1,12 +1,10 @@
 """Service for managing dead letter queue."""
 
-import logging
 from typing import Optional, Dict, Any, List
 from datetime import datetime, UTC
 
 from ..data.repositories.dead_letter import DeadLetterRepository
 from ..data.models.dead_letter import DeadLetter
-from ..exceptions import DatabaseException
 from ..utils.logging_context import get_context_logger
 
 logger = get_context_logger(__name__)

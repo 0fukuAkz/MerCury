@@ -11,21 +11,14 @@ from dataclasses import dataclass
 
 from ..data.database import get_session_direct, init_db
 from ..data.repositories import (
-    CampaignRepository, 
-    SMTPRepository, 
-    TemplateRepository,
-    RecipientRepository,
-    RecipientListRepository,
-    LogRepository
+    CampaignRepository
 )
 from ..data.models import (
-    Campaign, CampaignStatus, CampaignType,
-    RecipientList, Recipient, RecipientStatus,
-    Template, SMTPServer, EmailLog, EmailStatus
+    Campaign, CampaignStatus,
+    EmailLog, EmailStatus
 )
-from ..engine.async_sender import BulkSendResult
 from ..utils.async_io import AsyncFileLogger
-from ..utils.validation import validate_email, is_valid_email
+from ..utils.validation import is_valid_email
 from .email_service import EmailService, EmailConfig
 from .smtp_service import SMTPService
 from .bounce_service import BounceService
@@ -429,7 +422,6 @@ class CampaignService:
                    AsyncFileLogger(failed_log_path) as failed_logger:
             
             session = get_session_direct()
-            log_repo = LogRepository(session)
             
             try:
                 chunk_size = self.config.chunk_size if self.config else 1000

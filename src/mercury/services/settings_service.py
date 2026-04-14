@@ -1,7 +1,6 @@
 """Service for managing global application settings."""
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from ..data.database import get_session_direct
 from ..data.models.settings import GlobalSetting

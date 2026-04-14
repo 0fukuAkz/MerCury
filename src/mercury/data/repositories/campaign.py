@@ -2,7 +2,7 @@
 
 from typing import Optional, List
 from sqlalchemy.orm import Session
-from sqlalchemy import select, and_
+from sqlalchemy import select
 
 from .base import BaseRepository
 from ..models import Campaign, CampaignStatus

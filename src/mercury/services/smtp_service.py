@@ -2,11 +2,10 @@
 
 import logging
 from typing import List, Dict, Any, Optional
-from datetime import datetime, UTC
 
 from ..data.database import get_session_direct
 from ..data.repositories import SMTPRepository
-from ..data.models import SMTPServer, SMTPServerStatus
+from ..data.models import SMTPServer
 from ..engine.connection_pool import SMTPConnectionPool, SMTPServerConfig
 
 logger = logging.getLogger(__name__)

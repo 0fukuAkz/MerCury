@@ -2,7 +2,6 @@
 
 import logging
 import re
-from typing import Optional
 from pathlib import Path
 
 from ..exceptions import ValidationException, InvalidConfigValueError

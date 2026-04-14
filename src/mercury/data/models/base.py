@@ -1,10 +1,11 @@
 """Base model with common fields."""
 
 from datetime import datetime, UTC
-from sqlalchemy import Column, Integer, DateTime, String
+from sqlalchemy import Column, Integer, DateTime
 from sqlalchemy.ext.declarative import declared_attr
 
-from ..database import Base
+from ..database import Base  # re-exported: used by dead_letter.py
+__all__ = ['BaseModel', 'Base']
 
 
 class BaseModel:

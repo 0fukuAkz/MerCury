@@ -9,6 +9,7 @@ import json
 # Use structlog if available, fallback to standard logging
 try:
     import structlog
+    _ = structlog  # optional dependency: used when STRUCTLOG_AVAILABLE is True
     STRUCTLOG_AVAILABLE = True
 except ImportError:
     STRUCTLOG_AVAILABLE = False

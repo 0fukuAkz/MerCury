@@ -4,15 +4,12 @@ This module provides a centralized way to manage application dependencies,
 replacing global state with explicit dependency injection.
 """
 
-import os
 import logging
 from typing import Optional, Dict, Any
 from dataclasses import dataclass, field
 from flask import Flask
 from flask_socketio import SocketIO
 from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
-from flask_login import current_user
 
 logger = logging.getLogger(__name__)
 

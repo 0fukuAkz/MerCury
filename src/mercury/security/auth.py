@@ -8,9 +8,7 @@ import logging
 import base64
 from typing import Optional, Dict, Any, Tuple
 from datetime import datetime, UTC, timedelta
-from dataclasses import dataclass, field
-
-from flask import Flask, current_app
+from flask import Flask
 from flask_login import LoginManager, UserMixin
 
 logger = logging.getLogger(__name__)

@@ -2,7 +2,7 @@
 
 from datetime import datetime, UTC
 from typing import Optional
-from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, JSON
+from sqlalchemy import Integer, String, Text, DateTime, Boolean, JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .base import Base

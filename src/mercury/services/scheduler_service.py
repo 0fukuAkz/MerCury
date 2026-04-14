@@ -1,10 +1,9 @@
 """Scheduler service for scheduled email sending using APScheduler."""
 
-import os
 import logging
 import asyncio
-from typing import Optional, Dict, Any, List, Callable, Awaitable
-from datetime import datetime, timedelta, UTC
+from typing import Optional, Dict, Any, List, Callable
+from datetime import datetime, UTC
 from dataclasses import dataclass, field
 from enum import Enum
 

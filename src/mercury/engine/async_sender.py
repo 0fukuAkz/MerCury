@@ -3,7 +3,6 @@
 import asyncio
 import logging
 import mimetypes
-import os
 from typing import Optional, Dict, Any, List, Callable, Awaitable
 from email.message import EmailMessage
 from email.utils import formataddr, formatdate, make_msgid
@@ -15,15 +14,14 @@ import aiosmtplib
 
 from .connection_pool import SMTPConnectionPool, SMTPServerConfig, AsyncConnectionPool
 from .rate_limiter import RateLimiter, RateLimiterConfig
-from .retry_queue import RetryQueue, RetryConfig
+from .retry_queue import RetryQueue
 from ..exceptions import (
     SMTPConnectionError,
     SMTPAuthenticationError,
     SMTPRateLimitError,
     SMTPMailboxError,
     TransientSMTPError,
-    PermanentSMTPError,
-    is_transient_error
+    PermanentSMTPError
 )
 
 logger = logging.getLogger(__name__)
@@ -514,7 +512,7 @@ async def send_email_async(
                     filename=att['filename']
                 )
         
-        result = await conn.send_message(msg)
+        await conn.send_message(msg)
         
         logger.info(f"✅ Sent to {recipient}")
         return {

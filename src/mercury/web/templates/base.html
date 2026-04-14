@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="{{ ui_theme|default('dark') }}">
 
 <head>
     <meta charset="UTF-8">
@@ -38,6 +38,54 @@
             --glow-green: 0 0 20px rgba(57, 255, 20, 0.5);
         }
 
+        /* ── Light theme ─────────────────────────────────────────────────── */
+        html[data-theme="light"] {
+            --bg-primary:   #f0f2f5;
+            --bg-secondary: #ffffff;
+            --bg-tertiary:  #e8eaf0;
+            --accent-primary:   #be185d;
+            --accent-secondary: #0e7490;
+            --accent-gradient:  linear-gradient(135deg, #be185d, #0e7490);
+            --neon-pink:  #be185d;
+            --neon-cyan:  #0e7490;
+            --neon-green: #15803d;
+            --text-primary:   #111827;
+            --text-secondary: #4b5563;
+            --text-muted:     #9ca3af;
+            --border-color:   #d1d5db;
+            --success: #16a34a;
+            --warning: #d97706;
+            --error:   #dc2626;
+            --glow-pink:  0 0 12px rgba(190, 24,  93, 0.25);
+            --glow-cyan:  0 0 12px rgba( 14,116, 144, 0.25);
+            --glow-green: 0 0 12px rgba( 21,128,  61, 0.25);
+        }
+
+        /* ── Auto theme: follow OS preference ───────────────────────────── */
+        @media (prefers-color-scheme: light) {
+            html[data-theme="auto"] {
+                --bg-primary:   #f0f2f5;
+                --bg-secondary: #ffffff;
+                --bg-tertiary:  #e8eaf0;
+                --accent-primary:   #be185d;
+                --accent-secondary: #0e7490;
+                --accent-gradient:  linear-gradient(135deg, #be185d, #0e7490);
+                --neon-pink:  #be185d;
+                --neon-cyan:  #0e7490;
+                --neon-green: #15803d;
+                --text-primary:   #111827;
+                --text-secondary: #4b5563;
+                --text-muted:     #9ca3af;
+                --border-color:   #d1d5db;
+                --success: #16a34a;
+                --warning: #d97706;
+                --error:   #dc2626;
+                --glow-pink:  0 0 12px rgba(190, 24,  93, 0.25);
+                --glow-cyan:  0 0 12px rgba( 14,116, 144, 0.25);
+                --glow-green: 0 0 12px rgba( 21,128,  61, 0.25);
+            }
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -52,7 +100,7 @@
             position: relative;
         }
 
-        /* Scanline overlay */
+        /* Scanline overlay — dark mode only */
         body::before {
             content: '';
             position: fixed;
@@ -67,6 +115,10 @@
                     rgba(0, 0, 0, 0.1) 4px);
             pointer-events: none;
             z-index: 9999;
+        }
+        html[data-theme="light"] body::before { display: none; }
+        @media (prefers-color-scheme: light) {
+            html[data-theme="auto"] body::before { display: none; }
         }
 
         .layout {
@@ -164,13 +216,12 @@
 
         /* Cards */
         .card {
-            background: rgba(26, 26, 46, 0.8);
+            background: var(--bg-secondary);
             border: 1px solid var(--border-color);
             border-radius: var(--radius);
             padding: 1.5rem;
             margin-bottom: 1.5rem;
             transition: all 0.3s ease;
-            backdrop-filter: blur(10px);
         }
 
         .card:hover {
@@ -201,7 +252,7 @@
         }
 
         .stat-card {
-            background: rgba(26, 26, 46, 0.8);
+            background: var(--bg-secondary);
             border: 1px solid var(--border-color);
             border-radius: var(--radius);
             padding: 1.25rem;

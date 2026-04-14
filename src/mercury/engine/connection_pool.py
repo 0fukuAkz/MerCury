@@ -3,11 +3,11 @@
 import asyncio
 import logging
 from typing import Optional, Dict, Any, List, Tuple
-from datetime import datetime, UTC, timedelta
+from datetime import datetime, UTC
 from dataclasses import dataclass, field
 import aiosmtplib
 
-from .circuit_breaker import CircuitBreaker, CircuitBreakerConfig, CircuitState
+from .circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 
 logger = logging.getLogger(__name__)
 
@@ -178,7 +178,7 @@ class AsyncSMTPConnection:
             self.messages_sent += 1
             self.config.increment_counters()
             return {'success': True, 'response': str(response)}
-        except Exception as e:
+        except Exception:
             self.is_connected = False
             raise
     

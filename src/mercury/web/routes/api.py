@@ -3,7 +3,6 @@
 import asyncio
 from datetime import datetime, UTC
 from flask import Blueprint, jsonify, request
-from flask_login import current_user
 
 from ..decorators import api_key_or_login_required
 from ..extensions import limiter
@@ -326,7 +325,7 @@ def api_list_scheduled_jobs():
 @limiter.limit("10/minute")
 def api_create_scheduled_job():
     """Create a new scheduled job."""
-    from ...services.scheduler_service import SchedulerService, ScheduleType
+    from ...services.scheduler_service import SchedulerService
     from datetime import datetime
     import uuid
     

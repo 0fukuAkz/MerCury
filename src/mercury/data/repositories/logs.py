@@ -1,5 +1,5 @@
 
-from typing import List, Optional, Dict, Any
+from typing import List, Dict
 from sqlalchemy import func, desc, select
 from sqlalchemy.orm import Session
 

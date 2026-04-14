@@ -4,7 +4,6 @@ import asyncio
 import os
 import sys
 import logging
-from typing import Optional
 
 import click
 from tqdm import tqdm
@@ -386,7 +385,7 @@ def send(ctx, config_file, preview, limit, yes):
     if stats['failed'] == 0:
         click.echo(click.style("Success!", fg='green'))
     else:
-        click.echo(click.style(f"Check logs/failed-emails.txt", fg='yellow'))
+        click.echo(click.style("Check logs/failed-emails.txt", fg='yellow'))
 
 
 # =============================================================================

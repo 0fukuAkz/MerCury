@@ -1,6 +1,6 @@
 """Global application settings model."""
 
-from sqlalchemy import Column, Integer, Float, Boolean, String, Text, JSON
+from sqlalchemy import Column, Integer, Float, Boolean, String, JSON
 from ..database import Base
 from .base import BaseModel
 

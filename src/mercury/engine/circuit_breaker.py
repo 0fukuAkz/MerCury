@@ -4,9 +4,7 @@ import logging
 from datetime import datetime, timedelta, UTC
 from typing import Optional, Dict, Any
 from enum import Enum
-from dataclasses import dataclass, field
-
-from ..exceptions import SMTPException, SMTPConnectionError
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 

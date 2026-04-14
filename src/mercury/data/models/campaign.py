@@ -1,7 +1,6 @@
 """Campaign model with full feature support."""
 
 from enum import Enum
-from datetime import datetime, UTC
 from sqlalchemy import (
     Column, String, Integer, ForeignKey, DateTime, Text, 
     JSON, Enum as SQLEnum, Float, Boolean

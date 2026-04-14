@@ -1,8 +1,6 @@
 """User model for database-backed authentication."""
 
-from datetime import datetime, UTC
-from sqlalchemy import Column, String, Boolean, DateTime, Text, Integer
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, String, Boolean, DateTime, Integer
 
 from ..database import Base
 from .base import BaseModel

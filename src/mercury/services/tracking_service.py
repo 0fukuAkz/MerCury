@@ -6,10 +6,9 @@ import logging
 import hashlib
 from typing import Optional, Dict, Any, List
 from datetime import datetime, UTC
-from urllib.parse import urlencode, quote
+from urllib.parse import urlencode
 from dataclasses import dataclass, field
 
-from ..data.database import get_session_direct
 from ..security.auth import generate_unsubscribe_token
 
 logger = logging.getLogger(__name__)

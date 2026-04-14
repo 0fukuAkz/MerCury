@@ -4,7 +4,7 @@ import base64
 import io
 import logging
 import os
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Tuple
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
@@ -139,6 +139,7 @@ class PDFGenerator:
         
         try:
             import weasyprint
+            _ = weasyprint  # optional dependency: availability check only
             return True
         except ImportError:
             logger.warning(
@@ -312,7 +313,6 @@ class DOCXGenerator:
             DOCX bytes
         """
         from docx import Document
-        from docx.shared import Pt
         import re
         import html
         
@@ -323,7 +323,7 @@ class DOCXGenerator:
         for match in re.finditer(r'<h([1-6])[^>]*>([^<]+)</h\1>', html_content):
             level = int(match.group(1))
             text = html.unescape(match.group(2).strip())
-            heading = doc.add_heading(text, level=min(level, 9))
+            doc.add_heading(text, level=min(level, 9))
         
         # Handle paragraphs
         for match in re.finditer(r'<p[^>]*>(.*?)</p>', html_content, re.DOTALL):

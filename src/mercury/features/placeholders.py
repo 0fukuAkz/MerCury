@@ -1,6 +1,5 @@
 """Placeholder processor with 50+ built-in placeholders."""
 
-import os
 import re
 import uuid
 import random
