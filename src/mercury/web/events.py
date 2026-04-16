@@ -299,7 +299,19 @@ def register_socketio_events(sio: SocketIO):
         if svc:
             svc.pause()
 
-        emit('campaign_paused', {
+            # Update DB status
+            with app.app_context():
+                session = get_session_direct()
+                try:
+                    repo = CampaignRepository(session)
+                    campaign = repo.get(campaign_id)
+                    if campaign:
+                        campaign.status = CampaignStatus.PAUSED
+                        repo.update(campaign)
+                finally:
+                    session.close()
+
+        sio.emit('campaign_paused', {
             'campaign_id': campaign_id,
             'status': 'paused',
             'timestamp': datetime.now(UTC).isoformat()
@@ -316,9 +328,21 @@ def register_socketio_events(sio: SocketIO):
         if svc:
             svc.resume()
 
-        emit('campaign_resumed', {
+            # Update DB status back to sending
+            with app.app_context():
+                session = get_session_direct()
+                try:
+                    repo = CampaignRepository(session)
+                    campaign = repo.get(campaign_id)
+                    if campaign:
+                        campaign.status = CampaignStatus.SENDING
+                        repo.update(campaign)
+                finally:
+                    session.close()
+
+        sio.emit('campaign_resumed', {
             'campaign_id': campaign_id,
-            'status': 'resumed',
+            'status': 'sending',
             'timestamp': datetime.now(UTC).isoformat()
         })
 
@@ -333,7 +357,7 @@ def register_socketio_events(sio: SocketIO):
         if svc:
             svc.stop()
 
-        emit('campaign_stopped', {
+        sio.emit('campaign_stopped', {
             'campaign_id': campaign_id,
             'status': 'cancelled',
             'timestamp': datetime.now(UTC).isoformat()

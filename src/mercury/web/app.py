@@ -142,7 +142,7 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
             # --- Run Alembic migrations to head ---
             try:
                 _alembic_ini = os.path.join(
-                    os.path.dirname(__file__), '..', '..', '..', '..', 'alembic.ini'
+                    os.path.dirname(__file__), '..', '..', '..', 'alembic.ini'
                 )
                 _alembic_cfg = AlembicConfig(os.path.abspath(_alembic_ini))
                 alembic_command.upgrade(_alembic_cfg, 'head')

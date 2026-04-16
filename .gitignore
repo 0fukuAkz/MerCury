@@ -48,6 +48,9 @@ data/*.txt
 *.db-shm
 *.db-wal
 
+# Encryption key
+data/.encryption.key
+
 # Environment
 .env
 .env.local

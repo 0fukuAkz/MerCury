@@ -248,6 +248,28 @@
     .empty-state h3  { font-size: 1rem; color: var(--text-secondary); margin: 0; }
     .empty-state p   { font-size: 0.85rem; margin: 0; }
 
+    /* ── Bulk action bar ── */
+    .bulk-bar {
+        display: none;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.65rem 1.25rem;
+        margin-bottom: 1rem;
+        background: rgba(255,0,85,0.06);
+        border: 1px solid rgba(255,0,85,0.25);
+        border-radius: var(--radius);
+        font-size: 0.82rem;
+        color: var(--text-secondary);
+    }
+    .bulk-bar.visible { display: flex; }
+    .bulk-bar .bulk-count { font-weight: 700; color: var(--text-primary); font-family: 'JetBrains Mono', monospace; }
+
+    /* ── Row checkbox ── */
+    .row-cb {
+        width: 15px; height: 15px; cursor: pointer;
+        accent-color: var(--neon-cyan);
+    }
+
     /* ── Toast ── */
     #toast-container {
         position: fixed;
@@ -337,11 +359,22 @@
     </button>
 </div>
 
+<!-- Bulk action bar -->
+<div class="bulk-bar" id="bulk-bar">
+    <span><span class="bulk-count" id="bulk-count">0</span> selected</span>
+    <button class="act-btn del" onclick="bulkDelete()">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+        Delete Selected
+    </button>
+    <button class="act-btn cancel" onclick="clearSelection()">Cancel</button>
+</div>
+
 <!-- Campaign table -->
 <div class="card table-wrap" style="padding: 0;">
     <table class="table">
         <thead>
             <tr>
+                <th style="width:32px;padding-right:0"><input type="checkbox" class="row-cb" id="select-all" onchange="toggleSelectAll(this)"></th>
                 <th>Campaign</th>
                 <th>Type</th>
                 <th>Status</th>
@@ -365,6 +398,8 @@
     let allCampaigns = [];
     // track which detail rows are open by campaign id
     var _openDetails = {};
+    const PAGE_SIZE = 20;
+    var _visibleCount = PAGE_SIZE;
 
     /* ── Utilities ─────────────────────────────────────────────────────── */
     function showToast(msg, type = 'info') {
@@ -512,7 +547,7 @@
         tr.id = 'detail-' + c.id;
         tr.style.display = 'none';
         var td = document.createElement('td');
-        td.colSpan = 8;
+        td.colSpan = 9;
         td.innerHTML = buildDetailPanel(c);
         tr.appendChild(td);
         return tr;
@@ -627,12 +662,80 @@
             wrap.appendChild(editBtn);
         }
         mkBtn('', '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>', 'Clone', () => cloneCampaign(c.id));
-        if (['draft', 'failed', 'cancelled', 'completed'].includes(c.status))
-            mkBtn('del', '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>', 'Delete', () => deleteCampaign(c.id, c.name));
+        mkBtn('del', '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>', 'Delete', () => deleteCampaign(c.id, c.name));
 
         tdAct.appendChild(wrap);
-        [tdName, tdType, tdStatus, tdProg, tdSent, tdFail, tdRate, tdAct].forEach(td => tr.appendChild(td));
+
+        /* checkbox column */
+        const tdCb = document.createElement('td');
+        tdCb.style.paddingRight = '0';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.className = 'row-cb';
+        cb.dataset.id = c.id;
+        cb.addEventListener('change', updateBulkBar);
+        tdCb.appendChild(cb);
+
+        [tdCb, tdName, tdType, tdStatus, tdProg, tdSent, tdFail, tdRate, tdAct].forEach(td => tr.appendChild(td));
         return tr;
+    }
+
+    /* ── Selection / Bulk delete ─────────────────────────────────────── */
+    function getSelectedIds() {
+        return Array.from(document.querySelectorAll('.row-cb[data-id]:checked'))
+            .map(function(cb) { return parseInt(cb.dataset.id); });
+    }
+
+    function updateBulkBar() {
+        var ids = getSelectedIds();
+        var bar = document.getElementById('bulk-bar');
+        document.getElementById('bulk-count').textContent = ids.length;
+        bar.classList.toggle('visible', ids.length > 0);
+        // Sync select-all checkbox
+        var allCbs = document.querySelectorAll('.row-cb[data-id]');
+        var selectAll = document.getElementById('select-all');
+        if (allCbs.length > 0 && ids.length === allCbs.length) selectAll.checked = true;
+        else selectAll.checked = false;
+    }
+
+    function toggleSelectAll(master) {
+        document.querySelectorAll('.row-cb[data-id]').forEach(function(cb) {
+            cb.checked = master.checked;
+        });
+        updateBulkBar();
+    }
+
+    function clearSelection() {
+        document.getElementById('select-all').checked = false;
+        document.querySelectorAll('.row-cb[data-id]').forEach(function(cb) { cb.checked = false; });
+        updateBulkBar();
+    }
+
+    async function bulkDelete() {
+        var ids = getSelectedIds();
+        if (ids.length === 0) return;
+        var running = ids.filter(function(id) {
+            var c = allCampaigns.find(function(x) { return x.id === id; });
+            return c && (c.status === 'sending' || c.status === 'paused');
+        });
+        var msg = 'Delete ' + ids.length + ' campaign(s)?\nThis cannot be undone.';
+        if (running.length > 0) msg += '\n\n' + running.length + ' running/paused campaign(s) will be stopped first.';
+        if (!confirm(msg)) return;
+        try {
+            var r = await fetch('/api/campaigns/bulk-delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids: ids })
+            });
+            var d = await r.json();
+            if (d.success) {
+                showToast(d.deleted + ' campaign(s) deleted', 'success');
+                clearSelection();
+                loadCampaigns();
+            } else {
+                showToast(d.error || 'Bulk delete failed', 'error');
+            }
+        } catch { showToast('Bulk delete failed', 'error'); }
     }
 
     /* ── Load & render ─────────────────────────────────────────────────── */
@@ -661,7 +764,7 @@
         if (list.length === 0) {
             const tr = document.createElement('tr');
             const td = document.createElement('td');
-            td.colSpan = 8;
+            td.colSpan = 9;
             td.style.padding = '0';
             td.innerHTML = `
                 <div class="empty-state">
@@ -677,12 +780,33 @@
             tbody.appendChild(tr);
             return;
         }
-        list.forEach(c => {
+        var shown = list.slice(0, _visibleCount);
+        shown.forEach(c => {
             tbody.appendChild(buildRow(c));
             var dr = buildDetailRow(c);
             if (_openDetails[c.id]) dr.style.display = '';
             tbody.appendChild(dr);
         });
+        // Show more button
+        if (list.length > _visibleCount) {
+            var tr = document.createElement('tr');
+            var td = document.createElement('td');
+            td.colSpan = 9;
+            td.style.textAlign = 'center';
+            td.style.padding = '1rem';
+            var remaining = list.length - _visibleCount;
+            var btn = document.createElement('button');
+            btn.className = 'btn btn-secondary';
+            btn.style.fontSize = '0.8rem';
+            btn.textContent = 'Show More (' + remaining + ' remaining)';
+            btn.addEventListener('click', function() {
+                _visibleCount += PAGE_SIZE;
+                renderTable(filteredList());
+            });
+            td.appendChild(btn);
+            tr.appendChild(td);
+            tbody.appendChild(tr);
+        }
     }
 
     function filteredList() {
@@ -695,7 +819,7 @@
         });
     }
 
-    function applyFilter() { renderTable(filteredList()); }
+    function applyFilter() { _visibleCount = PAGE_SIZE; renderTable(filteredList()); }
 
     /* ── Actions ───────────────────────────────────────────────────────── */
     function startCampaign(id)  { socket.emit('start_campaign',  { campaign_id: id }); showToast('Starting campaign…', 'info'); }
@@ -712,7 +836,11 @@
     }
 
     async function deleteCampaign(id, name) {
-        if (!confirm(`Delete "${name}"?\nThis cannot be undone.`)) return;
+        var c = allCampaigns.find(function(x) { return x.id === id; });
+        var isActive = c && (c.status === 'sending' || c.status === 'paused');
+        var msg = 'Delete "' + name + '"?\nThis cannot be undone.';
+        if (isActive) msg += '\n\nThis campaign is currently ' + c.status + ' and will be stopped first.';
+        if (!confirm(msg)) return;
         try {
             const r = await fetch(`/api/campaigns/${id}`, { method: 'DELETE' });
             const d = await r.json();
@@ -811,6 +939,24 @@
             }
             if (c.total_recipients)
                 c.send_rate = Math.round((c.sent_count || 0) / c.total_recipients * 1000) / 10;
+            replaceRow(c);
+            updateStats(allCampaigns);
+        }
+    });
+
+    socket.on('campaign_paused', function(data) {
+        var c = allCampaigns.find(function(x) { return x.id === data.campaign_id; });
+        if (c) {
+            c.status = 'paused';
+            replaceRow(c);
+            updateStats(allCampaigns);
+        }
+    });
+
+    socket.on('campaign_resumed', function(data) {
+        var c = allCampaigns.find(function(x) { return x.id === data.campaign_id; });
+        if (c) {
+            c.status = 'sending';
             replaceRow(c);
             updateStats(allCampaigns);
         }

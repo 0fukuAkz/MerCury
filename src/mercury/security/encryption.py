@@ -51,14 +51,31 @@ class EncryptionService:
                 self._key = self._derive_key(env_password)
                 self._fernet = Fernet(self._key)
             else:
-                # Generate a new key and warn
-                logger.warning(
-                    "No encryption key provided. Generating ephemeral key. "
-                    "Set ENCRYPTION_KEY or ENCRYPTION_PASSWORD environment variable for persistence."
-                )
-                self._key = Fernet.generate_key()
+                # Try to load or create a persistent key file
+                self._key = self._load_or_create_key_file()
                 self._fernet = Fernet(self._key)
     
+    @staticmethod
+    def _load_or_create_key_file() -> bytes:
+        """Load encryption key from file, or generate and save one."""
+        from ..utils.app_dirs import get_data_dir
+
+        key_path = get_data_dir() / '.encryption.key'
+        if key_path.exists():
+            key = key_path.read_bytes().strip()
+            logger.debug("Loaded encryption key from %s", key_path)
+            return key
+
+        key = Fernet.generate_key()
+        key_path.write_bytes(key)
+        # Restrict permissions (owner read/write only)
+        try:
+            key_path.chmod(0o600)
+        except OSError:
+            pass
+        logger.info("Generated new encryption key at %s", key_path)
+        return key
+
     @staticmethod
     def _derive_key(password: str, salt: Optional[bytes] = None) -> bytes:
         """

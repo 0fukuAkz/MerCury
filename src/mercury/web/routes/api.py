@@ -201,17 +201,63 @@ def api_update_campaign(campaign_id):
 @api_key_or_login_required
 @limiter.limit("20/minute")
 def api_delete_campaign(campaign_id):
-    """Delete a campaign (draft/failed/cancelled/completed only)."""
+    """Delete a campaign. Stops it first if running or paused."""
+    from ..events import _active_services
+
+    # Stop the campaign if it's actively running
+    svc = _active_services.get(campaign_id)
+    if svc:
+        svc.stop()
+
     session = get_session_direct()
     try:
         repo = CampaignRepository(session)
         campaign = repo.get(campaign_id)
         if not campaign:
             return jsonify({'error': 'Campaign not found'}), 404
-        if campaign.status not in ('draft', 'failed', 'cancelled', 'completed'):
-            return jsonify({'error': 'Cannot delete an active or paused campaign'}), 400
+        # If it was running/paused, mark cancelled before deleting
+        if campaign.status in ('sending', 'paused'):
+            campaign.status = 'cancelled'
+            repo.update(campaign)
         repo.delete(campaign)
         return jsonify({'success': True})
+    finally:
+        session.close()
+
+@api_bp.route('/campaigns/bulk-delete', methods=['POST'])
+@api_key_or_login_required
+@limiter.limit("10/minute")
+def api_bulk_delete_campaigns():
+    """Bulk delete campaigns by IDs. Stops any running campaigns first."""
+    from ..events import _active_services
+
+    data = request.get_json(silent=True) or {}
+    ids = data.get('ids', [])
+    if not ids or not isinstance(ids, list):
+        return jsonify({'error': 'List of campaign IDs required'}), 400
+
+    # Stop any active campaigns
+    for cid in ids:
+        svc = _active_services.get(cid)
+        if svc:
+            svc.stop()
+
+    session = get_session_direct()
+    try:
+        repo = CampaignRepository(session)
+        deleted = 0
+        not_found = []
+        for cid in ids:
+            campaign = repo.get(cid)
+            if not campaign:
+                not_found.append(cid)
+                continue
+            if campaign.status in ('sending', 'paused'):
+                campaign.status = 'cancelled'
+                repo.update(campaign)
+            repo.delete(campaign)
+            deleted += 1
+        return jsonify({'success': True, 'deleted': deleted, 'not_found': not_found})
     finally:
         session.close()
 
