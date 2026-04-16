@@ -71,7 +71,6 @@ dependencies = [
     # Utilities
     "python-dotenv==1.0.0",
     "tqdm==4.66.1",
-    "faker==22.5.1",
     "pysocks==1.7.1",
     "rich==13.7.0",
 ]
@@ -89,6 +88,7 @@ dev = [
     "types-pyyaml==6.0.12.12",
     "ipython==8.20.0",
     "pre-commit==3.6.0",
+    "faker==22.5.1",
 ]
 pdf = [
     # Better PDF generation (requires system dependencies)

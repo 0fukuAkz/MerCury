@@ -5,6 +5,8 @@ import logging
 from typing import Optional
 from flask import Flask
 from flask_login import LoginManager
+from alembic.config import Config as AlembicConfig
+from alembic import command as alembic_command
 
 from ..app_context import AppContext, get_app_context, set_app_context
 from ..utils.logging_config import configure_logging
@@ -47,7 +49,15 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
     # Configuration
     app.config['ENV'] = os.environ.get('FLASK_ENV', 'development')
     app.config['DEBUG'] = os.environ.get('FLASK_DEBUG', '0').lower() in ('true', '1')
-    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-prod')
+    _secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-prod')
+    _is_production = os.environ.get('FLASK_ENV', 'development') == 'production'
+    _default_keys = {'dev-secret-key-change-in-prod', 'prod-secret-key-change-this'}
+    if _is_production and _secret_key in _default_keys:
+        raise RuntimeError(
+            "SECRET_KEY is set to a known insecure default. "
+            "Set the SECRET_KEY environment variable to a strong random value before running in production."
+        )
+    app.config['SECRET_KEY'] = _secret_key
     app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload
     
     # Force JSON output in production for structured logging (Docker/CloudWatch/ELK)
@@ -129,37 +139,17 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
         try:
             init_db()
             
-            # --- Auto-Migration for Global Settings ---
-            # Ideally use Alembic, but for this standalone app, we do a quick robust check.
-            from sqlalchemy import text
-            from ..data.database import get_engine
-            
-            engine = get_engine()
-            with engine.connect() as conn:
-                # Check for new 'global_settings' columns
-                try:
-                    # SQLite pragmas to check columns
-                    result = conn.execute(text("PRAGMA table_info(global_settings)"))
-                    columns = [row[1] for row in result.fetchall()] # row is (cid, name, type, ...)
-                    
-                    migration_ops = [
-                        ("batch_size", "INTEGER DEFAULT 1000"),
-                        ("default_sender_name", "VARCHAR(255)"),
-                        ("default_test_email", "VARCHAR(255)"),
-                        ("log_retention_days", "INTEGER DEFAULT 30"),
-                        ("log_level", "VARCHAR(20) DEFAULT 'INFO'"),
-                        ("ui_theme", "VARCHAR(20) DEFAULT 'dark'")
-                    ]
-                    
-                    for col_name, col_def in migration_ops:
-                        if col_name not in columns:
-                            logger.info(f"Migrating DB: Adding column {col_name} to global_settings")
-                            conn.execute(text(f"ALTER TABLE global_settings ADD COLUMN {col_name} {col_def}"))
-                            conn.commit()
-                            
-                except Exception as ex:
-                    logger.warning(f"Migration check failed (might be fresh DB): {ex}")
-            # ------------------------------------------
+            # --- Run Alembic migrations to head ---
+            try:
+                _alembic_ini = os.path.join(
+                    os.path.dirname(__file__), '..', '..', '..', '..', 'alembic.ini'
+                )
+                _alembic_cfg = AlembicConfig(os.path.abspath(_alembic_ini))
+                alembic_command.upgrade(_alembic_cfg, 'head')
+                logger.info("Database migrations applied successfully")
+            except Exception as ex:
+                logger.warning(f"Alembic migration failed (may be a fresh DB or already current): {ex}")
+            # --------------------------------------
             
             # Create default admin if none exists
             session = get_session_direct()
@@ -175,10 +165,18 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
                     )
                     # Use environment variable for initial password, fallback to 'admin'
                     initial_password = os.environ.get("ADMIN_PASSWORD", "admin")
+                    _using_default_password = 'ADMIN_PASSWORD' not in os.environ
                     admin.password_hash = hash_password(initial_password)
+                    admin.must_change_password = _using_default_password
                     session.add(admin)
                     session.commit()
-                    logger.info(f"Created default admin user (Password source: {'ENV' if 'ADMIN_PASSWORD' in os.environ else 'Default'})")
+                    if _using_default_password:
+                        logger.warning(
+                            "Created default admin user with password 'admin'. "
+                            "Set the ADMIN_PASSWORD environment variable and change this immediately."
+                        )
+                    else:
+                        logger.info("Created default admin user with password from ADMIN_PASSWORD env var.")
             finally:
                 session.close()
 

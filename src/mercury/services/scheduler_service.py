@@ -320,10 +320,8 @@ class SchedulerService:
                 if self.use_async:
                     asyncio.create_task(callback(**job.metadata if job else {}))
                 else:
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    loop.run_until_complete(callback(**job.metadata if job else {}))
-                    loop.close()
+                    from ..web.extensions import run_async
+                    run_async(callback(**job.metadata if job else {}))
             else:
                 # Run sync callback
                 callback(**job.metadata if job else {})

@@ -64,6 +64,34 @@ class EmailConfig:
     links: Optional[List[str]] = None
     rotation_strategy: str = "round_robin"
 
+    @classmethod
+    def from_campaign_config(cls, config: "Any") -> "EmailConfig":
+        """Build an EmailConfig from a CampaignConfig instance."""
+        return cls(
+            subject=config.subject,
+            from_email=config.from_email,
+            from_name=config.from_name,
+            reply_to=config.reply_to,
+            template_path=config.template_path,
+            html_content=config.html_content,
+            placeholders_path=config.placeholders_path,
+            dry_run=config.dry_run,
+            concurrency=config.concurrency,
+            rate_per_minute=config.rate_per_minute,
+            rate_per_hour=config.rate_per_hour,
+            enable_qr_code=config.enable_qr_code,
+            send_as_image=config.send_as_image,
+            convert_attachment=config.convert_attachment,
+            attachment_type=config.attachment_type,
+            attachment_path=config.attachment_path,
+            subjects=config.subjects,
+            from_names=config.from_names,
+            from_emails=config.from_emails,
+            templates=config.templates,
+            rotation_strategy=config.smtp_rotation,
+            links=config.links,
+        )
+
 
 class EmailService:
     """Service for composing and sending emails."""

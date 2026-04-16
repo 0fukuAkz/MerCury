@@ -37,7 +37,14 @@
       "Bash(.venv/bin/python -m pytest tests/test_features_coverage.py tests/test_models_coverage.py -v --tb=short)",
       "Bash(.venv/bin/python -m pytest tests/test_auth_routes.py -v --no-cov)",
       "Bash(.venv/bin/python -m pytest tests/test_error_aggregator.py -v --no-cov)",
-      "Bash(.venv/bin/pytest tests/ -q --tb=short --ignore=tests/e2e --cov=src/mercury --cov-report=term-missing --no-header)"
+      "Bash(.venv/bin/pytest tests/ -q --tb=short --ignore=tests/e2e --cov=src/mercury --cov-report=term-missing --no-header)",
+      "Bash(python3 -c \"import pytest; print\\(pytest.__version__\\)\")",
+      "Bash(python3 -m pytest --co -q)",
+      "Bash(python3 -c \"import sys; lines = [l for l in sys.stdin if 'print\\(' in l and '__pycache__' not in l]; print\\(f'Total: {len\\(lines\\)}'\\); [print\\(l.strip\\(\\)\\) for l in lines[:30]]\")",
+      "Bash(find /Users/macbook/Desktop/GitHub/MerCury/src -name \"*.py\" -exec grep -l 'print\\(' {} \\\\;)",
+      "Bash(xargs -I{} grep -n 'print\\(' {})",
+      "Bash(xargs -I{} grep -Hn \"print\" {})",
+      "Bash(python3 -c ':*)"
     ]
   }
 }

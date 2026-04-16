@@ -1,4 +1,0 @@
-# Suppression list - Updated 2026-04-15T17:27:47.578163+00:00
-hard@test.com
-spam@test.com
-suppressed@example.com

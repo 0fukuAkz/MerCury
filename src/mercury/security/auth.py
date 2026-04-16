@@ -467,11 +467,7 @@ def generate_unsubscribe_token(
     payload = f"{email_id}|{email_hash}|{expires_ts}"
     
     # Generate HMAC signature
-    signature = hmac.new(
-        secret,
-        payload.encode('utf-8'),
-        hashlib.sha256
-    ).hexdigest()[:32]
+    signature = hmac.digest(secret, payload.encode('utf-8'), hashlib.sha256).hex()[:32]
     
     # Combine payload and signature
     token_data = f"{payload}|{signature}"
@@ -527,11 +523,7 @@ def validate_unsubscribe_token(
         # Verify signature
         secret = _get_unsubscribe_secret()
         payload = f"{token_email_id}|{token_email_hash}|{expires_ts_str}"
-        expected_signature = hmac.new(
-            secret,
-            payload.encode('utf-8'),
-            hashlib.sha256
-        ).hexdigest()[:32]
+        expected_signature = hmac.digest(secret, payload.encode('utf-8'), hashlib.sha256).hex()[:32]
         
         if not secrets.compare_digest(signature, expected_signature):
             logger.warning(f"Unsubscribe token signature mismatch for email_id: {email_id}")

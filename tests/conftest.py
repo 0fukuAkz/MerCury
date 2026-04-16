@@ -26,7 +26,6 @@ def db_engine():
         poolclass=StaticPool,
         echo=False
     )
-    print(f"DEBUG: Registered tables: {Base.metadata.tables.keys()}")
     Base.metadata.create_all(engine)
     yield engine
     Base.metadata.drop_all(engine)

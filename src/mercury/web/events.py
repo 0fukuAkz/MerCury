@@ -1,6 +1,5 @@
 """SocketIO events."""
 
-import asyncio
 import logging
 import threading
 from datetime import datetime, UTC
@@ -12,6 +11,7 @@ from ..data.repositories import CampaignRepository
 from ..data.models import CampaignStatus
 from ..services.campaign_service import CampaignService, CampaignConfig
 from ..services.webhook_service import WebhookService
+from .extensions import run_async
 
 logger = logging.getLogger(__name__)
 
@@ -66,9 +66,7 @@ def _build_config_from_campaign(campaign) -> CampaignConfig:
 
 
 def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
-    """Execute campaign in a background thread with its own event loop."""
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+    """Execute campaign in a background thread using the shared async loop."""
 
     def _emit(event, data):
         sio.emit(event, data)
@@ -106,7 +104,7 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
 
         # Notify webhooks
         try:
-            loop.run_until_complete(_webhook_service.notify_campaign_started(
+            run_async(_webhook_service.notify_campaign_started(
                 campaign_id=str(campaign_id),
                 campaign_name=config.name,
                 total_recipients=0  # Will be updated once recipients are loaded
@@ -175,9 +173,7 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
         async def _progress_cb(progress: dict):
             _emit('campaign_progress', {'campaign_id': campaign_id, **progress})
 
-        stats = loop.run_until_complete(
-            service.run_campaign(recipients, progress_callback=_progress_cb)
-        )
+        stats = run_async(service.run_campaign(recipients, progress_callback=_progress_cb))
 
         # Determine final status
         final_status = CampaignStatus.COMPLETED
@@ -216,7 +212,7 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
                     duration = (_dt.fromisoformat(end_ts) - _dt.fromisoformat(start_ts)).total_seconds()
                 except Exception:
                     pass
-            loop.run_until_complete(_webhook_service.notify_campaign_completed(
+            run_async(_webhook_service.notify_campaign_completed(
                 campaign_id=str(campaign_id),
                 campaign_name=config.name,
                 total=stats.get('total', 0),
@@ -244,7 +240,6 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
         _emit('campaign_error', {'campaign_id': campaign_id, 'error': str(exc)})
     finally:
         _active_services.pop(campaign_id, None)
-        loop.close()
 
 
 def register_socketio_events(sio: SocketIO):

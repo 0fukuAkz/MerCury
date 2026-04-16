@@ -1,11 +1,10 @@
 """API routes."""
 
-import asyncio
 from datetime import datetime, UTC
 from flask import Blueprint, jsonify, request
 
 from ..decorators import api_key_or_login_required
-from ..extensions import limiter
+from ..extensions import limiter, run_async
 from ...data.database import get_session_direct
 from ...data.repositories import SMTPRepository, TemplateRepository, LogRepository, CampaignRepository
 from ...services.campaign_service import CampaignService, CampaignConfig
@@ -345,12 +344,7 @@ def api_test_smtp(name):
         service = SMTPService()
         service.load_from_config([s.get_connection_config() for s in servers])
         
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            result = loop.run_until_complete(service.test_connection(name))
-        finally:
-            loop.close()
+        result = run_async(service.test_connection(name))
         
         return jsonify(result)
     finally:
