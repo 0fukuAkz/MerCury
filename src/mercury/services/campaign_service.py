@@ -42,11 +42,14 @@ class CampaignConfig:
     reply_to: str = ""
     
     # Template
+    template_id: Optional[int] = None
     template_path: str = ""
+    html_content: Optional[str] = None
     templates: Optional[List[str]] = None
-    
+
     # Recipients
     recipients_path: str = ""
+    manual_recipients: Optional[List[str]] = None
     email_column: str = "email"
     validate_emails: bool = True
     deduplicate: bool = True
@@ -100,8 +103,8 @@ class CampaignService:
             loop = asyncio.get_event_loop()
             for sig in (signal.SIGTERM, signal.SIGINT):
                 loop.add_signal_handler(sig, self._handle_shutdown_signal)
-        except (RuntimeError, NotImplementedError):
-            # Windows or no event loop yet
+        except (RuntimeError, NotImplementedError, ValueError):
+            # Windows, no event loop yet, or called from a non-main thread
             pass
     
     def _handle_shutdown_signal(self):
@@ -129,9 +132,12 @@ class CampaignService:
         
         if config.rate_per_hour <= 0:
             config.rate_per_hour = global_settings.hourly_limit
-            
-        # If rate_per_minute is also 0, we can approximate or leave it to token bucket logic
-        # But let's leave it as is, rate limiter handles per-hour fine.
+
+        if config.concurrency <= 0:
+            config.concurrency = global_settings.max_concurrency
+
+        if config.chunk_size <= 0:
+            config.chunk_size = global_settings.batch_size
 
         # Apply Identity Defaults
         # If no "From" identity specified at all, use the pool
@@ -176,6 +182,7 @@ class CampaignService:
             from_name=config.from_name,
             reply_to=config.reply_to,
             template_path=config.template_path,
+            html_content=config.html_content,
             placeholders_path=config.placeholders_path,
             dry_run=config.dry_run,
             concurrency=config.concurrency,
@@ -195,7 +202,7 @@ class CampaignService:
         ))
         
         # Add static placeholders
-        if config.placeholders:
+        if config.placeholders and self.email_service._template_engine:
             for key, value in config.placeholders.items():
                 self.email_service._template_engine.add_static_placeholder(key, value)
         
@@ -205,10 +212,28 @@ class CampaignService:
         """Create a new campaign in database."""
         session = get_session_direct()
         try:
+            extra_settings: Dict[str, Any] = {}
+            if config.links:
+                extra_settings['links'] = config.links
+            if config.manual_recipients:
+                extra_settings['manual_recipients'] = config.manual_recipients
+            # Store path/flag fields that have no direct model column
+            if config.recipients_path:
+                extra_settings['recipients_path'] = config.recipients_path
+            if config.placeholders_path:
+                extra_settings['placeholders_path'] = config.placeholders_path
+            extra_settings['dry_run'] = bool(config.dry_run)
+            # Store rotation arrays (no dedicated columns)
+            if config.from_emails:
+                extra_settings['from_emails'] = config.from_emails
+            if config.from_names:
+                extra_settings['from_names'] = config.from_names
+
             campaign = Campaign(
                 name=config.name,
                 description=config.description,
                 status=CampaignStatus.DRAFT,
+                template_id=config.template_id,
                 from_email=config.from_email,
                 from_name=config.from_name,
                 reply_to=config.reply_to,
@@ -221,7 +246,7 @@ class CampaignService:
                 enable_qr_code=config.enable_qr_code,
                 convert_to_image=config.send_as_image,
                 smtp_rotation_strategy=config.smtp_rotation,
-                settings={'links': config.links} if config.links else {}
+                settings=extra_settings
             )
             
             repo = CampaignRepository(session)
@@ -462,7 +487,8 @@ class CampaignService:
                                 sent_at=datetime.now(UTC),
                                 subject=self.config.subject if self.config else "",
                                 from_email=self.config.from_email if self.config else "",
-                                smtp_server_name=email_result.smtp_server
+                                smtp_server_name=email_result.smtp_server,
+                                correlation_id=email_result.correlation_id
                             ))
                         else:
                             await failed_logger.log_failure(
@@ -479,7 +505,8 @@ class CampaignService:
                                 subject=self.config.subject if self.config else "",
                                 from_email=self.config.from_email if self.config else "",
                                 error_message=email_result.error,
-                                error_type=email_result.error_type
+                                error_type=email_result.error_type,
+                                correlation_id=email_result.correlation_id
                             ))
                     
                     # Batch insert to DB
@@ -540,7 +567,7 @@ class CampaignService:
             return self.email_service.get_statistics()
         return {}
     
-    def list_campaigns(self, limit: int = 20) -> List[Campaign]:
+    def list_campaigns(self, limit: int = 200) -> List[Campaign]:
         """List recent campaigns."""
         session = get_session_direct()
         try:

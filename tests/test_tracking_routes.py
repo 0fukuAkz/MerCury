@@ -30,7 +30,7 @@ class TestTrackingRoutes:
             recipient='',
             ip_address=ANY,
             user_agent=ANY,
-            extra_data={'url': target_url, 'link_id': 'link1'}
+            metadata={'url': target_url, 'link_id': 'link1'}
         )
 
     def test_track_click_default_url(self, client, mock_tracking_service):

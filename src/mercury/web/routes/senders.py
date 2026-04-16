@@ -2,12 +2,14 @@
 
 import logging
 from flask import Blueprint, render_template, request, flash, redirect, url_for
+from flask_login import login_required
 from ...services.identity_service import IdentityService
 
 senders_bp = Blueprint('senders', __name__, url_prefix='/senders')
 logger = logging.getLogger(__name__)
 
 @senders_bp.route('/')
+@login_required
 def index():
     """Sender identities dashboard."""
     emails = IdentityService.get_emails()
@@ -15,6 +17,7 @@ def index():
     return render_template('senders.html', emails=emails, names=names)
 
 @senders_bp.route('/emails', methods=['POST'])
+@login_required
 def add_email():
     """Add a new From-Email."""
     email = request.form.get('email', '').strip()
@@ -34,12 +37,14 @@ def add_email():
     return redirect(url_for('senders.index'))
 
 @senders_bp.route('/emails/<int:id>/toggle', methods=['POST'])
+@login_required
 def toggle_email(id):
     """Toggle status."""
     IdentityService.toggle_email_status(id)
     return redirect(url_for('senders.index'))
 
 @senders_bp.route('/emails/<int:id>/delete', methods=['POST'])
+@login_required
 def delete_email(id):
     """Delete email."""
     IdentityService.delete_email(id)
@@ -47,6 +52,7 @@ def delete_email(id):
     return redirect(url_for('senders.index'))
 
 @senders_bp.route('/names', methods=['POST'])
+@login_required
 def add_name():
     """Add a new Sender Name."""
     name = request.form.get('name', '').strip()
@@ -66,12 +72,14 @@ def add_name():
     return redirect(url_for('senders.index'))
 
 @senders_bp.route('/names/<int:id>/toggle', methods=['POST'])
+@login_required
 def toggle_name(id):
     """Toggle status."""
     IdentityService.toggle_name_status(id)
     return redirect(url_for('senders.index'))
 
 @senders_bp.route('/names/<int:id>/delete', methods=['POST'])
+@login_required
 def delete_name(id):
     """Delete name."""
     IdentityService.delete_name(id)

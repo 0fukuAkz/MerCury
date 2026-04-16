@@ -639,8 +639,8 @@
 
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script>
-        // Initialize WebSocket connection
-        const socket = io();
+        // Initialize WebSocket connection (window-scoped so child templates can access it)
+        var socket = io();
 
         socket.on('connect', function () {
             console.log('Connected to server');

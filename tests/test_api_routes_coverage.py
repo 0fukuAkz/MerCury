@@ -27,7 +27,8 @@ def test_api_create_campaign_invalid(client, auth_headers):
 @patch('mercury.services.campaign_service.CampaignService.create_campaign')
 def test_api_create_campaign_valid(mock_create, client, auth_headers):
     mock_campaign = MagicMock()
-    mock_campaign.to_dict.return_value = {'id': 1, 'name': 'Test Campaign'}
+    mock_campaign.id = 999
+    mock_campaign.to_dict.return_value = {'id': 999, 'name': 'Test Campaign'}
     mock_create.return_value = mock_campaign
     
     response = client.post('/api/campaigns', headers=auth_headers, json={

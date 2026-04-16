@@ -1,7 +1,7 @@
 """Campaign repository."""
 
 from typing import Optional, List
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import select
 
 from .base import BaseRepository
@@ -32,10 +32,20 @@ class CampaignRepository(BaseRepository[Campaign]):
         """Get all scheduled campaigns."""
         return self.get_by_status(CampaignStatus.SCHEDULED)
     
+    def get(self, id: int) -> Campaign | None:
+        """Get campaign by ID with template eagerly loaded."""
+        stmt = (
+            select(Campaign)
+            .where(Campaign.id == id)
+            .options(joinedload(Campaign.template))
+        )
+        return self.session.execute(stmt).scalar_one_or_none()
+
     def get_recent(self, limit: int = 10) -> List[Campaign]:
         """Get most recent campaigns."""
         stmt = (
             select(Campaign)
+            .options(joinedload(Campaign.template))
             .order_by(Campaign.created_at.desc())
             .limit(limit)
         )

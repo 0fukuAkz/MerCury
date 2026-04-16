@@ -7,7 +7,7 @@ from flask import Blueprint, jsonify, request
 from ..decorators import api_key_or_login_required
 from ..extensions import limiter
 from ...data.database import get_session_direct
-from ...data.repositories import SMTPRepository, TemplateRepository, LogRepository
+from ...data.repositories import SMTPRepository, TemplateRepository, LogRepository, CampaignRepository
 from ...services.campaign_service import CampaignService, CampaignConfig
 from ...services.smtp_service import SMTPService
 from ...features.template_engine import TemplateEngine
@@ -32,15 +32,13 @@ def api_status():
 @limiter.limit("30/minute")
 def api_list_campaigns():
     """List all email campaigns."""
-    service = CampaignService()
-    # service.initialize() # Check if initialize is needed? It was called in app.py
-    # app.py: service.initialize()
-    service.initialize()
-    campaigns = service.list_campaigns()
-    
-    return jsonify({
-        'campaigns': [c.to_dict() for c in campaigns]
-    })
+    session = get_session_direct()
+    try:
+        repo = CampaignRepository(session)
+        campaigns = repo.get_recent(200)
+        return jsonify({'campaigns': [c.to_dict() for c in campaigns]})
+    finally:
+        session.close()
 
 @api_bp.route('/campaigns', methods=['POST'])
 @api_key_or_login_required
@@ -55,35 +53,41 @@ def api_create_campaign():
     # Handle rotation arrays (from newline-separated frontend or direct arrays)
     subjects = data.get('subjects') if isinstance(data.get('subjects'), list) else None
     from_names = data.get('from_names') if isinstance(data.get('from_names'), list) else None
+    from_emails = data.get('from_emails') if isinstance(data.get('from_emails'), list) else None
     templates = data.get('templates') if isinstance(data.get('templates'), list) else None
+    links = data.get('links') if isinstance(data.get('links'), list) else None
+    manual_recipients = data.get('manual_recipients') if isinstance(data.get('manual_recipients'), list) else None
 
     config = CampaignConfig(
         name=data.get('name'),
         description=data.get('description', ''),
-        
+
         # Email content
         subject=data.get('subject', ''),
         subjects=subjects,
         from_email=data.get('from_email', ''),
         from_name=data.get('from_name', ''),
         from_names=from_names,
+        from_emails=from_emails,
         reply_to=data.get('reply_to', ''),
-        
+
         # Templates
+        template_id=int(data['template_id']) if data.get('template_id') else None,
         template_path=data.get('template_path', ''),
         templates=templates,
-        
+
         # Recipients
         recipients_path=data.get('recipients_path', ''),
+        manual_recipients=manual_recipients,
         validate_emails=data.get('validate_emails', True),
         deduplicate=data.get('deduplicate', True),
         
         # Sending options
         dry_run=data.get('dry_run', True),
-        concurrency=int(data.get('concurrency', 50)),
+        concurrency=int(data.get('concurrency', 0)),
         rate_per_minute=int(data.get('rate_per_minute', 0)),
         rate_per_hour=int(data.get('rate_per_hour', 0)),
-        chunk_size=int(data.get('chunk_size', 1000)),
+        chunk_size=int(data.get('chunk_size', 0)),
         pause_between_chunks=int(data.get('pause_between_chunks', 0)),
         smtp_rotation=data.get('rotation_strategy', 'weighted'),
         
@@ -92,7 +96,10 @@ def api_create_campaign():
         send_as_image=data.get('send_as_image', False),
         attachment_type=data.get('attachment_type') or None,
         attachment_path=data.get('attachment_path') or None,
-        
+
+        # Links rotation
+        links=links,
+
         # Placeholders
         placeholders_path=data.get('placeholders_path', '')
     )
@@ -100,10 +107,189 @@ def api_create_campaign():
     service = CampaignService()
     service.initialize()
     campaign = service.create_campaign(config)
-    
+
+    session = get_session_direct()
+    try:
+        repo = CampaignRepository(session)
+        fresh = repo.get(campaign.id)
+        campaign_dict = fresh.to_dict() if fresh else campaign.to_dict()
+    finally:
+        session.close()
+
     return jsonify({
         'success': True,
-        'campaign': campaign.to_dict()
+        'campaign': campaign_dict
+    })
+
+@api_bp.route('/campaigns/<int:campaign_id>', methods=['GET'])
+@api_key_or_login_required
+@limiter.limit("60/minute")
+def api_get_campaign(campaign_id):
+    """Get a single campaign by ID."""
+    session = get_session_direct()
+    try:
+        repo = CampaignRepository(session)
+        campaign = repo.get(campaign_id)
+        if not campaign:
+            return jsonify({'error': 'Campaign not found'}), 404
+        return jsonify({'campaign': campaign.to_dict()})
+    finally:
+        session.close()
+
+@api_bp.route('/campaigns/<int:campaign_id>', methods=['PUT'])
+@api_key_or_login_required
+@limiter.limit("20/minute")
+def api_update_campaign(campaign_id):
+    """Update an existing campaign (draft/scheduled only)."""
+    session = get_session_direct()
+    try:
+        repo = CampaignRepository(session)
+        campaign = repo.get(campaign_id)
+        if not campaign:
+            return jsonify({'error': 'Campaign not found'}), 404
+        if campaign.status not in ('draft', 'scheduled'):
+            return jsonify({'error': 'Only draft or scheduled campaigns can be edited'}), 400
+
+        data = request.get_json(silent=True) or {}
+
+        editable = [
+            'name', 'description', 'type',
+            'from_email', 'from_name', 'reply_to',
+            'template_id', 'enable_qr_code', 'convert_to_image',
+            'smtp_rotation_strategy', 'auto_failover',
+            'chunk_size', 'concurrency', 'rate_per_minute', 'rate_per_hour',
+            'pause_between_chunks',
+        ]
+        for field in editable:
+            if field in data:
+                setattr(campaign, field, data[field])
+
+        # Map send_as_image (form field name) → convert_to_image (column name)
+        if 'send_as_image' in data:
+            campaign.convert_to_image = bool(data['send_as_image'])
+
+        # subjects list
+        if 'subjects' in data and isinstance(data['subjects'], list):
+            campaign.subjects = data['subjects']
+        elif 'subject' in data:
+            campaign.subjects = [data['subject']]
+
+        # merge settings blob — includes non-column fields like recipients_path, dry_run
+        extra = {}
+        if data.get('manual_recipients') and isinstance(data['manual_recipients'], list):
+            extra['manual_recipients'] = data['manual_recipients']
+        if data.get('links') and isinstance(data['links'], list):
+            extra['links'] = data['links']
+        if 'recipients_path' in data and data['recipients_path']:
+            extra['recipients_path'] = data['recipients_path']
+        if 'dry_run' in data:
+            extra['dry_run'] = bool(data['dry_run'])
+        if isinstance(data.get('from_emails'), list):
+            extra['from_emails'] = data['from_emails']
+        if isinstance(data.get('from_names'), list):
+            extra['from_names'] = data['from_names']
+        if extra:
+            merged = dict(campaign.settings or {})
+            merged.update(extra)
+            campaign.settings = merged
+
+        repo.update(campaign)
+        return jsonify({'success': True, 'campaign': campaign.to_dict()})
+    finally:
+        session.close()
+
+@api_bp.route('/campaigns/<int:campaign_id>', methods=['DELETE'])
+@api_key_or_login_required
+@limiter.limit("20/minute")
+def api_delete_campaign(campaign_id):
+    """Delete a campaign (draft/failed/cancelled/completed only)."""
+    session = get_session_direct()
+    try:
+        repo = CampaignRepository(session)
+        campaign = repo.get(campaign_id)
+        if not campaign:
+            return jsonify({'error': 'Campaign not found'}), 404
+        if campaign.status not in ('draft', 'failed', 'cancelled', 'completed'):
+            return jsonify({'error': 'Cannot delete an active or paused campaign'}), 400
+        repo.delete(campaign)
+        return jsonify({'success': True})
+    finally:
+        session.close()
+
+@api_bp.route('/campaigns/<int:campaign_id>/clone', methods=['POST'])
+@api_key_or_login_required
+@limiter.limit("10/minute")
+def api_clone_campaign(campaign_id):
+    """Clone an existing campaign as a new draft."""
+    from ...data.models.campaign import Campaign, CampaignStatus
+    session = get_session_direct()
+    try:
+        repo = CampaignRepository(session)
+        src = repo.get(campaign_id)
+        if not src:
+            return jsonify({'error': 'Campaign not found'}), 404
+        clone = Campaign(
+            name=src.name + ' (Copy)',
+            description=src.description,
+            type=src.type,
+            status=CampaignStatus.DRAFT,
+            template_id=src.template_id,
+            from_email=src.from_email,
+            from_name=src.from_name,
+            reply_to=src.reply_to,
+            subjects=list(src.subjects or []),
+            chunk_size=src.chunk_size,
+            concurrency=src.concurrency,
+            rate_per_minute=src.rate_per_minute,
+            rate_per_hour=src.rate_per_hour,
+            enable_qr_code=src.enable_qr_code,
+            convert_to_image=src.convert_to_image,
+            smtp_rotation_strategy=src.smtp_rotation_strategy,
+            settings=dict(src.settings or {}),
+        )
+        clone = repo.create(clone)
+        return jsonify({'success': True, 'campaign': clone.to_dict()})
+    finally:
+        session.close()
+
+@api_bp.route('/campaigns/<int:campaign_id>/start', methods=['POST'])
+@api_key_or_login_required
+@limiter.limit("5/minute")
+def api_start_campaign(campaign_id):
+    """Start a campaign via REST API (alternative to WebSocket)."""
+    import threading
+    from ..events import _run_campaign_thread, _active_services
+
+    if campaign_id in _active_services:
+        return jsonify({'error': 'Campaign already running'}), 409
+
+    session = get_session_direct()
+    try:
+        repo = CampaignRepository(session)
+        campaign = repo.get(campaign_id)
+        if not campaign:
+            return jsonify({'error': 'Campaign not found'}), 404
+        if campaign.status not in ('draft', 'scheduled'):
+            return jsonify({'error': f'Cannot start campaign with status: {campaign.status}'}), 400
+    finally:
+        session.close()
+
+    from flask import current_app
+    from ..extensions import socketio
+
+    app = current_app._get_current_object()
+    t = threading.Thread(
+        target=_run_campaign_thread,
+        args=(campaign_id, socketio, app),
+        daemon=True,
+        name=f"campaign-{campaign_id}",
+    )
+    t.start()
+
+    return jsonify({
+        'success': True,
+        'campaign_id': campaign_id,
+        'status': 'starting'
     })
 
 @api_bp.route('/smtp', methods=['GET'])
@@ -167,6 +353,51 @@ def api_test_smtp(name):
             loop.close()
         
         return jsonify(result)
+    finally:
+        session.close()
+
+@api_bp.route('/smtp/<name>', methods=['PUT'])
+@api_key_or_login_required
+@limiter.limit("20/minute")
+def api_update_smtp(name):
+    """Update an existing SMTP server by name."""
+    data = request.get_json(silent=True) or {}
+    session = get_session_direct()
+    try:
+        repo = SMTPRepository(session)
+        server = repo.get_by_name(name)
+        if not server:
+            return jsonify({'success': False, 'error': 'Server not found'}), 404
+        if 'host' in data:
+            server.host = data['host']
+        if 'port' in data:
+            server.port = int(data['port'])
+        if 'username' in data:
+            server.username = data['username']
+        if 'password' in data and data['password']:
+            server.password = data['password']
+        if 'use_tls' in data:
+            server.use_tls = bool(data['use_tls'])
+        if 'use_ssl' in data:
+            server.use_ssl = bool(data['use_ssl'])
+        repo.update(server)
+        return jsonify({'success': True, 'server': server.to_dict()})
+    finally:
+        session.close()
+
+@api_bp.route('/smtp/<name>', methods=['DELETE'])
+@api_key_or_login_required
+@limiter.limit("10/minute")
+def api_delete_smtp(name):
+    """Delete a specific SMTP server by name."""
+    session = get_session_direct()
+    try:
+        repo = SMTPRepository(session)
+        server = repo.get_by_name(name)
+        if not server:
+            return jsonify({'success': False, 'error': 'Server not found'}), 404
+        repo.delete(server)
+        return jsonify({'success': True})
     finally:
         session.close()
 

@@ -128,7 +128,7 @@ class EncryptionService:
             decrypted = self._fernet.decrypt(ciphertext.encode())
             return decrypted.decode()
         except InvalidToken as e:
-            logger.error("Failed to decrypt: Invalid token or wrong key")
+            logger.debug("Failed to decrypt: Invalid token or wrong key")
             raise ValueError("Decryption failed: Invalid token or wrong key") from e
     
     def is_encrypted(self, value: str) -> bool:

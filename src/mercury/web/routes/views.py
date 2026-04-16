@@ -21,7 +21,26 @@ def campaigns():
 @login_required
 def new_campaign():
     """New campaign creation form."""
-    return render_template('campaign_form.html')
+    return render_template('campaign_form.html', campaign=None)
+
+@views_bp.route('/campaigns/<int:campaign_id>/edit')
+@login_required
+def edit_campaign(campaign_id):
+    """Edit an existing campaign."""
+    from ...data.repositories import CampaignRepository
+    from ...data.database import get_session_direct
+    import json
+    session = get_session_direct()
+    try:
+        repo = CampaignRepository(session)
+        campaign = repo.get(campaign_id)
+        if not campaign:
+            from flask import abort
+            abort(404)
+        campaign_json = json.dumps(campaign.to_dict())
+    finally:
+        session.close()
+    return render_template('campaign_form.html', campaign=campaign_json)
 
 @views_bp.route('/smtp')
 @login_required

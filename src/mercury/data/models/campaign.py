@@ -102,7 +102,36 @@ class Campaign(Base, BaseModel):
         if self.sent_count == 0:
             return 0.0
         return round((self.delivered_count / self.sent_count) * 100, 2)
-    
+
+    @property
+    def send_rate(self) -> float:
+        """Sent / total_recipients as percentage."""
+        if not self.total_recipients:
+            return 0.0
+        return round(self.sent_count / self.total_recipients * 100, 1)
+
+    def to_dict(self) -> dict:
+        result = super().to_dict()
+        # computed fields not stored as columns
+        result['send_rate'] = self.send_rate
+        try:
+            result['template_name'] = self.template.name if self.template else None
+        except Exception:
+            result['template_name'] = None
+        s = self.settings or {}
+        result['dry_run'] = bool(s.get('dry_run', False))
+        # surface settings-stored fields at top level so the form/UI can read them directly
+        result['recipients_path'] = s.get('recipients_path', '')
+        result['manual_recipients_count'] = len(s.get('manual_recipients', []) or [])
+        result['subject'] = (self.subjects[0] if self.subjects else '') or ''
+        result['from_emails'] = s.get('from_emails') or []
+        result['from_names']  = s.get('from_names')  or []
+        if self.started_at and self.completed_at:
+            result['duration_seconds'] = int((self.completed_at - self.started_at).total_seconds())
+        else:
+            result['duration_seconds'] = None
+        return result
+
     @property
     def is_editable(self) -> bool:
         """Check if campaign can be edited."""

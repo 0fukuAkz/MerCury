@@ -142,10 +142,97 @@
     .act-btn.start:hover  { background: rgba(57,255,20,0.1); box-shadow: 0 0 8px rgba(57,255,20,0.25); }
     .act-btn.pause  { color: var(--warning); border-color: rgba(255,107,53,0.4); }
     .act-btn.pause:hover  { background: rgba(255,107,53,0.1); }
-    .act-btn.resume { color: var(--neon-cyan); border-color: rgba(0,255,255,0.4); }
-    .act-btn.resume:hover { background: rgba(0,255,255,0.1); }
     .act-btn.del    { color: var(--error); border-color: rgba(255,0,85,0.3); }
     .act-btn.del:hover    { background: rgba(255,0,85,0.1); box-shadow: 0 0 8px rgba(255,0,85,0.2); }
+    .act-btn.edit   { color: var(--neon-cyan); border-color: rgba(0,255,255,0.3); }
+    .act-btn.edit:hover   { background: rgba(0,255,255,0.1); box-shadow: 0 0 8px rgba(0,255,255,0.2); }
+
+    /* ── Detail row ── */
+    .detail-row > td { padding: 0 !important; background: var(--bg-secondary); }
+    .detail-panel {
+        padding: 1.1rem 1.5rem 1.25rem;
+        border-top: 1px solid var(--border-color);
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.4rem;
+    }
+    @media (max-width: 860px) { .detail-panel { grid-template-columns: 1fr; } }
+
+    .detail-sec-title {
+        font-size: 0.62rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--text-muted);
+        margin: 0 0 0.65rem;
+    }
+    .detail-stats {
+        display: flex;
+        gap: 1.1rem;
+        flex-wrap: wrap;
+        margin-bottom: 0.9rem;
+    }
+    .detail-stat { display: flex; flex-direction: column; gap: 0.12rem; min-width: 60px; }
+    .detail-stat-val {
+        font-size: 1.15rem;
+        font-weight: 700;
+        font-family: 'JetBrains Mono', monospace;
+        line-height: 1.1;
+    }
+    .detail-stat-lbl {
+        font-size: 0.62rem;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--text-muted);
+    }
+    .d-cyan   { color: var(--neon-cyan); }
+    .d-green  { color: var(--neon-green); }
+    .d-red    { color: var(--error); }
+    .d-muted  { color: var(--text-secondary); }
+
+    .detail-timing {
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+        font-size: 0.78rem;
+        color: var(--text-secondary);
+    }
+    .detail-timing .lbl { color: var(--text-muted); font-size: 0.7rem; min-width: 80px; display: inline-block; }
+
+    .detail-cfg {
+        display: flex;
+        flex-direction: column;
+        gap: 0.38rem;
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+    }
+    .detail-cfg-row { display: flex; gap: 0.4rem; align-items: baseline; flex-wrap: wrap; }
+    .detail-cfg-key { color: var(--text-muted); font-size: 0.72rem; min-width: 76px; flex-shrink: 0; }
+    .detail-cfg-val { color: var(--text-primary); font-size: 0.8rem; }
+    .detail-tag {
+        display: inline-block;
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: 3px;
+        padding: 0 0.35rem;
+        font-size: 0.68rem;
+        font-family: 'JetBrains Mono', monospace;
+        color: var(--text-muted);
+    }
+    .detail-tag.on   { color: var(--neon-green);  border-color: rgba(57,255,20,0.35); }
+    .detail-tag.off  { color: var(--error);        border-color: rgba(255,0,85,0.3); }
+    .detail-tag.warn { color: var(--warning);      border-color: rgba(255,107,53,0.4); }
+    .detail-tag.muted{ color: var(--text-muted);   border-color: var(--border-color); }
+
+    /* Chevron toggle on name cell */
+    .c-name-wrap { display: flex; align-items: flex-start; gap: 0.4rem; cursor: pointer; }
+    .c-name-wrap:hover .c-name { color: var(--neon-cyan); }
+    .row-chevron {
+        margin-top: 0.15rem;
+        color: var(--text-muted);
+        flex-shrink: 0;
+        transition: transform 0.18s;
+    }
+    .row-chevron.open { transform: rotate(90deg); color: var(--neon-cyan); }
 
     /* ── Empty state ── */
     .empty-state {
@@ -271,8 +358,13 @@
 
 <div id="toast-container"></div>
 
+{% endblock %}
+
+{% block extra_js %}
 <script>
     let allCampaigns = [];
+    // track which detail rows are open by campaign id
+    var _openDetails = {};
 
     /* ── Utilities ─────────────────────────────────────────────────────── */
     function showToast(msg, type = 'info') {
@@ -289,6 +381,25 @@
         setTimeout(() => t.remove(), 3200);
     }
 
+    function fmtDate(iso) {
+        if (!iso) return '—';
+        try {
+            return new Date(iso).toLocaleString(undefined, {
+                month: 'short', day: 'numeric', year: 'numeric',
+                hour: '2-digit', minute: '2-digit'
+            });
+        } catch { return iso; }
+    }
+
+    function fmtDuration(secs) {
+        if (secs == null || secs < 0) return null;
+        if (secs < 60) return `${secs}s`;
+        const m = Math.floor(secs / 60), s = secs % 60;
+        if (m < 60) return s > 0 ? `${m}m ${s}s` : `${m}m`;
+        const h = Math.floor(m / 60), rm = m % 60;
+        return rm > 0 ? `${h}h ${rm}m` : `${h}h`;
+    }
+
     const STATUS_CFG = {
         draft:     { cls: 'badge-info',      label: 'Draft' },
         scheduled: { cls: 'badge-scheduled', label: 'Scheduled' },
@@ -299,26 +410,172 @@
         cancelled: { cls: 'badge-error',     label: 'Cancelled' },
     };
 
+    /* ── Detail row builder ─────────────────────────────────────────────── */
+    function buildDetailPanel(c) {
+        const ran = ['sending','paused','completed','failed','cancelled'].includes(c.status);
+        const total  = c.total_recipients || 0;
+        const sent   = c.sent_count       || 0;
+        const failed = c.failed_count     || 0;
+        const rate   = c.send_rate != null ? c.send_rate : (total > 0 ? Math.round(sent / total * 1000) / 10 : 0);
+        const dur    = fmtDuration(c.duration_seconds);
+
+        // ── Left: stats & timing ──────────────────────────────────────────
+        var leftHtml = '';
+        if (ran) {
+            const isSending = c.status === 'sending';
+            leftHtml += `<p class="detail-sec-title">Run Results</p>
+            <div class="detail-stats">
+                <div class="detail-stat"><span class="detail-stat-val d-cyan">${total.toLocaleString()}</span><span class="detail-stat-lbl">Total</span></div>
+                <div class="detail-stat"><span class="detail-stat-val d-green">${sent.toLocaleString()}</span><span class="detail-stat-lbl">Sent</span></div>
+                <div class="detail-stat"><span class="detail-stat-val d-red">${failed.toLocaleString()}</span><span class="detail-stat-lbl">Failed</span></div>
+                <div class="detail-stat"><span class="detail-stat-val d-muted">${rate}%</span><span class="detail-stat-lbl">Rate</span></div>
+            </div>
+            <div class="detail-timing">`;
+            if (c.started_at)   leftHtml += `<div><span class="lbl">Started</span>${fmtDate(c.started_at)}</div>`;
+            if (c.completed_at) leftHtml += `<div><span class="lbl">Finished</span>${fmtDate(c.completed_at)}</div>`;
+            if (dur)            leftHtml += `<div><span class="lbl">Duration</span>${dur}</div>`;
+            else if (isSending) leftHtml += `<div><span class="lbl">Duration</span><span style="color:var(--neon-cyan)">Running…</span></div>`;
+            const remaining = total - sent - failed;
+            if (isSending && remaining > 0) leftHtml += `<div><span class="lbl">Remaining</span>${remaining.toLocaleString()}</div>`;
+            leftHtml += `</div>`;
+
+            if (c.status === 'failed') {
+                leftHtml += `<div style="margin-top:0.6rem;padding:0.4rem 0.6rem;border:1px solid rgba(255,0,85,0.25);border-radius:4px;font-size:0.76rem;color:var(--error);background:rgba(255,0,85,0.05)">Campaign failed — check logs for details</div>`;
+            }
+        } else {
+            leftHtml += `<p class="detail-sec-title">Run Results</p>
+            <div style="color:var(--text-muted);font-size:0.82rem;padding:0.35rem 0 0.5rem">Not yet run.</div>`;
+            if (c.scheduled_at) {
+                leftHtml += `<div class="detail-timing"><div><span class="lbl">Scheduled</span>${fmtDate(c.scheduled_at)}</div></div>`;
+            }
+        }
+        leftHtml += `<div class="detail-timing" style="margin-top:0.55rem">
+            <div><span class="lbl">Created</span>${fmtDate(c.created_at)}</div>
+            <div><span class="lbl">Updated</span>${fmtDate(c.updated_at)}</div>
+        </div>`;
+
+        // ── Right: configuration ──────────────────────────────────────────
+        // Mode: LIVE (green) or DRY RUN (orange) – semantically correct colors
+        const modeTag = c.dry_run
+            ? '<span class="detail-tag warn">DRY RUN</span>'
+            : '<span class="detail-tag on">LIVE</span>';
+
+        // Recipients source
+        var recipientsVal = '—';
+        if (c.manual_recipients_count > 0) {
+            recipientsVal = `${c.manual_recipients_count.toLocaleString()} recipients (manual)`;
+        } else if (c.recipients_path) {
+            const fname = c.recipients_path.split(/[/\\]/).pop();
+            recipientsVal = `<span title="${c.recipients_path}" style="font-size:0.75rem">${fname}</span>`;
+        } else if (c.total_recipients > 0) {
+            recipientsVal = c.total_recipients.toLocaleString() + ' (linked list)';
+        }
+
+        var rightHtml = `<p class="detail-sec-title">Configuration</p><div class="detail-cfg">`;
+        rightHtml += `<div class="detail-cfg-row"><span class="detail-cfg-key">Mode</span><span class="detail-cfg-val">${modeTag}</span></div>`;
+        rightHtml += `<div class="detail-cfg-row"><span class="detail-cfg-key">Recipients</span><span class="detail-cfg-val">${recipientsVal}</span></div>`;
+        if (c.subject) {
+            const subj = c.subject.length > 55 ? c.subject.slice(0, 55) + '…' : c.subject;
+            rightHtml += `<div class="detail-cfg-row"><span class="detail-cfg-key">Subject</span><span class="detail-cfg-val" style="font-size:0.78rem">${subj}</span></div>`;
+        }
+        if (c.from_email || c.from_name) {
+            const frm = [c.from_name, c.from_email ? `<${c.from_email}>` : ''].filter(Boolean).join(' ');
+            rightHtml += `<div class="detail-cfg-row"><span class="detail-cfg-key">From</span><span class="detail-cfg-val">${frm}</span></div>`;
+        }
+        if (c.template_name) {
+            rightHtml += `<div class="detail-cfg-row"><span class="detail-cfg-key">Template</span><span class="detail-cfg-val">${c.template_name}</span></div>`;
+        }
+        if (c.concurrency) {
+            rightHtml += `<div class="detail-cfg-row"><span class="detail-cfg-key">Concurrency</span><span class="detail-cfg-val">${c.concurrency}</span></div>`;
+        }
+        if (c.rate_per_hour || c.rate_per_minute) {
+            const rp = [];
+            if (c.rate_per_hour)   rp.push(`${c.rate_per_hour}/hr`);
+            if (c.rate_per_minute) rp.push(`${c.rate_per_minute}/min`);
+            rightHtml += `<div class="detail-cfg-row"><span class="detail-cfg-key">Rate Limit</span><span class="detail-cfg-val">${rp.join(' · ')}</span></div>`;
+        }
+        if (c.chunk_size) {
+            rightHtml += `<div class="detail-cfg-row"><span class="detail-cfg-key">Chunk Size</span><span class="detail-cfg-val">${c.chunk_size.toLocaleString()}</span></div>`;
+        }
+        if (c.smtp_rotation_strategy) {
+            const rotTag = `<span class="detail-tag muted">${c.smtp_rotation_strategy}</span>`;
+            rightHtml += `<div class="detail-cfg-row"><span class="detail-cfg-key">SMTP Rotation</span><span class="detail-cfg-val">${rotTag}</span></div>`;
+        }
+        rightHtml += `</div>`;
+
+        return `<div class="detail-panel"><div>${leftHtml}</div><div>${rightHtml}</div></div>`;
+    }
+
+    function buildDetailRow(c) {
+        var tr = document.createElement('tr');
+        tr.className = 'detail-row';
+        tr.id = 'detail-' + c.id;
+        tr.style.display = 'none';
+        var td = document.createElement('td');
+        td.colSpan = 8;
+        td.innerHTML = buildDetailPanel(c);
+        tr.appendChild(td);
+        return tr;
+    }
+
+    function toggleDetail(id) {
+        var dr = document.getElementById('detail-' + id);
+        var chevron = document.getElementById('chevron-' + id);
+        if (!dr) return;
+        var open = dr.style.display !== 'none';
+        dr.style.display = open ? 'none' : '';
+        if (chevron) chevron.classList.toggle('open', !open);
+        _openDetails[id] = !open;
+    }
+
+    function refreshDetailRow(c) {
+        var dr = document.getElementById('detail-' + c.id);
+        if (!dr || dr.style.display === 'none') return;
+        var td = dr.querySelector('td');
+        if (td) td.innerHTML = buildDetailPanel(c);
+    }
+
     /* ── Row builder (XSS-safe: server values set via textContent) ─────── */
     function buildRow(c) {
         const total  = c.total_recipients || 0;
         const sent   = c.sent_count       || 0;
         const failed = c.failed_count     || 0;
         const pct    = total > 0 ? Math.min(100, Math.round((sent + failed) / total * 100)) : 0;
+        const rate   = c.send_rate        != null ? c.send_rate : 0;
         const sc     = STATUS_CFG[c.status] || { cls: 'badge-info', label: c.status || '—' };
 
         const tr = document.createElement('tr');
         tr.dataset.name   = (c.name || '').toLowerCase();
         tr.dataset.status = (c.status || '').toLowerCase();
+        tr.dataset.id     = c.id;
 
         /* name + description */
         const tdName = document.createElement('td');
         const el = (tag, cls, text) => { const e = document.createElement(tag); e.className = cls; e.textContent = text; return e; };
-        tdName.appendChild(el('div', 'c-name', c.name || '(untitled)'));
+
+        const chevron = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        chevron.id = 'chevron-' + c.id;
+        chevron.setAttribute('class', 'row-chevron' + (_openDetails[c.id] ? ' open' : ''));
+        chevron.setAttribute('width', '11');
+        chevron.setAttribute('height', '11');
+        chevron.setAttribute('viewBox', '0 0 24 24');
+        chevron.setAttribute('fill', 'none');
+        chevron.setAttribute('stroke', 'currentColor');
+        chevron.setAttribute('stroke-width', '2.5');
+        chevron.innerHTML = '<polyline points="9 18 15 12 9 6"/>';
+
+        const nameWrap = document.createElement('div');
+        nameWrap.className = 'c-name-wrap';
+        nameWrap.addEventListener('click', function() { toggleDetail(c.id); });
+        nameWrap.appendChild(chevron);
+        const nameBlock = document.createElement('div');
+        nameBlock.appendChild(el('div', 'c-name', c.name || '(untitled)'));
         if (c.description) {
             const d = c.description.length > 58 ? c.description.slice(0, 58) + '…' : c.description;
-            tdName.appendChild(el('div', 'c-desc', d));
+            nameBlock.appendChild(el('div', 'c-desc', d));
         }
+        nameWrap.appendChild(nameBlock);
+        tdName.appendChild(nameWrap);
 
         /* type */
         const tdType = document.createElement('td');
@@ -338,7 +595,7 @@
         const fmtCell = (cls, val) => { const td = document.createElement('td'); td.className = cls; td.textContent = val; return td; };
         const tdSent = fmtCell('font-mono text-success', sent.toLocaleString());
         const tdFail = fmtCell('font-mono text-error',   failed.toLocaleString());
-        const tdRate = fmtCell('font-mono',              (c.success_rate || 0) + '%');
+        const tdRate = fmtCell('font-mono',              rate + '%');
 
         /* actions */
         const tdAct = document.createElement('td');
@@ -362,6 +619,13 @@
             mkBtn('pause', '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>', 'Pause', () => pauseCampaign(c.id));
         if (c.status === 'paused')
             mkBtn('resume', '<polygon points="5 3 19 12 5 21 5 3"/>', 'Resume', () => resumeCampaign(c.id));
+        if (c.status === 'draft' || c.status === 'scheduled') {
+            const editBtn = document.createElement('a');
+            editBtn.href = `/campaigns/${c.id}/edit`;
+            editBtn.className = 'act-btn edit';
+            editBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Edit';
+            wrap.appendChild(editBtn);
+        }
         mkBtn('', '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>', 'Clone', () => cloneCampaign(c.id));
         if (['draft', 'failed', 'cancelled', 'completed'].includes(c.status))
             mkBtn('del', '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>', 'Delete', () => deleteCampaign(c.id, c.name));
@@ -413,7 +677,12 @@
             tbody.appendChild(tr);
             return;
         }
-        list.forEach(c => tbody.appendChild(buildRow(c)));
+        list.forEach(c => {
+            tbody.appendChild(buildRow(c));
+            var dr = buildDetailRow(c);
+            if (_openDetails[c.id]) dr.style.display = '';
+            tbody.appendChild(dr);
+        });
     }
 
     function filteredList() {
@@ -452,19 +721,109 @@
         } catch { showToast('Delete failed', 'error'); }
     }
 
-    /* ── Socket live-updates ───────────────────────────────────────────── */
-    socket.on('campaign_status_update', data => {
-        const c = allCampaigns.find(x => x.id === data.campaign_id);
-        if (c) { Object.assign(c, data); renderTable(filteredList()); updateStats(allCampaigns); }
-    });
-    socket.on('campaign_progress', data => {
-        const c = allCampaigns.find(x => x.id === data.campaign_id);
-        if (c) {
-            if (data.sent    !== undefined) c.sent_count        = data.sent;
-            if (data.failed  !== undefined) c.failed_count      = data.failed;
-            if (data.total   !== undefined) c.total_recipients  = data.total;
-            renderTable(filteredList());
+    /* ── Surgical row helpers ─────────────────────────────────────────── */
+    function patchRow(c) {
+        var tbody = document.getElementById('campaigns-tbody');
+        var tr = tbody ? tbody.querySelector('tr[data-id="' + c.id + '"]') : null;
+        if (!tr) return;
+        var cells = tr.cells;
+        if (cells.length < 7) return;
+        var total  = c.total_recipients || 0;
+        var sent   = c.sent_count       || 0;
+        var failed = c.failed_count     || 0;
+        var pct    = total > 0 ? Math.min(100, Math.round((sent + failed) / total * 100)) : 0;
+        var rate   = c.send_rate != null ? c.send_rate : 0;
+        var sc     = STATUS_CFG[c.status] || { cls: 'badge-info', label: c.status || '—' };
+        var badge  = cells[2].querySelector('.badge');
+        if (badge) { badge.className = 'badge ' + sc.cls; badge.textContent = sc.label; }
+        cells[3].innerHTML = '<div class="prog-wrap"><span class="prog-pct">' + pct + '%</span><div class="prog-bar"><div class="prog-fill" style="width:' + pct + '%"></div></div></div>';
+        cells[4].textContent = sent.toLocaleString();
+        cells[5].textContent = failed.toLocaleString();
+        cells[6].textContent = rate + '%';
+    }
+
+    function replaceRow(c) {
+        var tbody = document.getElementById('campaigns-tbody');
+        if (!tbody) return;
+        var oldTr = tbody.querySelector('tr[data-id="' + c.id + '"]');
+        var oldDr = document.getElementById('detail-' + c.id);
+        var newTr = buildRow(c);
+        var newDr = buildDetailRow(c);
+        if (_openDetails[c.id]) newDr.style.display = '';
+        if (oldTr) { oldTr.replaceWith(newTr); } else { tbody.appendChild(newTr); }
+        if (oldDr) { oldDr.replaceWith(newDr); } else { newTr.insertAdjacentElement('afterend', newDr); }
+    }
+
+    var _patchQueue = new Set();
+    var _rafPending = false;
+    function schedulePatch(id) {
+        _patchQueue.add(id);
+        if (!_rafPending) {
+            _rafPending = true;
+            requestAnimationFrame(function() {
+                _rafPending = false;
+                _patchQueue.forEach(function(qid) {
+                    var c = allCampaigns.find(function(x) { return x.id === qid; });
+                    if (c) { patchRow(c); refreshDetailRow(c); }
+                });
+                _patchQueue.clear();
+                updateStats(allCampaigns);
+            });
         }
+    }
+
+    /* ── Socket live-updates ───────────────────────────────────────────── */
+    socket.on('campaign_started', function(data) {
+        var c = allCampaigns.find(function(x) { return x.id === data.campaign_id; });
+        if (c) {
+            c.status = 'sending';
+            if (data.timestamp) c.started_at = data.timestamp;
+            replaceRow(c);
+            updateStats(allCampaigns);
+        }
+    });
+
+    socket.on('campaign_progress', function(data) {
+        var c = allCampaigns.find(function(x) { return x.id === data.campaign_id; });
+        if (!c) return;
+        // initial event shape: {total, sent, failed, status:'sending'}
+        if (data.status !== undefined) c.status           = data.status;
+        if (data.total  !== undefined) c.total_recipients = data.total;
+        if (data.sent   !== undefined) c.sent_count       = data.sent;
+        if (data.failed !== undefined) c.failed_count     = data.failed;
+        // per-email event shape: {index, success:bool, percent, recipient}
+        if (data.success !== undefined) {
+            if (data.success) c.sent_count   = (c.sent_count   || 0) + 1;
+            else              c.failed_count = (c.failed_count || 0) + 1;
+        }
+        if (c.total_recipients)
+            c.send_rate = Math.round((c.sent_count || 0) / c.total_recipients * 1000) / 10;
+        schedulePatch(c.id);
+    });
+
+    socket.on('campaign_complete', function(data) {
+        var c = allCampaigns.find(function(x) { return x.id === data.campaign_id; });
+        if (c) {
+            c.status = data.status;
+            if (data.stats) {
+                if (data.stats.sent   !== undefined) c.sent_count   = data.stats.sent;
+                if (data.stats.failed !== undefined) c.failed_count = data.stats.failed;
+            }
+            if (c.total_recipients)
+                c.send_rate = Math.round((c.sent_count || 0) / c.total_recipients * 1000) / 10;
+            replaceRow(c);
+            updateStats(allCampaigns);
+        }
+    });
+
+    socket.on('campaign_error', function(data) {
+        var c = allCampaigns.find(function(x) { return x.id === data.campaign_id; });
+        if (c) {
+            c.status = 'failed';
+            replaceRow(c);
+            updateStats(allCampaigns);
+        }
+        showToast('Campaign error: ' + (data.error || 'Unknown error'), 'error');
     });
 
     loadCampaigns();

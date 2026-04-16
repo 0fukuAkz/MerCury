@@ -22,8 +22,7 @@ def test_tracking_generate_unsubscribe_url(tracking_service, monkeypatch):
     # Refresh base_url if needed or just instantiate with it
     ts = TrackingService(base_url="http://app.com")
     url = ts.generate_unsubscribe_link("log123", "user@test.com")
-    assert "http://app.com/track/unsubscribe" in url
-    assert "token=" in url
+    assert "http://app.com/track/unsubscribe/log123/" in url
 
 @pytest.mark.asyncio
 async def test_tracking_record_open(tracking_service):

@@ -159,11 +159,7 @@ class TrackingService:
             expires_days=365
         )
         
-        params = urlencode({
-            'token': token,
-            'list': list_id or 'default'
-        })
-        return f"{self.base_url}/track/unsubscribe/{email_id}?{params}"
+        return f"{self.base_url}/track/unsubscribe/{email_id}/{token}"
     
     def inject_tracking(
         self,

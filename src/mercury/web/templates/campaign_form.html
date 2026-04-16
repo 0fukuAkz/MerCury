@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}New Campaign - MerCury{% endblock %}
+{% block title %}{% if campaign %}Edit Campaign{% else %}New Campaign{% endif %} - MerCury{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -314,8 +314,8 @@
 {% block content %}
 <div class="page-header flex justify-between items-center">
     <div>
-        <h1 class="page-title">New Campaign</h1>
-        <p class="page-description">Configure and launch a new email campaign</p>
+        <h1 class="page-title">{% if campaign %}Edit Campaign{% else %}New Campaign{% endif %}</h1>
+        <p class="page-description">{% if campaign %}Update campaign settings{% else %}Configure and launch a new email campaign{% endif %}</p>
     </div>
     <a href="/campaigns" class="btn btn-secondary">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -325,7 +325,7 @@
     </a>
 </div>
 
-<form id="campaign-form" onsubmit="createCampaign(event)" novalidate>
+<form id="campaign-form" onsubmit="submitCampaign(event)" novalidate>
 <div class="form-layout">
 
     <!-- LEFT: tabbed form -->
@@ -400,12 +400,20 @@
                     <label class="form-label">Reply-To</label>
                     <input type="email" class="form-input" name="reply_to" placeholder="reply@example.com">
                 </div>
-                <div class="form-group">
-                    <label class="form-label">Template Path</label>
-                    <input type="text" class="form-input" name="template_path"
-                        placeholder="templates/email.html">
-                    <div class="form-hint">Primary template. For A/B variants use the Rotation tab.</div>
+                <div class="form-group" style="margin-bottom:0.75rem">
+                    <label class="form-label">Template</label>
+                    <select class="form-select form-input" id="templateSelect" onchange="onTemplateSelect(this)">
+                        <option value="">— Loading templates… —</option>
+                    </select>
+                    <div class="form-hint">Select a saved template or choose &ldquo;Custom path&rdquo; to enter a file path.</div>
                 </div>
+                <div class="form-group" id="customPathGroup" style="display:none">
+                    <label class="form-label">Custom Template Path</label>
+                    <input type="text" class="form-input" name="template_path" id="templatePathInput"
+                        placeholder="templates/email.html">
+                    <div class="form-hint">Path to an HTML file on disk. For A/B variants use the Rotation tab.</div>
+                </div>
+                <input type="hidden" name="template_id" id="templateIdInput" value="">
             </div>
         </div>
 
@@ -454,93 +462,34 @@
         <div class="tab-pane" id="tab-delivery">
             <div class="form-section" style="margin-bottom:1rem">
                 <div class="section-title">SMTP Servers</div>
-                <div class="fg fg-2">
-                    <div class="form-group">
-                        <label class="form-label">Server List</label>
-                        <textarea class="form-textarea" name="smtp_hosts_list" rows="4"
-                            placeholder="smtp1.example.com:587:user1:pass1&#10;smtp2.example.com:465:user2:pass2"></textarea>
-                        <div class="form-hint">
-                            Format: <code style="font-size:0.7rem">host:port:username:password</code><br>
-                            Leave empty to use configured servers.
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Rotation Strategy</label>
-                        <select class="form-select form-input" name="smtp_rotation">
-                            <option value="round_robin">Round Robin</option>
-                            <option value="weighted" selected>Weighted</option>
-                            <option value="random">Random</option>
-                            <option value="failover">Failover</option>
-                        </select>
-                        <div class="form-hint" style="margin-top:0.4rem">How to rotate between SMTP servers.</div>
-                    </div>
+                <div style="display:flex;align-items:center;gap:0.6rem;padding:0.65rem 0.9rem;background:rgba(0,255,255,0.05);border:1px solid rgba(0,255,255,0.2);border-radius:var(--radius);font-size:0.78rem;color:var(--text-secondary)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--neon-cyan)" stroke-width="2" style="flex-shrink:0">
+                        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                    </svg>
+                    SMTP servers and rotation strategy are managed in
+                    <a href="/smtp" style="color:var(--neon-cyan);text-decoration:none;font-weight:600">SMTP Settings</a>.
                 </div>
             </div>
 
             <div class="form-section" style="margin-bottom:1rem">
                 <div class="section-title">Proxy Configuration</div>
-                <div class="fg fg-2">
-                    <div class="form-group">
-                        <label class="form-label">Proxy List</label>
-                        <textarea class="form-textarea" name="proxies_list" rows="4"
-                            placeholder="proxy1.example.com:8080&#10;host:port:user:pass&#10;socks5://proxy3.example.com:1080"></textarea>
-                        <div class="form-hint">
-                            <code style="font-size:0.7rem">host:port</code> or <code style="font-size:0.7rem">host:port:user:pass</code><br>
-                            Prefix with <code style="font-size:0.7rem">socks5://</code> for SOCKS proxies.
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Proxy Rotation</label>
-                        <select class="form-select form-input" name="proxy_rotation">
-                            <option value="none">None (No Proxy)</option>
-                            <option value="round_robin">Round Robin</option>
-                            <option value="random">Random</option>
-                            <option value="per_email">Per Email</option>
-                        </select>
-                        <div class="form-hint" style="margin-top:0.4rem">How to cycle through proxies.</div>
-                    </div>
+                <div style="display:flex;align-items:center;gap:0.6rem;padding:0.65rem 0.9rem;background:rgba(0,255,255,0.05);border:1px solid rgba(0,255,255,0.2);border-radius:var(--radius);font-size:0.78rem;color:var(--text-secondary)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--neon-cyan)" stroke-width="2" style="flex-shrink:0">
+                        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                    </svg>
+                    Proxy list and rotation are configured under
+                    <a href="/settings" style="color:var(--neon-cyan);text-decoration:none;font-weight:600">Global Settings → Proxies &amp; SMTP</a>.
                 </div>
             </div>
 
             <div class="form-section">
                 <div class="section-title">Rate &amp; Concurrency</div>
-                <div class="fg fg-3" style="margin-bottom:1rem">
-                    <div class="form-group">
-                        <label class="form-label">Concurrency</label>
-                        <input type="number" class="form-input" name="concurrency" value="50" min="1">
-                        <div class="form-hint">Parallel connections</div>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Rate / min</label>
-                        <input type="number" class="form-input" name="rate_per_minute" value="30" min="0">
-                        <div class="form-hint">0 = unlimited</div>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Rate / hour</label>
-                        <input type="number" class="form-input" name="rate_per_hour" value="500" min="0">
-                        <div class="form-hint">0 = unlimited</div>
-                    </div>
-                </div>
-                <div class="fg fg-3">
-                    <div class="form-group">
-                        <label class="form-label">Chunk Size</label>
-                        <input type="number" class="form-input" name="chunk_size" value="1000" min="1">
-                        <div class="form-hint">Emails per batch</div>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Pause (sec)</label>
-                        <input type="number" class="form-input" name="pause_between_chunks" value="0" min="0">
-                        <div class="form-hint">Between batches</div>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Rotation</label>
-                        <select class="form-select form-input" name="rotation_strategy">
-                            <option value="round_robin">Round Robin</option>
-                            <option value="weighted">Weighted</option>
-                            <option value="random">Random</option>
-                            <option value="sequential">Sequential</option>
-                        </select>
-                    </div>
+                <div style="display:flex;align-items:center;gap:0.6rem;padding:0.65rem 0.9rem;background:rgba(0,255,255,0.05);border:1px solid rgba(0,255,255,0.2);border-radius:var(--radius);font-size:0.78rem;color:var(--text-secondary)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--neon-cyan)" stroke-width="2" style="flex-shrink:0">
+                        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                    </svg>
+                    Rate limits, concurrency and batch size are inherited from
+                    <a href="/settings" style="color:var(--neon-cyan);text-decoration:none;font-weight:600">Global Settings</a>.
                 </div>
             </div>
         </div>
@@ -549,19 +498,43 @@
         <div class="tab-pane" id="tab-recipients">
             <div class="form-section">
                 <div class="section-title">Recipient List</div>
-                <div class="fg fg-2" style="margin-bottom:1rem">
-                    <div class="form-group">
-                        <label class="form-label">Recipients File <span class="req">*</span></label>
-                        <input type="text" class="form-input" name="recipients_path" required
-                            placeholder="data/recipients.csv">
-                        <div class="form-hint">CSV or TXT. Extra columns become placeholders.</div>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Email Column</label>
-                        <input type="text" class="form-input" name="email_column" value="email" placeholder="email">
-                        <div class="form-hint">Column name that contains email addresses.</div>
+
+                <!-- Source toggle -->
+                <div style="display:flex;gap:0.25rem;margin-bottom:1rem">
+                    <button type="button" class="tab-btn active" id="srcBtnFile"
+                        onclick="setRecipientsSource('file', this)">From File</button>
+                    <button type="button" class="tab-btn" id="srcBtnManual"
+                        onclick="setRecipientsSource('manual', this)">Paste Emails</button>
+                </div>
+
+                <!-- File source -->
+                <div id="recipientsFileGroup">
+                    <div class="fg fg-2" style="margin-bottom:1rem">
+                        <div class="form-group">
+                            <label class="form-label">Recipients File</label>
+                            <input type="text" class="form-input" name="recipients_path" id="recipientsPathInput"
+                                placeholder="data/recipients.csv">
+                            <div class="form-hint">CSV or TXT. Extra columns become placeholders.</div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Email Column</label>
+                            <input type="text" class="form-input" name="email_column" value="email" placeholder="email">
+                            <div class="form-hint">Column name that contains email addresses.</div>
+                        </div>
                     </div>
                 </div>
+
+                <!-- Manual source -->
+                <div id="recipientsManualGroup" style="display:none;margin-bottom:1rem">
+                    <div class="form-group">
+                        <label class="form-label">Email Addresses</label>
+                        <textarea class="form-textarea" id="manualRecipientsInput" rows="8"
+                            placeholder="alice@example.com&#10;bob@example.com&#10;carol@company.org"
+                            style="font-size:0.8rem"></textarea>
+                        <div class="form-hint">One email per line, or comma/semicolon separated. Duplicates are removed automatically.</div>
+                    </div>
+                </div>
+
                 <div class="toggle-row">
                     <label class="toggle">
                         <input type="checkbox" name="validate_emails" id="validateEmails" checked>
@@ -699,12 +672,12 @@
                 <span class="toggle-label" style="font-weight:600">Dry Run</span>
             </label>
             <div style="flex:1"></div>
-            <a href="/campaigns" class="btn btn-secondary">Cancel</a>
+            <a href="/campaigns" class="btn btn-secondary" onclick="clearDraft()">Cancel</a>
             <button type="submit" class="btn btn-primary" id="submit-btn">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="display:inline;vertical-align:-1px">
                     <polyline points="22 2 15 22 11 13 2 9 22 2"/>
                 </svg>
-                Create Campaign
+                {% if campaign %}Save Changes{% else %}Create Campaign{% endif %}
             </button>
         </div>
     </div>
@@ -760,12 +733,216 @@
 <div id="toast-container"></div>
 
 <script>
+    /* ── Edit-mode seed data ─────────────────────────────────────────────── */
+    var EDIT_CAMPAIGN = {{ campaign | safe if campaign else 'null' }};
+    var EDIT_MODE = !!EDIT_CAMPAIGN;
+
+    /* ── Draft autosave (localStorage) ──────────────────────────────────── */
+    var DRAFT_KEY = EDIT_MODE ? ('mercury_campaign_edit_' + EDIT_CAMPAIGN.id) : 'mercury_campaign_new';
+    var _pendingDraftTemplateVal = null;
+    var _saveDraftTimer = null;
+
+    function _serializeDraft() {
+        var d = {};
+        document.querySelectorAll('#campaign-form [name]').forEach(function(el) {
+            if (!el.name) return;
+            if (el.type === 'checkbox') d[el.name] = el.checked;
+            else d[el.name] = el.value;
+        });
+        d.__src  = _recipientsSource;
+        d.__man  = document.getElementById('manualRecipientsInput').value;
+        d.__tmpl = document.getElementById('templateSelect').value;
+        return d;
+    }
+
+    function _applyDraft(d) {
+        document.querySelectorAll('#campaign-form [name]').forEach(function(el) {
+            if (!(el.name in d)) return;
+            if (el.type === 'checkbox') el.checked = !!d[el.name];
+            else el.value = d[el.name] !== undefined ? d[el.name] : '';
+        });
+        if (d.__src) {
+            var srcBtn = d.__src === 'manual'
+                ? document.getElementById('srcBtnManual')
+                : document.getElementById('srcBtnFile');
+            setRecipientsSource(d.__src, srcBtn);
+        }
+        if (d.__man !== undefined)
+            document.getElementById('manualRecipientsInput').value = d.__man;
+        if (d.__tmpl) _pendingDraftTemplateVal = d.__tmpl;
+        var dryEl = document.querySelector('[name="dry_run"]');
+        if (dryEl) document.getElementById('dry-run-banner').classList.toggle('hidden', !dryEl.checked);
+    }
+
+    function clearDraft() {
+        try { localStorage.removeItem(DRAFT_KEY); } catch(e) {}
+    }
+
+    function scheduleSaveDraft() {
+        clearTimeout(_saveDraftTimer);
+        _saveDraftTimer = setTimeout(function() {
+            try { localStorage.setItem(DRAFT_KEY, JSON.stringify(_serializeDraft())); } catch(e) {}
+        }, 400);
+    }
+
     /* ── Tab switching ───────────────────────────────────────────────────── */
     function switchTab(name, btn) {
         document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         document.getElementById('tab-' + name).classList.add('active');
         btn.classList.add('active');
+    }
+
+    /* ── Recipients source toggle ────────────────────────────────────────── */
+    var _recipientsSource = 'file';
+    function setRecipientsSource(type, btn) {
+        _recipientsSource = type;
+        document.getElementById('recipientsFileGroup').style.display   = type === 'file'   ? '' : 'none';
+        document.getElementById('recipientsManualGroup').style.display = type === 'manual' ? '' : 'none';
+        document.querySelectorAll('#srcBtnFile, #srcBtnManual').forEach(function(b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+    }
+
+    /* ── Template picker ─────────────────────────────────────────────────── */
+    var _savedTemplates = [];
+    async function loadTemplates() {
+        try {
+            var res = await fetch('/api/templates');
+            var json = await res.json();
+            _savedTemplates = json.templates || [];
+        } catch (e) {
+            _savedTemplates = [];
+        }
+        var sel = document.getElementById('templateSelect');
+        sel.innerHTML = '<option value="">\u2014 No template \u2014</option>';
+        _savedTemplates.forEach(function(t) {
+            var opt = document.createElement('option');
+            opt.value = t.id;
+            opt.textContent = t.name + (t.subject ? '  \u2014  ' + t.subject : '');
+            opt.dataset.subject  = t.subject  || '';
+            opt.dataset.fromName = t.from_name || '';
+            opt.dataset.htmlPath = t.html_path || '';
+            sel.appendChild(opt);
+        });
+        var custom = document.createElement('option');
+        custom.value = '__custom__';
+        custom.textContent = '\u2014 Custom path \u2014';
+        sel.appendChild(custom);
+        // Restore pending draft template selection
+        if (_pendingDraftTemplateVal) {
+            var pv = _pendingDraftTemplateVal;
+            _pendingDraftTemplateVal = null;
+            if (sel.querySelector('option[value="' + pv + '"]')) {
+                sel.value = pv;
+                onTemplateSelect(sel);
+            }
+        }
+    }
+
+    function onTemplateSelect(sel) {
+        var v = sel.value;
+        var customGroup = document.getElementById('customPathGroup');
+        var templateId  = document.getElementById('templateIdInput');
+        var pathInput   = document.getElementById('templatePathInput');
+        if (v === '__custom__') {
+            customGroup.style.display = '';
+            templateId.value = '';
+        } else if (v === '') {
+            customGroup.style.display = 'none';
+            templateId.value = '';
+            pathInput.value  = '';
+        } else {
+            customGroup.style.display = 'none';
+            templateId.value = v;
+            // Auto-fill subject/from_name from saved template
+            var opt = sel.options[sel.selectedIndex];
+            if (opt.dataset.subject && !document.querySelector('[name="subject"]').value)
+                document.querySelector('[name="subject"]').value = opt.dataset.subject;
+            if (opt.dataset.fromName && !document.querySelector('[name="from_name"]').value)
+                document.querySelector('[name="from_name"]').value = opt.dataset.fromName;
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        loadTemplates();
+        if (EDIT_MODE) {
+            prefillForm(EDIT_CAMPAIGN);
+        } else {
+            // Restore unsaved draft from localStorage
+            try {
+                var saved = localStorage.getItem(DRAFT_KEY);
+                if (saved) _applyDraft(JSON.parse(saved));
+            } catch(e) {}
+        }
+        // Autosave on every input/change
+        var form = document.getElementById('campaign-form');
+        form.addEventListener('input',  scheduleSaveDraft);
+        form.addEventListener('change', scheduleSaveDraft);
+    });
+
+    /* ── Pre-fill form from existing campaign data ───────────────────────── */
+    function prefillForm(c) {
+        var set = function(sel, val) {
+            var el = document.querySelector(sel);
+            if (el && val !== null && val !== undefined) el.value = val;
+        };
+        var check = function(sel, val) {
+            var el = document.querySelector(sel);
+            if (el) el.checked = !!val;
+        };
+
+        set('[name="name"]',        c.name);
+        set('[name="description"]', c.description);
+        set('[name="type"]',        c.type);
+        set('[name="from_email"]',  c.from_email);
+        set('[name="from_name"]',   c.from_name);
+        set('[name="reply_to"]',    c.reply_to);
+
+        // Rotation from_names / from_emails lists
+        if (c.from_names && c.from_names.length)
+            set('[name="from_names_list"]', c.from_names.join('\n'));
+        if (c.from_emails && c.from_emails.length)
+            set('[name="from_emails_list"]', c.from_emails.join('\n'));
+
+        // Subject — use first entry from subjects array or fall back
+        var subj = (c.subjects && c.subjects.length) ? c.subjects[0] : '';
+        set('[name="subject"]', subj);
+        // Additional subject variants
+        if (c.subjects && c.subjects.length > 1)
+            set('[name="subjects_list"]', c.subjects.slice(1).join('\n'));
+
+        // Template
+        if (c.template_id) {
+            document.getElementById('templateIdInput').value = c.template_id;
+            // Select the matching option once templates load (poll briefly)
+            var tries = 0;
+            var poll = setInterval(function() {
+                var sel = document.getElementById('templateSelect');
+                var opt = sel.querySelector('option[value="' + c.template_id + '"]');
+                if (opt || ++tries > 20) {
+                    clearInterval(poll);
+                    if (opt) sel.value = c.template_id;
+                }
+            }, 100);
+        }
+
+        // Recipients
+        if (c.settings && c.settings.manual_recipients && c.settings.manual_recipients.length) {
+            setRecipientsSource('manual', document.getElementById('srcBtnManual'));
+            document.getElementById('manualRecipientsInput').value = c.settings.manual_recipients.join('\n');
+        } else {
+            // recipients_path is now surfaced at top-level of campaign dict
+            set('[name="recipients_path"]', c.recipients_path || (c.settings && c.settings.recipients_path) || '');
+        }
+
+        // Toggles — prefer top-level dry_run (surfaced from settings in to_dict); fall back to settings
+        check('[name="dry_run"]',        c.dry_run !== undefined ? c.dry_run : (c.settings && c.settings.dry_run));
+        check('[name="enable_qr_code"]', c.enable_qr_code);
+        check('[name="send_as_image"]',  c.convert_to_image);
+
+        // Dry-run banner
+        var dryEl = document.querySelector('[name="dry_run"]');
+        if (dryEl) document.getElementById('dry-run-banner').classList.toggle('hidden', !dryEl.checked);
     }
 
     /* ── Toast ───────────────────────────────────────────────────────────── */
@@ -810,13 +987,13 @@
         }
     }
 
-    /* ── Form submission ─────────────────────────────────────────────────── */
-    async function createCampaign(event) {
+    /* ── Form submission (create or update) ─────────────────────────────── */
+    async function submitCampaign(event) {
         event.preventDefault();
 
         var btn = document.getElementById('submit-btn');
         btn.disabled = true;
-        btn.textContent = 'Creating…';
+        btn.textContent = EDIT_MODE ? 'Saving…' : 'Creating…';
 
         var formData = new FormData(event.target);
         var data = {};
@@ -827,10 +1004,19 @@
             'enable_tracking', 'track_opens', 'track_clicks',
             'enable_bounce_filtering', 'convert_attachment'
         ];
-        var intFields = [
-            'concurrency', 'rate_per_minute', 'rate_per_hour',
-            'chunk_size', 'pause_between_chunks'
-        ];
+        var intFields = [];
+
+        // Manual recipients: parse textarea into array and inject
+        if (_recipientsSource === 'manual') {
+            var raw = document.getElementById('manualRecipientsInput').value;
+            var emails = raw.split(/[\n,;]+/)
+                .map(function(s) { return s.trim().toLowerCase(); })
+                .filter(function(s) { return s.length > 0; });
+            // Deduplicate
+            emails = emails.filter(function(v, i, arr) { return arr.indexOf(v) === i; });
+            data['manual_recipients'] = emails;
+            delete data['recipients_path'];
+        }
 
         formData.forEach(function(value, key) {
             if (checkboxFields.includes(key)) data[key] = true;
@@ -848,8 +1034,6 @@
             from_emails_list: 'from_emails',
             templates_list:   'templates',
             links_list:       'links',
-            smtp_hosts_list:  'smtp_hosts',
-            proxies_list:     'proxies',
         };
         for (var raw in listFields) {
             var key = listFields[raw];
@@ -860,25 +1044,28 @@
         }
 
         try {
-            var res = await fetch('/api/campaigns', {
-                method:  'POST',
+            var url    = EDIT_MODE ? '/api/campaigns/' + EDIT_CAMPAIGN.id : '/api/campaigns';
+            var method = EDIT_MODE ? 'PUT' : 'POST';
+            var res = await fetch(url, {
+                method:  method,
                 headers: { 'Content-Type': 'application/json' },
                 body:    JSON.stringify(data),
             });
             var result = await res.json();
 
             if (result.success) {
-                showToast('Campaign created!', 'success');
+                clearDraft();
+                showToast(EDIT_MODE ? 'Campaign saved!' : 'Campaign created!', 'success');
                 setTimeout(function() { window.location.href = '/campaigns'; }, 900);
             } else {
-                showToast(result.error || 'Failed to create campaign', 'error');
+                showToast(result.error || (EDIT_MODE ? 'Failed to save campaign' : 'Failed to create campaign'), 'error');
                 btn.disabled = false;
-                btn.textContent = 'Create Campaign';
+                btn.textContent = EDIT_MODE ? 'Save Changes' : 'Create Campaign';
             }
         } catch (err) {
             showToast('Network error: ' + err.message, 'error');
             btn.disabled = false;
-            btn.textContent = 'Create Campaign';
+            btn.textContent = EDIT_MODE ? 'Save Changes' : 'Create Campaign';
         }
     }
 </script>

@@ -114,6 +114,7 @@ class SMTPServer(Base, BaseModel):
     def get_connection_config(self) -> dict:
         """Get configuration dict for SMTP connection."""
         return {
+            'name': self.name,
             'host': self.host,
             'port': self.port,
             'username': self.username,
@@ -129,9 +130,10 @@ class SMTPServer(Base, BaseModel):
     def to_dict(self) -> dict:
         """Convert to dictionary excluding sensitive fields."""
         result = super().to_dict()
-        # Remove protected fields
+        # Remove protected fields but expose whether a password is configured
         result.pop('password', None)
         result.pop('_password', None)
+        result['has_password'] = bool(self._password)
         return result
 
     def __repr__(self):

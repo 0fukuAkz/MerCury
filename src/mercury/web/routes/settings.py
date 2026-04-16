@@ -2,12 +2,14 @@
 
 import logging
 from flask import Blueprint, render_template, request, flash, redirect, url_for
+from flask_login import login_required
 from ...services.settings_service import SettingsService
 
 settings_bp = Blueprint('settings', __name__, url_prefix='/settings')
 logger = logging.getLogger(__name__)
 
 @settings_bp.route('/', methods=['GET', 'POST'])
+@login_required
 def index():
     """Global settings dashboard."""
     settings = SettingsService.get_settings()

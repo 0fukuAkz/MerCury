@@ -34,6 +34,11 @@ def configure_logging(
         stream=sys.stdout,
         level=getattr(logging, level.upper())
     )
+
+    # Silence noisy third-party loggers in non-debug mode
+    if not is_development:
+        for _noisy in ('engineio', 'socketio', 'werkzeug', 'aiosmtplib', 'asyncio'):
+            logging.getLogger(_noisy).setLevel(logging.WARNING)
     
     # Add file handler if specified
     if log_file:

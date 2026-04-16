@@ -1,21 +1,62 @@
 """Tracking routes."""
 
-from flask import Blueprint, request, abort, make_response
-from ...services.tracking_service import TrackingService, TRACKING_PIXEL_GIF
+from urllib.parse import urlparse
+from flask import Blueprint, request, abort, make_response, redirect
+from ...services.tracking_service import TrackingService, TRACKING_PIXEL_GIF, _email_id_registry
+from ...data.database import get_session_direct
+from ...data.models import EmailLog
 
 tracking_bp = Blueprint('tracking', __name__, url_prefix='/track')
+
+def _safe_redirect_url(url: str) -> str:
+    """Return url if it uses http/https, otherwise fall back to '/'."""
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme and parsed.scheme.lower() not in ('http', 'https'):
+            return '/'
+    except Exception:
+        return '/'
+    return url or '/'
+
+
+def _lookup_recipient(email_id: str) -> str:
+    """Look up recipient email from the email_id registry."""
+    return _email_id_registry.get(email_id, '')
+
+
+def _update_email_log(email_id: str, event_type: str):
+    """Update EmailLog open/click counts in the database."""
+    try:
+        session = get_session_direct()
+        try:
+            log = session.query(EmailLog).filter(
+                EmailLog.correlation_id == email_id
+            ).first()
+            if log:
+                if event_type == 'open':
+                    log.open_count = (log.open_count or 0) + 1
+                elif event_type == 'click':
+                    log.click_count = (log.click_count or 0) + 1
+                session.commit()
+        finally:
+            session.close()
+    except Exception:
+        pass  # Best-effort; don't break tracking response
+
 
 @tracking_bp.route('/open/<email_id>')
 def track_open(email_id):
     """Track email open via 1x1 transparent pixel."""
+    recipient = _lookup_recipient(email_id)
     service = TrackingService()
     service.record_event(
         email_id=email_id,
         event_type='open',
-        recipient='',  # Would be looked up from email_id via service logic if expanded
+        recipient=recipient,
         ip_address=request.remote_addr,
         user_agent=request.user_agent.string if request.user_agent else ''
     )
+    _update_email_log(email_id, 'open')
     
     response = make_response(TRACKING_PIXEL_GIF)
     response.headers['Content-Type'] = 'image/gif'
@@ -27,20 +68,20 @@ def track_open(email_id):
 @tracking_bp.route('/click/<email_id>')
 def track_click(email_id):
     """Track link click and redirect to destination."""
-    url = request.args.get('url', '/')
+    url = _safe_redirect_url(request.args.get('url', '/'))
     link_id = request.args.get('lid')
     
+    recipient = _lookup_recipient(email_id)
     service = TrackingService()
     service.record_event(
         email_id=email_id,
         event_type='click',
-        recipient='',
+        recipient=recipient,
         ip_address=request.remote_addr,
         user_agent=request.user_agent.string if request.user_agent else '',
-        extra_data={'url': url, 'link_id': link_id}
+        metadata={'url': url, 'link_id': link_id}
     )
-    
-    from flask import redirect
+    _update_email_log(email_id, 'click')    
     return redirect(url)
 
 @tracking_bp.route('/unsubscribe/<email_id>/<token>')
@@ -51,11 +92,12 @@ def track_unsubscribe(email_id, token):
     if not validate_unsubscribe_token(email_id, token):
         abort(403, 'Invalid unsubscribe token')
     
+    recipient = _lookup_recipient(email_id)
     service = TrackingService()
     service.record_event(
         email_id=email_id,
         event_type='unsubscribe',
-        recipient='',
+        recipient=recipient,
         ip_address=request.remote_addr,
         user_agent=request.user_agent.string if request.user_agent else ''
     )

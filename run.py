@@ -260,13 +260,30 @@ def main():
         import shutil
         gunicorn_path = shutil.which("gunicorn") or str(Path(sys.executable).parent / "gunicorn")
 
+        is_debug = os.environ.get('FLASK_DEBUG', '0').lower() in ('true', '1')
+
+        # In debug mode: all output to stdout, full access log
+        # In normal mode: access log goes to file only, warnings+ to stdout
+        if is_debug:
+            log_args = [
+                "--log-level", "debug",
+                "--access-logfile", "-",
+            ]
+        else:
+            log_dir = ROOT_DIR / "logs"
+            log_dir.mkdir(parents=True, exist_ok=True)
+            log_args = [
+                "--log-level", "warning",
+                "--access-logfile", str(log_dir / "access.log"),
+                "--error-logfile", "-",
+            ]
+
         cmd = [
             gunicorn_path,
             "--worker-class", "eventlet",
             "-w", "1",
             "--bind", "0.0.0.0:5000",
-            "--log-level", "info",
-            "--access-logfile", "-",
+            *log_args,
             "mercury.web.app:create_app()",
         ]
 

@@ -427,76 +427,87 @@ class ImageGenerator:
         format: Optional[str] = None
     ) -> bytes:
         """
-        Generate image from HTML using PIL.
-        
-        This is a simplified version that renders basic HTML.
-        For full HTML rendering, use a headless browser.
-        
+        Generate image from HTML using WeasyPrint (falls back to PIL).
+
         Args:
             html_content: HTML to render
             output_path: Optional save path
-            width: Image width
+            width: Image width (used for PIL fallback only)
             format: Image format (PNG, JPEG)
-            
+
         Returns:
             Image bytes
         """
-        from PIL import Image, ImageDraw, ImageFont
-        import re
-        import html
-        
-        width = width or self.config.image_width
+        import logging as _logging
+        _log = _logging.getLogger(__name__)
+
         format = format or self.config.image_format
-        
-        # Strip HTML tags
-        text = re.sub(r'<[^>]+>', '\n', html_content)
-        text = html.unescape(text)
-        lines = [line.strip() for line in text.split('\n') if line.strip()]
-        
-        # Create image
-        line_height = 25
-        padding = 20
-        height = max(len(lines) * line_height + padding * 2, 100)
-        
-        img = Image.new('RGB', (width, height), color='white')
-        draw = ImageDraw.Draw(img)
-        
-        # Try to load a font
+
+        # Preferred: WeasyPrint renders full HTML/CSS → PNG
         try:
-            font = ImageFont.truetype("arial.ttf", 14)
-        except (OSError, IOError):
-            font = ImageFont.load_default()
-        
-        # Draw text
-        y = padding
-        for line in lines:
-            # Word wrap
-            words = line.split()
-            current_line = ""
-            for word in words:
-                test_line = f"{current_line} {word}".strip()
-                bbox = draw.textbbox((0, 0), test_line, font=font)
-                if bbox[2] > width - padding * 2:
+            from weasyprint import HTML as WeasyHTML
+            image_bytes = WeasyHTML(string=html_content).write_png()
+
+            # Convert to JPEG if requested
+            if format.upper() == 'JPEG':
+                from PIL import Image as PILImage
+                img = PILImage.open(io.BytesIO(image_bytes)).convert('RGB')
+                buf = io.BytesIO()
+                img.save(buf, format='JPEG', quality=self.config.image_quality)
+                image_bytes = buf.getvalue()
+        except Exception as exc:
+            _log.warning(f"WeasyPrint HTML-to-image failed, falling back to PIL: {exc}")
+            # Fallback: PIL plain-text rendering
+            from PIL import Image, ImageDraw, ImageFont
+            import re
+            import html as _html
+
+            width = width or self.config.image_width
+
+            # Strip HTML tags
+            text = re.sub(r'<[^>]+>', '\n', html_content)
+            text = _html.unescape(text)
+            lines = [line.strip() for line in text.split('\n') if line.strip()]
+
+            line_height = 25
+            padding = 20
+            height = max(len(lines) * line_height + padding * 2, 100)
+
+            img = Image.new('RGB', (width, height), color='white')
+            draw = ImageDraw.Draw(img)
+
+            try:
+                font = ImageFont.truetype("arial.ttf", 14)
+            except (OSError, IOError):
+                font = ImageFont.load_default()
+
+            y = padding
+            for line in lines:
+                words = line.split()
+                current_line = ""
+                for word in words:
+                    test_line = f"{current_line} {word}".strip()
+                    bbox = draw.textbbox((0, 0), test_line, font=font)
+                    if bbox[2] > width - padding * 2:
+                        draw.text((padding, y), current_line, fill='black', font=font)
+                        y += line_height
+                        current_line = word
+                    else:
+                        current_line = test_line
+                if current_line:
                     draw.text((padding, y), current_line, fill='black', font=font)
                     y += line_height
-                    current_line = word
-                else:
-                    current_line = test_line
-            if current_line:
-                draw.text((padding, y), current_line, fill='black', font=font)
-                y += line_height
-        
-        buffer = io.BytesIO()
-        img.save(buffer, format=format, quality=self.config.image_quality)
-        buffer.seek(0)
-        
-        image_bytes = buffer.getvalue()
-        
+
+            buffer = io.BytesIO()
+            img.save(buffer, format=format, quality=self.config.image_quality)
+            buffer.seek(0)
+            image_bytes = buffer.getvalue()
+
         if output_path:
             os.makedirs(os.path.dirname(output_path) or '.', exist_ok=True)
             with open(output_path, 'wb') as f:
                 f.write(image_bytes)
-        
+
         return image_bytes
     
     def generate_data_url(

@@ -85,12 +85,14 @@ async def test_campaign_run_with_results(db_session, mock_campaign_config):
     res1.success = True
     res1.recipient = 'user1@test.com'
     res1.smtp_server = 'Server 1'
+    res1.correlation_id = 'test-corr-1'
     
     res2 = MagicMock()
     res2.success = False
     res2.recipient = 'user2@test.com'
     res2.error = 'Timeout'
     res2.error_type = 'network'
+    res2.correlation_id = 'test-corr-2'
     
     mock_result.results = [res1, res2]
     

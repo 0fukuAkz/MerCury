@@ -16,6 +16,7 @@ from ..features.rotation import RotationManager, RotationStrategy
 from .smtp_service import SMTPService
 from .tracking_service import TrackingService
 from .bounce_service import BounceService
+from .dead_letter_service import DeadLetterService
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +84,7 @@ class EmailService:
         self._attachment_generator: Optional[AttachmentGenerator] = None
         self._tracking_service: Optional[TrackingService] = None
         self._bounce_service: Optional[BounceService] = None
+        self._dead_letter_service: Optional[DeadLetterService] = None
         
         # Default configuration
         self.config = EmailConfig()
@@ -114,10 +116,10 @@ class EmailService:
         if config.subjects and len(config.subjects) > 1:
             self._rotation_manager.register('subjects', config.subjects, strategy)
         
-        if config.from_names and len(config.from_names) > 1:
+        if config.from_names and len(config.from_names) >= 1:
             self._rotation_manager.register('from_names', config.from_names, strategy)
         
-        if config.from_emails and len(config.from_emails) > 1:
+        if config.from_emails and len(config.from_emails) >= 1:
             self._rotation_manager.register('from_emails', config.from_emails, strategy)
         
         if config.templates and len(config.templates) > 1:
@@ -138,6 +140,15 @@ class EmailService:
         # Setup bounce service
         if config.enable_bounce_filtering:
             self._bounce_service = BounceService()
+        
+        # Setup dead letter service
+        try:
+            from ..data.database import get_session_direct
+            from ..data.repositories.dead_letter import DeadLetterRepository
+            session = get_session_direct()
+            self._dead_letter_service = DeadLetterService(DeadLetterRepository(session))
+        except Exception as e:
+            logger.warning(f"Dead letter service not available: {e}")
     
     def get_sender(self) -> AsyncEmailSender:
         """Get or create async email sender."""
@@ -189,6 +200,18 @@ class EmailService:
         placeholders = placeholders or {}
         placeholders['email'] = recipient
         
+        # Check bounce suppression
+        if self._bounce_service and self._bounce_service.is_suppressed(recipient):
+            logger.info(f"Skipping suppressed recipient: {recipient}")
+            return EmailResult(
+                success=False,
+                recipient=recipient,
+                correlation_id='',
+                timestamp=datetime.now(UTC),
+                error='Recipient is suppressed',
+                error_type='suppressed'
+            )
+        
         # Get rotating values
         if subject is None:
             if self._rotation_manager and self._rotation_manager.is_registered('subjects'):
@@ -225,11 +248,12 @@ class EmailService:
             html_body = f"<p>Email to {recipient}</p>"
         
         # Inject tracking if enabled
+        tracking_email_id = None
         if self._tracking_service and self.config.enable_tracking:
-            email_id = self._tracking_service.generate_email_id(recipient)
+            tracking_email_id = self._tracking_service.generate_email_id(recipient)
             html_body = self._tracking_service.inject_tracking(
                 html_body,
-                email_id=email_id,
+                email_id=tracking_email_id,
                 recipient=recipient,
                 track_opens=self.config.track_opens,
                 track_clicks=self.config.track_clicks
@@ -307,15 +331,41 @@ class EmailService:
         # Send email
         sender = self.get_sender()
         
-        return await sender.send_email(
+        result = await sender.send_email(
             recipient=recipient,
             subject=subject,
             html_body=html_body,
             from_email=from_email or self.config.from_email,
             from_name=from_name,
             reply_to=reply_to or self.config.reply_to,
-            attachments=attachments
+            attachments=attachments,
+            correlation_id=tracking_email_id
         )
+        
+        # On failure: process bounce and add to dead letter queue
+        if not result.success and result.error:
+            if self._bounce_service:
+                self._bounce_service.process_bounce(
+                    email=recipient,
+                    error_message=result.error,
+                    smtp_code=None
+                )
+            if self._dead_letter_service:
+                try:
+                    self._dead_letter_service.add_dead_letter(
+                        recipient=recipient,
+                        subject=subject or '',
+                        html_body=html_body or '',
+                        from_email=from_email or self.config.from_email,
+                        error_type=result.error_type or 'send_failure',
+                        error_message=result.error or 'Unknown error',
+                        from_name=from_name,
+                        smtp_server=result.smtp_server
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to add dead letter: {e}")
+        
+        return result
     
     async def send_bulk(
         self,

@@ -44,7 +44,8 @@ def test_api_create_campaign(client):
     with patch('mercury.web.routes.api.CampaignService') as MockService:
         service = MockService.return_value
         campaign = Mock()
-        campaign.to_dict.return_value = {'id': 1, 'name': 'New'}
+        campaign.id = 999
+        campaign.to_dict.return_value = {'id': 999, 'name': 'New'}
         service.create_campaign.return_value = campaign
         
         payload = {'name': 'New', 'subject': 'Hi'}
