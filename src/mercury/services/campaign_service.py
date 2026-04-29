@@ -21,7 +21,6 @@ from ..utils.async_io import AsyncFileLogger
 from ..utils.validation import is_valid_email
 from .email_service import EmailService, EmailConfig
 from .smtp_service import SMTPService
-from .bounce_service import BounceService
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +79,12 @@ class CampaignConfig:
     placeholders: Optional[Dict[str, str]] = None
     placeholders_path: str = ""
 
+    # Tracking
+    enable_tracking: bool = True
+    track_opens: bool = True
+    track_clicks: bool = True
+    tracking_base_url: str = ""
+
 
 class CampaignService:
     """Service for managing and executing email campaigns."""
@@ -87,7 +92,6 @@ class CampaignService:
     def __init__(self):
         self.smtp_service = SMTPService()
         self.email_service: Optional[EmailService] = None
-        self.bounce_service: Optional[BounceService] = None
         self.config: Optional[CampaignConfig] = None
         self._current_campaign: Optional[Campaign] = None
         self._running = False
@@ -98,13 +102,24 @@ class CampaignService:
         self._setup_signal_handlers()
     
     def _setup_signal_handlers(self):
-        """Setup signal handlers for graceful shutdown."""
+        """Setup signal handlers for graceful shutdown.
+
+        Only attaches handlers if we're already inside a running event loop.
+        Outside one (CLI startup, tests, non-main threads, Windows) this is a
+        no-op — the caller can install signal handlers via the standard
+        `signal.signal()` interface instead.
+        """
         try:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+
+        try:
             for sig in (signal.SIGTERM, signal.SIGINT):
                 loop.add_signal_handler(sig, self._handle_shutdown_signal)
-        except (RuntimeError, NotImplementedError, ValueError):
-            # Windows, no event loop yet, or called from a non-main thread
+        except (NotImplementedError, ValueError):
+            # add_signal_handler is not implemented on Windows, and ValueError
+            # is raised when called from a non-main thread.
             pass
     
     def _handle_shutdown_signal(self):
@@ -116,7 +131,6 @@ class CampaignService:
     def initialize(self):
         """Initialize database and services."""
         init_db()
-        self.bounce_service = BounceService()
         logger.info("Campaign service initialized")
     
     def load_config(self, config: CampaignConfig):
@@ -125,13 +139,11 @@ class CampaignService:
         from .settings_service import SettingsService
 
         # Apply Global Settings
-        # Only override if campaign config doesn't specify strict limits (0 usually means unlimited or default)
-        # But here 0 might mean "use system default" or "unlimited". 
-        # For safety in this system, we assume 0 means "inherit global default".
+        # 0 means "use system default" for concurrency/chunk_size.
+        # rate_per_hour/rate_per_minute of 0 means "no per-campaign rate limit" —
+        # do NOT inherit hourly_limit here because it creates a token-bucket with
+        # burst=1 that blocks the second concurrent send within the same campaign.
         global_settings = SettingsService.get_settings()
-        
-        if config.rate_per_hour <= 0:
-            config.rate_per_hour = global_settings.hourly_limit
 
         if config.concurrency <= 0:
             config.concurrency = global_settings.max_concurrency
@@ -179,9 +191,9 @@ class CampaignService:
         self.email_service.configure(EmailConfig.from_campaign_config(config))
         
         # Add static placeholders
-        if config.placeholders and self.email_service._template_engine:
+        if config.placeholders and self.email_service._placeholder_processor:
             for key, value in config.placeholders.items():
-                self.email_service._template_engine.add_static_placeholder(key, value)
+                self.email_service._placeholder_processor.static_placeholders[key] = value
         
         logger.info(f"Loaded campaign config: {config.name}")
     
@@ -205,6 +217,10 @@ class CampaignService:
                 extra_settings['from_emails'] = config.from_emails
             if config.from_names:
                 extra_settings['from_names'] = config.from_names
+            if config.template_path:
+                extra_settings['template_path'] = config.template_path
+            if config.templates:
+                extra_settings['templates'] = config.templates
 
             campaign = Campaign(
                 name=config.name,
@@ -339,26 +355,30 @@ class CampaignService:
         self,
         path: str,
         validate: bool = True,
-        deduplicate: bool = True
-    ) -> List[Dict[str, Any]]:
+        deduplicate: bool = True,
+        stream: bool = False,
+    ) -> List[Dict[str, Any]] | Iterator[Dict[str, Any]]:
         """
-        Load recipients asynchronously (runs in thread executor).
-        
-        Args:
-            path: Path to CSV or Text file
-            validate: Validate email format
-            deduplicate: Remove duplicates
-            
-        Returns:
-            List of recipient dicts
+        Load recipients from disk in a worker thread.
+
+        Default returns a fully materialized list (back-compat with existing
+        callers that need ``len(...)``). Pass ``stream=True`` to get the
+        underlying generator instead — constant memory, no thread hop, but
+        the caller must consume it on a thread that can do blocking I/O.
         """
-        def _load():
+        def _open_iter() -> Iterator[Dict[str, Any]]:
             if path.lower().endswith('.csv'):
-                return list(self.load_recipients_from_csv(path, validate=validate, deduplicate=deduplicate))
-            else:
-                return list(self.load_recipients_from_text(path, validate=validate, deduplicate=deduplicate))
-        
-        return await asyncio.to_thread(_load)
+                return self.load_recipients_from_csv(
+                    path, validate=validate, deduplicate=deduplicate
+                )
+            return self.load_recipients_from_text(
+                path, validate=validate, deduplicate=deduplicate
+            )
+
+        if stream:
+            return _open_iter()
+
+        return await asyncio.to_thread(lambda: list(_open_iter()))
 
     def iterate_recipients(
         self, 
@@ -448,7 +468,21 @@ class CampaignService:
                         recipients=chunk,
                         progress_callback=progress_callback
                     )
-                    
+
+                    # Fail fast: if every result in this chunk is a server-side
+                    # error (auth / connection), abort the whole campaign rather
+                    # than writing thousands of failed log entries and misleading
+                    # the user into thinking recipients are at fault.
+                    _SERVER_ERR = {'authentication_error', 'connection_error'}
+                    if result.results and all(
+                        not r.success and r.error_type in _SERVER_ERR
+                        for r in result.results
+                    ):
+                        sample_error = result.results[0].error or 'SMTP server error'
+                        raise RuntimeError(
+                            f"SMTP server error — campaign aborted: {sample_error}"
+                        )
+
                     # Log results asynchronously and to DB
                     db_logs = []
                     
@@ -465,7 +499,7 @@ class CampaignService:
                                 subject=self.config.subject if self.config else "",
                                 from_email=self.config.from_email if self.config else "",
                                 smtp_server_name=email_result.smtp_server,
-                                correlation_id=email_result.correlation_id
+                                correlation_id=email_result.correlation_id or None
                             ))
                         else:
                             await failed_logger.log_failure(
@@ -483,7 +517,7 @@ class CampaignService:
                                 from_email=self.config.from_email if self.config else "",
                                 error_message=email_result.error,
                                 error_type=email_result.error_type,
-                                correlation_id=email_result.correlation_id
+                                correlation_id=email_result.correlation_id or None
                             ))
                     
                     # Batch insert to DB

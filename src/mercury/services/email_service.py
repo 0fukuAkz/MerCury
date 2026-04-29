@@ -11,11 +11,11 @@ from ..engine.async_sender import AsyncEmailSender, EmailResult, BulkSendResult
 from ..engine.rate_limiter import RateLimiter, RateLimiterConfig
 from ..engine.retry_queue import RetryQueue
 from ..features.template_engine import TemplateEngine
+from ..features.placeholders import PlaceholderProcessor
 from ..features.generators import AttachmentGenerator, GeneratorConfig
 from ..features.rotation import RotationManager, RotationStrategy
 from .smtp_service import SMTPService
 from .tracking_service import TrackingService
-from .bounce_service import BounceService
 from .dead_letter_service import DeadLetterService
 
 logger = logging.getLogger(__name__)
@@ -47,9 +47,6 @@ class EmailConfig:
     track_opens: bool = True
     track_clicks: bool = True
     tracking_base_url: Optional[str] = None
-    
-    # Bounce handling
-    enable_bounce_filtering: bool = True
     
     # Sending options
     dry_run: bool = False
@@ -90,6 +87,10 @@ class EmailConfig:
             templates=config.templates,
             rotation_strategy=config.smtp_rotation,
             links=config.links,
+            enable_tracking=config.enable_tracking,
+            track_opens=config.track_opens,
+            track_clicks=config.track_clicks,
+            tracking_base_url=config.tracking_base_url or None,
         )
 
 
@@ -111,8 +112,8 @@ class EmailService:
         self._rotation_manager: Optional[RotationManager] = None
         self._attachment_generator: Optional[AttachmentGenerator] = None
         self._tracking_service: Optional[TrackingService] = None
-        self._bounce_service: Optional[BounceService] = None
         self._dead_letter_service: Optional[DeadLetterService] = None
+        self._placeholder_processor: Optional[PlaceholderProcessor] = None
         
         # Default configuration
         self.config = EmailConfig()
@@ -136,6 +137,22 @@ class EmailService:
                 placeholders_path=config.placeholders_path
             )
             self._template_engine.config.enable_qr_code = config.enable_qr_code
+            self._placeholder_processor = self._template_engine.placeholder_processor
+        else:
+            # Standalone processor when no template engine is configured
+            static_ph = {}
+            if config.placeholders_path:
+                try:
+                    import json, yaml as _yaml
+                    with open(config.placeholders_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    if config.placeholders_path.endswith(('.yaml', '.yml')):
+                        static_ph = _yaml.safe_load(content) or {}
+                    else:
+                        static_ph = json.loads(content)
+                except Exception:
+                    pass
+            self._placeholder_processor = PlaceholderProcessor(static_ph)
         
         # Setup rotation
         self._rotation_manager = RotationManager()
@@ -164,10 +181,6 @@ class EmailService:
             self._tracking_service = TrackingService(
                 base_url=config.tracking_base_url
             )
-        
-        # Setup bounce service
-        if config.enable_bounce_filtering:
-            self._bounce_service = BounceService()
         
         # Setup dead letter service
         try:
@@ -228,18 +241,6 @@ class EmailService:
         placeholders = placeholders or {}
         placeholders['email'] = recipient
         
-        # Check bounce suppression
-        if self._bounce_service and self._bounce_service.is_suppressed(recipient):
-            logger.info(f"Skipping suppressed recipient: {recipient}")
-            return EmailResult(
-                success=False,
-                recipient=recipient,
-                correlation_id='',
-                timestamp=datetime.now(UTC),
-                error='Recipient is suppressed',
-                error_type='suppressed'
-            )
-        
         # Get rotating values
         if subject is None:
             if self._rotation_manager and self._rotation_manager.is_registered('subjects'):
@@ -271,6 +272,19 @@ class EmailService:
                 recipient_data=placeholders,
                 link=link
             )
+        elif html_body and self._placeholder_processor:
+            # Body was passed directly (e.g. test email, API) — still apply placeholders
+            extras = {'link': link or '', 'url': link or ''}
+
+            # Generate QR code for {{qr_code}} tag when enabled
+            if self.config.enable_qr_code and link:
+                from ..features.generators import QRCodeGenerator
+                qr_gen = QRCodeGenerator(GeneratorConfig())
+                qr_data_url = qr_gen.generate_data_url(link)
+                extras['qr_code'] = f'<img src="{qr_data_url}" alt="QR Code" />'
+                extras['qr_code_url'] = qr_data_url
+
+            html_body = self._placeholder_processor.process(html_body, placeholders, extras)
         
         if not html_body:
             html_body = f"<p>Email to {recipient}</p>"
@@ -288,9 +302,14 @@ class EmailService:
             )
         
         # Apply placeholders to subject
-        if subject and placeholders:
-            for key, value in placeholders.items():
-                subject = subject.replace(f"{{{{{key}}}}}", str(value))
+        if subject and self._placeholder_processor:
+            subject = self._placeholder_processor.process(subject, placeholders)
+        
+        # Apply placeholders to from_name / from_email
+        if from_name and self._placeholder_processor and '{{' in from_name:
+            from_name = self._placeholder_processor.process(from_name, placeholders)
+        if from_email and self._placeholder_processor and '{{' in from_email:
+            from_email = self._placeholder_processor.process(from_email, placeholders)
         
         # Generate attachments if configured
         if attachments is None:
@@ -355,10 +374,30 @@ class EmailService:
         if self.config.send_as_image and self._attachment_generator:
             image_url = self._attachment_generator.image.generate_data_url(html_body)
             html_body = f'<img src="{image_url}" alt="Email" style="max-width:100%;" />'
-        
+
+        # Apply encoding/obfuscation from global settings
+        from .settings_service import SettingsService
+        from ..features.encoding import (
+            html_entity_encode, unicode_homoglyph_replace,
+            url_encode_links, base64_encode_attachment
+        )
+        _enc_settings = SettingsService.get_settings()
+
+        if _enc_settings.obfuscate_links:
+            html_body = url_encode_links(html_body)
+        if _enc_settings.encode_html_entities:
+            html_body = html_entity_encode(html_body)
+        if _enc_settings.encode_unicode_homoglyphs:
+            html_body = unicode_homoglyph_replace(html_body)
+        if _enc_settings.encode_attachments and attachments:
+            for att in attachments:
+                att['data'] = base64_encode_attachment(att['data'])
+
+        _force_base64 = bool(_enc_settings.encode_body_base64)
+
         # Send email
         sender = self.get_sender()
-        
+
         result = await sender.send_email(
             recipient=recipient,
             subject=subject,
@@ -367,18 +406,16 @@ class EmailService:
             from_name=from_name,
             reply_to=reply_to or self.config.reply_to,
             attachments=attachments,
-            correlation_id=tracking_email_id
+            correlation_id=tracking_email_id,
+            force_base64_body=_force_base64
         )
         
-        # On failure: process bounce and add to dead letter queue
+        # On failure: add to dead letter queue.
+        # Skip for server-side errors (auth / connection) — these are
+        # infrastructure problems, not recipient-level rejections.
+        _SERVER_ERROR_TYPES = {'authentication_error', 'connection_error'}
         if not result.success and result.error:
-            if self._bounce_service:
-                self._bounce_service.process_bounce(
-                    email=recipient,
-                    error_message=result.error,
-                    smtp_code=None
-                )
-            if self._dead_letter_service:
+            if self._dead_letter_service and result.error_type not in _SERVER_ERROR_TYPES:
                 try:
                     self._dead_letter_service.add_dead_letter(
                         recipient=recipient,
@@ -462,7 +499,7 @@ class EmailService:
                 processed_results.append(EmailResult(
                     success=False,
                     recipient="unknown", 
-                    correlation_id="",
+                    correlation_id=None,
                     timestamp=datetime.now(UTC),
                     error=str(r),
                     error_type="exception"

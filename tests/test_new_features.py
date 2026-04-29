@@ -177,23 +177,6 @@ class TestBounceService:
         assert bounce_type == BounceType.SOFT
         assert category == BounceCategory.MAILBOX_FULL
     
-    def test_filter_recipients(self):
-        """Test suppression list filtering."""
-        from mercury.services.bounce_service import BounceService
-        
-        service = BounceService()
-        service.add_to_suppression_list("bad@example.com")
-        
-        allowed, suppressed = service.filter_recipients([
-            "good@example.com",
-            "bad@example.com",
-            "another@example.com"
-        ])
-        
-        assert len(allowed) == 2
-        assert len(suppressed) == 1
-        assert "bad@example.com" in suppressed
-
 
 class TestWebhookService:
     """Test webhook service."""

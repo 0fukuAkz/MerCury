@@ -1,7 +1,8 @@
 """API routes."""
 
 from datetime import datetime, UTC
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_file
+from sqlalchemy.orm.attributes import flag_modified
 
 from ..decorators import api_key_or_login_required
 from ..extensions import limiter, run_async
@@ -50,7 +51,8 @@ def api_create_campaign():
         return jsonify({'error': 'Campaign name required'}), 400
     
     # Handle rotation arrays (from newline-separated frontend or direct arrays)
-    subjects = data.get('subjects') if isinstance(data.get('subjects'), list) else None
+    subjects_raw = data.get('subjects') if isinstance(data.get('subjects'), list) else None
+    subjects = [s for s in subjects_raw if s and s.strip()] if subjects_raw is not None else None
     from_names = data.get('from_names') if isinstance(data.get('from_names'), list) else None
     from_emails = data.get('from_emails') if isinstance(data.get('from_emails'), list) else None
     templates = data.get('templates') if isinstance(data.get('templates'), list) else None
@@ -83,7 +85,7 @@ def api_create_campaign():
         
         # Sending options
         dry_run=data.get('dry_run', True),
-        concurrency=int(data.get('concurrency', 0)),
+        concurrency=int(data.get('concurrency') or 0),
         rate_per_minute=int(data.get('rate_per_minute', 0)),
         rate_per_hour=int(data.get('rate_per_hour', 0)),
         chunk_size=int(data.get('chunk_size', 0)),
@@ -100,7 +102,13 @@ def api_create_campaign():
         links=links,
 
         # Placeholders
-        placeholders_path=data.get('placeholders_path', '')
+        placeholders_path=data.get('placeholders_path', ''),
+
+        # Tracking
+        enable_tracking=data.get('enable_tracking', True),
+        track_opens=data.get('track_opens', True),
+        track_clicks=data.get('track_clicks', True),
+        tracking_base_url=data.get('tracking_base_url', ''),
     )
     
     service = CampaignService()
@@ -159,25 +167,31 @@ def api_update_campaign(campaign_id):
             'chunk_size', 'concurrency', 'rate_per_minute', 'rate_per_hour',
             'pause_between_chunks',
         ]
+        int_or_null_fields = {'template_id', 'recipient_list_id'}
         for field in editable:
             if field in data:
-                setattr(campaign, field, data[field])
+                val = data[field]
+                # Coerce empty-string to None for integer FK fields
+                if field in int_or_null_fields:
+                    val = int(val) if val not in (None, '', 'null') else None
+                setattr(campaign, field, val)
 
         # Map send_as_image (form field name) → convert_to_image (column name)
         if 'send_as_image' in data:
             campaign.convert_to_image = bool(data['send_as_image'])
 
-        # subjects list
+        # subjects list — strip empty entries
         if 'subjects' in data and isinstance(data['subjects'], list):
-            campaign.subjects = data['subjects']
-        elif 'subject' in data:
+            campaign.subjects = [s for s in data['subjects'] if s and s.strip()]
+        elif 'subject' in data and data['subject'].strip():
             campaign.subjects = [data['subject']]
 
         # merge settings blob — includes non-column fields like recipients_path, dry_run
         extra = {}
         if data.get('manual_recipients') and isinstance(data['manual_recipients'], list):
             extra['manual_recipients'] = data['manual_recipients']
-        if data.get('links') and isinstance(data['links'], list):
+        # Always write links so an empty list clears previous value
+        if 'links' in data and isinstance(data['links'], list):
             extra['links'] = data['links']
         if 'recipients_path' in data and data['recipients_path']:
             extra['recipients_path'] = data['recipients_path']
@@ -187,10 +201,21 @@ def api_update_campaign(campaign_id):
             extra['from_emails'] = data['from_emails']
         if isinstance(data.get('from_names'), list):
             extra['from_names'] = data['from_names']
-        if extra:
-            merged = dict(campaign.settings or {})
-            merged.update(extra)
-            campaign.settings = merged
+        if 'template_path' in data:
+            extra['template_path'] = data.get('template_path', '')
+        if 'templates' in data and isinstance(data['templates'], list):
+            extra['templates'] = data['templates']
+        for _tracking_field in ('enable_tracking', 'track_opens', 'track_clicks'):
+            if _tracking_field in data:
+                extra[_tracking_field] = bool(data[_tracking_field])
+        if 'tracking_base_url' in data:
+            extra['tracking_base_url'] = data.get('tracking_base_url', '')
+        # Always merge into settings so rotation fields are persisted every save
+        merged = dict(campaign.settings or {})
+        merged.update(extra)
+        campaign.settings = merged
+        # flag_modified ensures SQLAlchemy tracks JSON column changes
+        flag_modified(campaign, 'settings')
 
         repo.update(campaign)
         return jsonify({'success': True, 'campaign': campaign.to_dict()})
@@ -297,6 +322,102 @@ def api_clone_campaign(campaign_id):
     finally:
         session.close()
 
+
+@api_bp.route('/campaigns/test-email', methods=['POST'])
+@api_key_or_login_required
+@limiter.limit("10/minute")
+def api_send_test_email():
+    """Send a single test email using the provided campaign settings."""
+    from ...services.email_service import EmailService, EmailConfig
+
+    data = request.get_json(silent=True) or {}
+    recipient = (data.get('test_recipient') or '').strip().lower()
+    if not recipient or '@' not in recipient:
+        return jsonify({'success': False, 'error': 'Valid test_recipient is required'}), 400
+
+    # Build a minimal EmailConfig from the form values
+    subject = data.get('subject') or '(Test) No subject'
+    from_email = data.get('from_email') or ''
+    if not from_email:
+        return jsonify({'success': False, 'error': 'From Email is required'}), 400
+
+    try:
+        # Load SMTP servers
+        session = get_session_direct()
+        try:
+            smtp_repo = SMTPRepository(session)
+            smtp_servers = smtp_repo.get_all()
+            smtp_configs = [s.get_connection_config() for s in smtp_servers if s.is_enabled]
+            if not smtp_configs:
+                return jsonify({'success': False, 'error': 'No active SMTP servers configured'}), 400
+        finally:
+            session.close()
+
+        # Optionally load the template
+        template_id = data.get('template_id')
+        template_path = data.get('template_path')
+        html_body = None
+        if template_id:
+            session = get_session_direct()
+            try:
+                trepo = TemplateRepository(session)
+                tpl = trepo.get(int(template_id))
+                if tpl:
+                    html_body = tpl.html_content
+            finally:
+                session.close()
+        elif template_path:
+            import os
+            if os.path.isfile(template_path):
+                with open(template_path, 'r', encoding='utf-8') as f:
+                    html_body = f.read()
+
+        # Extract link(s) from form data
+        primary_link = (data.get('primary_link') or '').strip()
+        links_raw = data.get('links') or data.get('links_list') or []
+        if isinstance(links_raw, str):
+            links_raw = [l.strip() for l in links_raw.splitlines() if l.strip()]
+        link_to_use = primary_link or (links_raw[0] if links_raw else None)
+
+        # Respect campaign tracking/feature toggles (checkboxes send "on" or are absent)
+        enable_tracking = data.get('enable_tracking') in (True, 'on', '1', 'true')
+        track_opens = data.get('track_opens') in (True, 'on', '1', 'true')
+        track_clicks = data.get('track_clicks') in (True, 'on', '1', 'true')
+
+        config = EmailConfig(
+            subject=subject,
+            from_email=from_email,
+            from_name=data.get('from_name', ''),
+            reply_to=data.get('reply_to') or None,
+            placeholders_path=data.get('placeholders_path') or None,
+            enable_tracking=enable_tracking,
+            track_opens=track_opens,
+            track_clicks=track_clicks,
+        )
+
+        smtp_service = SMTPService()
+        smtp_service.load_from_config(smtp_configs)
+
+        service = EmailService(smtp_service)
+        service.configure(config)
+        result = run_async(service.send_single(
+            recipient=recipient,
+            subject=subject,
+            html_body=html_body,
+            from_email=from_email,
+            from_name=data.get('from_name', ''),
+            reply_to=data.get('reply_to') or None,
+            link=link_to_use,
+        ))
+
+        if result.success:
+            return jsonify({'success': True, 'correlation_id': result.correlation_id})
+        else:
+            return jsonify({'success': False, 'error': result.error or 'Send failed'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @api_bp.route('/campaigns/<int:campaign_id>/start', methods=['POST'])
 @api_key_or_login_required
 @limiter.limit("5/minute")
@@ -377,21 +498,23 @@ def api_add_smtp():
         'server': server.to_dict()
     })
 
-@api_bp.route('/smtp/test/<name>', methods=['POST'])
+@api_bp.route('/smtp/test/<int:server_id>', methods=['POST'])
 @api_key_or_login_required
 @limiter.limit("5/minute")
-def api_test_smtp(name):
-    """Test connection to a specific SMTP server."""
+def api_test_smtp(server_id: int):
+    """Test connection to a specific SMTP server by id."""
     session = get_session_direct()
     try:
         repo = SMTPRepository(session)
+        server = repo.get(server_id)
+        if not server:
+            return jsonify({'success': False, 'error': 'Server not found'}), 404
+
         servers = repo.get_all()
-        
         service = SMTPService()
         service.load_from_config([s.get_connection_config() for s in servers])
-        
-        result = run_async(service.test_connection(name))
-        
+
+        result = run_async(service.test_connection(server.name))
         return jsonify(result)
     finally:
         session.close()
@@ -629,7 +752,9 @@ def api_create_scheduled_job():
                 name=data['name'],
                 cron_expression=data['cron_expression'],
                 callback=lambda: None,
-                campaign_id=data['campaign_id']
+                campaign_id=data['campaign_id'],
+                timezone=data.get('timezone') or None,
+                max_runs=int(data['max_runs']) if data.get('max_runs') else None,
             )
         elif schedule_type == 'interval':
             if not data.get('interval_seconds'):
@@ -639,7 +764,9 @@ def api_create_scheduled_job():
                 name=data['name'],
                 interval_seconds=int(data['interval_seconds']),
                 callback=lambda: None,
-                campaign_id=data['campaign_id']
+                campaign_id=data['campaign_id'],
+                timezone=data.get('timezone') or None,
+                max_runs=int(data['max_runs']) if data.get('max_runs') else None,
             )
         else:
             return jsonify({'error': f'Invalid schedule type: {schedule_type}'}), 400
@@ -722,52 +849,165 @@ def api_bounce_stats():
     return jsonify(stats)
 
 
-@api_bp.route('/bounces/suppression', methods=['GET'])
+# ============ RECIPIENTS FILE API ============
+
+def _recipients_dir() -> str:
+    """Return the absolute path to the data/recipients directory, creating it if needed."""
+    import os
+    base = os.path.join(os.getcwd(), 'data', 'recipients')
+    os.makedirs(base, exist_ok=True)
+    return base
+
+
+def _safe_filename(name: str) -> str:
+    """Sanitize a filename to prevent path traversal."""
+    import os, re
+    name = os.path.basename(name)
+    name = re.sub(r'[^\w\s.\-]', '_', name)
+    return name or 'upload.csv'
+
+
+@api_bp.route('/recipients', methods=['GET'])
 @api_key_or_login_required
 @limiter.limit("30/minute")
-def api_get_suppression_list():
-    """Get suppression list."""
-    from ...services.bounce_service import BounceService
-    
-    service = BounceService()
-    suppression_list = list(service.get_suppression_list())
-    
+def api_list_recipient_files():
+    """List all recipient list files in data/recipients/."""
+    import os
+    base = _recipients_dir()
+    files = []
+    for fname in sorted(os.listdir(base)):
+        fpath = os.path.join(base, fname)
+        if os.path.isfile(fpath) and fname.lower().endswith(('.csv', '.txt')):
+            stat = os.stat(fpath)
+            files.append({
+                'filename': fname,
+                'size': stat.st_size,
+                'modified': datetime.fromtimestamp(stat.st_mtime, UTC).isoformat(),
+            })
+    return jsonify({'files': files, 'count': len(files)})
+
+
+@api_bp.route('/recipients/upload', methods=['POST'])
+@api_key_or_login_required
+@limiter.limit("10/minute")
+def api_upload_recipients():
+    """Upload a CSV/TXT recipient file with optional validation and deduplication."""
+    import os, csv, io, re
+
+    uploaded = request.files.get('file')
+    if not uploaded:
+        return jsonify({'error': 'No file uploaded'}), 400
+
+    validate = request.form.get('validate', 'true').lower() in ('true', '1', 'yes')
+    deduplicate = request.form.get('deduplicate', 'true').lower() in ('true', '1', 'yes')
+
+    raw = uploaded.stream.read().decode('utf-8', errors='replace')
+    filename = _safe_filename(uploaded.filename or 'upload.csv')
+
+    # Parse as CSV; fall back to plain-text (one email per line)
+    email_rgx = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+    rows = []
+    fieldnames = []
+    try:
+        reader = csv.DictReader(io.StringIO(raw))
+        if reader.fieldnames and any(f.lower().strip() == 'email' for f in reader.fieldnames):
+            fieldnames = [f.strip() for f in reader.fieldnames]
+            for row in reader:
+                rows.append({k.strip(): v.strip() for k, v in row.items()})
+        else:
+            raise ValueError("no email column")
+    except Exception:
+        # Plain-text fallback — one email per line
+        fieldnames = ['email']
+        rows = [{'email': line.strip()} for line in raw.splitlines() if line.strip() and '@' in line]
+
+    total_raw = len(rows)
+
+    # Validate email format
+    invalid_count = 0
+    if validate:
+        valid_rows = []
+        for r in rows:
+            email = r.get('email', '').lower().strip()
+            if email_rgx.match(email):
+                r['email'] = email
+                valid_rows.append(r)
+            else:
+                invalid_count += 1
+        rows = valid_rows
+
+    # Deduplicate
+    dup_count = 0
+    if deduplicate:
+        seen = set()
+        deduped = []
+        for r in rows:
+            key = r.get('email', '').lower()
+            if key not in seen:
+                seen.add(key)
+                deduped.append(r)
+            else:
+                dup_count += 1
+        rows = deduped
+
+    # Write processed file
+    base = _recipients_dir()
+    dest = os.path.join(base, filename)
+    with open(dest, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
     return jsonify({
-        'suppression_list': suppression_list,
-        'count': len(suppression_list)
+        'success': True,
+        'filename': filename,
+        'total_raw': total_raw,
+        'invalid_removed': invalid_count,
+        'duplicates_removed': dup_count,
+        'saved': len(rows),
     })
 
 
-@api_bp.route('/bounces/suppression', methods=['POST'])
+@api_bp.route('/recipients/<filename>/preview', methods=['GET'])
 @api_key_or_login_required
-@limiter.limit("10/minute")
-def api_add_to_suppression():
-    """Add email to suppression list."""
-    from ...services.bounce_service import BounceService
-    
-    data = request.get_json(silent=True) or {}
-    email = data.get('email', '').lower().strip()
-    
-    if not email:
-        return jsonify({'error': 'Email is required'}), 400
-    
-    service = BounceService()
-    service.add_to_suppression_list(email)
-    
-    return jsonify({'success': True, 'email': email})
+@limiter.limit("30/minute")
+def api_preview_recipients(filename: str):
+    """Return the first N rows of a recipient file."""
+    import os, csv, io
+
+    filename = _safe_filename(filename)
+    fpath = os.path.join(_recipients_dir(), filename)
+    if not os.path.isfile(fpath):
+        return jsonify({'error': 'File not found'}), 404
+
+    limit = min(int(request.args.get('limit', 20)), 200)
+    rows = []
+    fieldnames = []
+    with open(fpath, 'r', encoding='utf-8', errors='replace') as f:
+        reader = csv.DictReader(f)
+        fieldnames = reader.fieldnames or []
+        for i, row in enumerate(reader):
+            if i >= limit:
+                break
+            rows.append(dict(row))
+
+    return jsonify({'filename': filename, 'columns': fieldnames, 'rows': rows, 'count': len(rows)})
 
 
-@api_bp.route('/bounces/suppression/<email>', methods=['DELETE'])
+@api_bp.route('/recipients/<filename>', methods=['DELETE'])
 @api_key_or_login_required
 @limiter.limit("10/minute")
-def api_remove_from_suppression(email):
-    """Remove email from suppression list."""
-    from ...services.bounce_service import BounceService
-    
-    service = BounceService()
-    removed = service.remove_from_suppression_list(email.lower().strip())
-    
-    return jsonify({'success': removed, 'email': email})
+def api_delete_recipient_file(filename: str):
+    """Delete a recipient list file."""
+    import os
+
+    filename = _safe_filename(filename)
+    fpath = os.path.join(_recipients_dir(), filename)
+    if not os.path.isfile(fpath):
+        return jsonify({'error': 'File not found'}), 404
+
+    os.remove(fpath)
+    return jsonify({'success': True, 'filename': filename})
 
 
 # ============ DEAD LETTER API ============

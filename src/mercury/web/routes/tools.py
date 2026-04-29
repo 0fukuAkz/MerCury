@@ -62,6 +62,10 @@ def render_content():
             data = _get_generator().image.generate_from_html(content)
             mimetype = 'image/png'
             filename = 'image.png'
+        elif format_type == 'docx':
+            data = _get_generator().docx.generate_from_html(content)
+            mimetype = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            filename = 'document.docx'
         else:
             return jsonify({'error': 'Invalid format'}), 400
             

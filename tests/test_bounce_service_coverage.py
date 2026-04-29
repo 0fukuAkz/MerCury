@@ -27,7 +27,6 @@ def test_bounce_processing(bounce_service, db_session):
     # Process hard bounce
     bounce_service.process_bounce(email, "550 User unknown")
     
-    assert bounce_service.is_suppressed(email)
     assert len(bounce_service._bounces) == 1
 
 def test_reputation_penalty(bounce_service):

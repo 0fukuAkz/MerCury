@@ -46,5 +46,6 @@
       "Bash(xargs -I{} grep -Hn \"print\" {})",
       "Bash(python3 -c ':*)"
     ]
-  }
+  },
+  "outputStyle": "Explanatory"
 }

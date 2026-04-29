@@ -30,10 +30,14 @@ target_metadata = Base.metadata
 
 # Get database URL from environment or config
 def get_url():
-    return os.environ.get(
-        "DATABASE_URL",
-        config.get_main_option("sqlalchemy.url")
-    )
+    if os.environ.get("DATABASE_URL"):
+        return os.environ["DATABASE_URL"]
+    # Use the same path resolution as the app itself
+    try:
+        from mercury.utils.app_dirs import get_db_path
+        return get_db_path()
+    except Exception:
+        return config.get_main_option("sqlalchemy.url")
 
 
 def run_migrations_offline() -> None:

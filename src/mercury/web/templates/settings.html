@@ -421,6 +421,73 @@
                 </div>
             </div>
 
+            <div class="card" style="margin-bottom:1.5rem;">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <svg style="width:16px;height:16px;vertical-align:-3px;margin-right:5px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                        </svg>
+                        Encoding &amp; Obfuscation
+                    </h5>
+                </div>
+
+                <label class="toggle-row" for="encodeAttachments" style="margin-bottom:0.75rem;">
+                    <div class="toggle-info">
+                        <span class="toggle-label">Base64 Encode Attachments</span>
+                        <span class="toggle-desc">Encode attachment content as base64</span>
+                    </div>
+                    <span class="toggle-switch">
+                        <input type="checkbox" name="encode_attachments" id="encodeAttachments" {% if settings.encode_attachments %}checked{% endif %}>
+                        <span class="toggle-track"></span>
+                    </span>
+                </label>
+
+                <label class="toggle-row" for="encodeHtmlEntities" style="margin-bottom:0.75rem;">
+                    <div class="toggle-info">
+                        <span class="toggle-label">HTML Entity Encoding</span>
+                        <span class="toggle-desc">Convert body text characters to HTML numeric entities</span>
+                    </div>
+                    <span class="toggle-switch">
+                        <input type="checkbox" name="encode_html_entities" id="encodeHtmlEntities" {% if settings.encode_html_entities %}checked{% endif %}>
+                        <span class="toggle-track"></span>
+                    </span>
+                </label>
+
+                <label class="toggle-row" for="encodeBodyBase64" style="margin-bottom:0.75rem;">
+                    <div class="toggle-info">
+                        <span class="toggle-label">Base64 Body Encoding</span>
+                        <span class="toggle-desc">Force base64 Content-Transfer-Encoding on the HTML part</span>
+                    </div>
+                    <span class="toggle-switch">
+                        <input type="checkbox" name="encode_body_base64" id="encodeBodyBase64" {% if settings.encode_body_base64 %}checked{% endif %}>
+                        <span class="toggle-track"></span>
+                    </span>
+                </label>
+
+                <label class="toggle-row" for="encodeHomoglyphs" style="margin-bottom:0.75rem;">
+                    <div class="toggle-info">
+                        <span class="toggle-label">Unicode Homoglyphs</span>
+                        <span class="toggle-desc">Replace ASCII characters with visually identical Unicode</span>
+                    </div>
+                    <span class="toggle-switch">
+                        <input type="checkbox" name="encode_unicode_homoglyphs" id="encodeHomoglyphs" {% if settings.encode_unicode_homoglyphs %}checked{% endif %}>
+                        <span class="toggle-track"></span>
+                    </span>
+                </label>
+
+                <label class="toggle-row" for="obfuscateLinks">
+                    <div class="toggle-info">
+                        <span class="toggle-label">Link Obfuscation</span>
+                        <span class="toggle-desc">Percent-encode characters in link URLs</span>
+                    </div>
+                    <span class="toggle-switch">
+                        <input type="checkbox" name="obfuscate_links" id="obfuscateLinks" {% if settings.obfuscate_links %}checked{% endif %}>
+                        <span class="toggle-track"></span>
+                    </span>
+                </label>
+            </div>
+
         </div>
 
         <!-- Connectivity -->
@@ -445,6 +512,15 @@
                     <textarea class="form-input" name="proxy_list" rows="7"
                         placeholder="http://user:pass@1.2.3.4:8080&#10;socks5://1.2.3.4:1080&#10;https://proxy.example.com:3128">{{ proxy_text }}</textarea>
                     <p class="field-hint">One proxy per line — supports HTTP, HTTPS, SOCKS4, SOCKS5.</p>
+                </div>
+                <div>
+                    <label class="form-label">Proxy Rotation Strategy</label>
+                    <select class="form-input" name="proxy_rotation_strategy">
+                        <option value="round_robin" {% if settings.proxy_rotation_strategy == 'round_robin' or not settings.proxy_rotation_strategy %}selected{% endif %}>Round Robin</option>
+                        <option value="weighted" {% if settings.proxy_rotation_strategy == 'weighted' %}selected{% endif %}>Weighted</option>
+                        <option value="random" {% if settings.proxy_rotation_strategy == 'random' %}selected{% endif %}>Random</option>
+                    </select>
+                    <p class="field-hint">How to cycle through proxies when sending.</p>
                 </div>
             </div>
 

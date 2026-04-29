@@ -48,5 +48,12 @@ class GlobalSetting(Base, BaseModel):
     # --- UI Preferences ---
     ui_theme = Column(String(20), default="dark")
 
+    # --- Encoding & Obfuscation ---
+    encode_attachments = Column(Boolean, default=False)
+    encode_html_entities = Column(Boolean, default=False)
+    encode_body_base64 = Column(Boolean, default=False)
+    encode_unicode_homoglyphs = Column(Boolean, default=False)
+    obfuscate_links = Column(Boolean, default=False)
+
     def __repr__(self):
         return f"<GlobalSetting(id={self.id})>"

@@ -33,7 +33,6 @@ def test_campaign_service_initialization():
         service = CampaignService()
         service.initialize()
         mock_init.assert_called_once()
-        assert service.bounce_service is not None
 
 def test_campaign_service_load_config():
     service = CampaignService()

@@ -136,8 +136,8 @@
             }
 
             tbody.innerHTML = data.campaigns.slice(0, 5).map(campaign => `
-                <tr>
-                    <td>${campaign.name}</td>
+                <tr style="cursor:pointer;" onclick="window.location.href='/campaigns'" title="View campaigns">
+                    <td><a href="/campaigns" style="color:inherit;text-decoration:none;font-weight:500;">${campaign.name}</a></td>
                     <td><span class="badge badge-${getStatusColor(campaign.status)}">${campaign.status}</span></td>
                     <td class="font-mono">${campaign.sent_count || 0}</td>
                     <td class="font-mono">${campaign.failed_count || 0}</td>
@@ -166,12 +166,15 @@
 
             tbody.innerHTML = data.servers.map(server => `
                 <tr>
-                    <td>${server.name}</td>
-                    <td class="font-mono">${server.host}:${server.port}</td>
+                    <td style="cursor:pointer;" onclick="window.location.href='/smtp'" title="Manage SMTP servers">
+                        <a href="/smtp" style="color:inherit;text-decoration:none;font-weight:500;">${server.name}</a>
+                    </td>
+                    <td class="font-mono" style="cursor:pointer;" onclick="window.location.href='/smtp'">${server.host}:${server.port}</td>
                     <td><span class="badge badge-${server.is_enabled ? 'success' : 'error'}">${server.is_enabled ? 'Active' : 'Inactive'}</span></td>
                     <td class="font-mono">${server.current_minute_count || 0}/${server.max_per_minute || 30}</td>
                     <td>
-                        <button class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="testServer('${server.name}')">Test</button>
+                        <button class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;"
+                            onclick="event.stopPropagation(); testServer(${server.id}, '${server.name}')">Test</button>
                     </td>
                 </tr>
             `).join('');
@@ -180,13 +183,20 @@
         }
     }
 
-    async function testServer(name) {
+    async function testServer(id, name) {
+        const btn = event.currentTarget;
+        const original = btn.textContent;
+        btn.textContent = 'Testing…';
+        btn.disabled = true;
         try {
-            const response = await fetch(`/api/smtp/test/${name}`, { method: 'POST' });
+            const response = await fetch(`/api/smtp/test/${id}`, { method: 'POST' });
             const result = await response.json();
-            alert(result.success ? 'Connection successful!' : `Connection failed: ${result.error}`);
+            alert(result.success ? `✓ ${name}: connection successful!` : `✗ ${name}: ${result.error || 'connection failed'}`);
         } catch (error) {
             alert('Test failed: ' + error.message);
+        } finally {
+            btn.textContent = original;
+            btn.disabled = false;
         }
     }
 

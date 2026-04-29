@@ -8,15 +8,16 @@
     <p class="page-description">Manage recipient lists and email addresses</p>
 </div>
 
+<!-- Upload -->
 <div class="card">
     <div class="card-header">
         <h2 class="card-title">Upload Recipients</h2>
     </div>
-    <p class="text-muted mb-4">Upload a CSV file with an 'email' column. Additional columns will be available as
+    <p class="text-muted mb-4">Upload a CSV file with an <code>email</code> column. Additional columns become
         placeholders.</p>
 
     <div class="form-group">
-        <label class="form-label">CSV File</label>
+        <label class="form-label">CSV / TXT File</label>
         <input type="file" class="form-input" id="csv-file" accept=".csv,.txt">
     </div>
 
@@ -32,14 +33,37 @@
     </div>
 
     <button class="btn btn-primary" onclick="uploadRecipients()">Upload & Process</button>
+    <div id="upload-result" class="mt-4" style="display:none;"></div>
 </div>
 
+<!-- Existing files -->
+<div class="card">
+    <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+        <h2 class="card-title" style="margin:0;">Recipient Lists</h2>
+        <button class="btn btn-secondary btn-sm" onclick="loadFiles()">Refresh</button>
+    </div>
+    <div id="files-table-wrap">
+        <p class="text-muted">Loading…</p>
+    </div>
+</div>
+
+<!-- Preview modal -->
+<div id="preview-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9999; overflow-y:auto;">
+    <div style="background:var(--bg-secondary); margin:4rem auto; max-width:900px; border-radius:12px; padding:1.5rem;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+            <h3 id="preview-title" style="margin:0;"></h3>
+            <button class="btn btn-secondary btn-sm" onclick="document.getElementById('preview-modal').style.display='none'">Close</button>
+        </div>
+        <div id="preview-content" style="overflow-x:auto;"></div>
+    </div>
+</div>
+
+<!-- Sample format -->
 <div class="card">
     <div class="card-header">
         <h2 class="card-title">Sample CSV Format</h2>
     </div>
-    <pre
-        style="background: var(--bg-tertiary); padding: 1rem; border-radius: 8px; overflow-x: auto; font-family: 'JetBrains Mono', monospace; font-size: 0.875rem;">email,first_name,last_name,company
+    <pre style="background: var(--bg-tertiary); padding: 1rem; border-radius: 8px; overflow-x: auto; font-family: 'JetBrains Mono', monospace; font-size: 0.875rem;">email,first_name,last_name,company
 john@example.com,John,Doe,Acme Inc
 jane@company.com,Jane,Smith,Tech Corp
 bob@domain.org,Bob,Wilson,StartUp LLC</pre>
@@ -54,51 +78,121 @@ bob@domain.org,Bob,Wilson,StartUp LLC</pre>
     </p>
 </div>
 
-<div class="card">
-    <div class="card-header">
-        <h2 class="card-title">Suppression List</h2>
-    </div>
-    <p class="text-muted mb-4">Add emails to prevent sending to them.</p>
-
-    <div class="form-group">
-        <label class="form-label">Email Address</label>
-        <div class="flex gap-4">
-            <input type="email" class="form-input" id="suppress-email" placeholder="email@example.com" style="flex: 1;">
-            <button class="btn btn-secondary" onclick="suppressEmail()">Add to Suppression</button>
-        </div>
-    </div>
-</div>
-
 <script>
+    // ---- Upload ----
     async function uploadRecipients() {
         const fileInput = document.getElementById('csv-file');
         const file = fileInput.files[0];
-
-        if (!file) {
-            alert('Please select a file');
-            return;
-        }
+        if (!file) { alert('Please select a file'); return; }
 
         const formData = new FormData();
         formData.append('file', file);
         formData.append('validate', document.getElementById('validate-emails').checked);
         formData.append('deduplicate', document.getElementById('deduplicate').checked);
 
-        // Note: API endpoint for file upload would need to be implemented
-        alert('This feature is coming soon in the Web UI. Use CLI: mercury run config.yaml');
-    }
+        const resultEl = document.getElementById('upload-result');
+        resultEl.style.display = 'block';
+        resultEl.innerHTML = '<span class="text-muted">Uploading…</span>';
 
-    async function suppressEmail() {
-        const email = document.getElementById('suppress-email').value;
-
-        if (!email) {
-            alert('Please enter an email address');
-            return;
+        try {
+            const resp = await fetch('/api/recipients/upload', { method: 'POST', body: formData });
+            const data = await resp.json();
+            if (!resp.ok) {
+                resultEl.innerHTML = `<span style="color:var(--danger)">${data.error || 'Upload failed'}</span>`;
+                return;
+            }
+            resultEl.innerHTML = `
+                <div class="alert alert-success">
+                    <strong>Saved as ${data.filename}</strong> —
+                    ${data.saved} recipients saved
+                    ${data.invalid_removed ? ` · ${data.invalid_removed} invalid removed` : ''}
+                    ${data.duplicates_removed ? ` · ${data.duplicates_removed} duplicates removed` : ''}
+                </div>`;
+            fileInput.value = '';
+            loadFiles();
+        } catch (e) {
+            resultEl.innerHTML = `<span style="color:var(--danger)">Error: ${e.message}</span>`;
         }
-
-        // Note: API endpoint for suppression would need to be implemented
-        alert(`Added ${email} to suppression list (API pending)`);
-        document.getElementById('suppress-email').value = '';
     }
+
+    // ---- File list ----
+    async function loadFiles() {
+        const wrap = document.getElementById('files-table-wrap');
+        try {
+            const resp = await fetch('/api/recipients');
+            const data = await resp.json();
+            if (!data.files || data.files.length === 0) {
+                wrap.innerHTML = '<p class="text-muted">No recipient lists uploaded yet.</p>';
+                return;
+            }
+            let html = `<table class="table" style="width:100%;">
+                <thead><tr>
+                    <th>Filename</th><th>Size</th><th>Modified</th><th>Actions</th>
+                </tr></thead><tbody>`;
+            for (const f of data.files) {
+                const kb = (f.size / 1024).toFixed(1);
+                const mod = new Date(f.modified).toLocaleString();
+                html += `<tr>
+                    <td><code>${f.filename}</code></td>
+                    <td>${kb} KB</td>
+                    <td>${mod}</td>
+                    <td style="display:flex; gap:0.5rem;">
+                        <button class="btn btn-secondary btn-sm" onclick="previewFile('${f.filename}')">Preview</button>
+                        <button class="btn btn-sm" style="background:var(--danger);color:#fff;" onclick="deleteFile('${f.filename}')">Delete</button>
+                    </td>
+                </tr>`;
+            }
+            html += '</tbody></table>';
+            wrap.innerHTML = html;
+        } catch (e) {
+            wrap.innerHTML = `<p style="color:var(--danger)">Failed to load files: ${e.message}</p>`;
+        }
+    }
+
+    // ---- Preview ----
+    async function previewFile(filename) {
+        const modal = document.getElementById('preview-modal');
+        const title = document.getElementById('preview-title');
+        const content = document.getElementById('preview-content');
+        title.textContent = filename;
+        content.innerHTML = '<p class="text-muted">Loading…</p>';
+        modal.style.display = 'block';
+
+        try {
+            const resp = await fetch(`/api/recipients/${encodeURIComponent(filename)}/preview?limit=50`);
+            const data = await resp.json();
+            if (!resp.ok) { content.innerHTML = `<p style="color:var(--danger)">${data.error}</p>`; return; }
+            if (!data.rows.length) { content.innerHTML = '<p class="text-muted">File is empty.</p>'; return; }
+
+            let html = '<table class="table" style="width:100%; font-size:0.8rem;"><thead><tr>';
+            for (const col of data.columns) html += `<th>${col}</th>`;
+            html += '</tr></thead><tbody>';
+            for (const row of data.rows) {
+                html += '<tr>';
+                for (const col of data.columns) html += `<td>${row[col] ?? ''}</td>`;
+                html += '</tr>';
+            }
+            html += `</tbody></table><p class="text-muted mt-2">Showing ${data.count} rows.</p>`;
+            content.innerHTML = html;
+        } catch (e) {
+            content.innerHTML = `<p style="color:var(--danger)">Error: ${e.message}</p>`;
+        }
+    }
+
+    // ---- Delete ----
+    async function deleteFile(filename) {
+        if (!confirm(`Delete ${filename}? This cannot be undone.`)) return;
+        try {
+            const resp = await fetch(`/api/recipients/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+            const data = await resp.json();
+            if (data.success) loadFiles();
+            else alert(data.error || 'Delete failed');
+        } catch (e) {
+            alert(`Error: ${e.message}`);
+        }
+    }
+
+    // Load on page ready
+    loadFiles();
 </script>
 {% endblock %}

@@ -138,7 +138,6 @@ def test_send_preview(runner):
             
             service = MockService.return_value
             service.load_recipients_from_csv.return_value = [{'email': 'a@b.com'}]
-            service.bounce_service = None
             
             result = runner.invoke(cli, ['send', 'c.yaml', '--preview'])
             assert "PREVIEW" in result.output
@@ -155,7 +154,6 @@ def test_send_cancel(runner):
             mock_load.return_value = config
             service = MockService.return_value
             service.load_recipients_from_csv.return_value = [{'email': 'a@b.com'}]
-            service.bounce_service = None
             
             # Input 'n' for no
             result = runner.invoke(cli, ['send', 'c.yaml'], input='n\n')
@@ -173,7 +171,6 @@ def test_send_success(runner):
             mock_load.return_value = config
             service = MockService.return_value
             service.load_recipients_from_csv.return_value = [{'email': 'a@b.com'}]
-            service.bounce_service = None
             
             mock_run.return_value = {'sent': 1, 'failed': 0}
             

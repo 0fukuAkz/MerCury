@@ -301,6 +301,18 @@
                             PNG Image
                         </label>
                     </div>
+                    <div class="format-option">
+                        <input type="radio" name="docFormat" id="formatDocx" value="docx">
+                        <label for="formatDocx">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                                <polyline points="14 2 14 8 20 8"/>
+                                <line x1="8" y1="13" x2="16" y2="13"/>
+                                <line x1="8" y1="17" x2="16" y2="17"/>
+                            </svg>
+                            DOCX
+                        </label>
+                    </div>
                 </div>
             </div>
             <button type="button" class="btn btn-primary" id="convertBtn" onclick="convertDocument()">
@@ -429,7 +441,7 @@
             if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Conversion failed'); }
 
             _docBlob = await res.blob();
-            _docFilename = format === 'pdf' ? 'document.pdf' : 'image.png';
+            _docFilename = format === 'pdf' ? 'document.pdf' : format === 'docx' ? 'document.docx' : 'image.png';
             const url = URL.createObjectURL(_docBlob);
 
             const frame  = document.getElementById('docFrame');
@@ -449,6 +461,12 @@
                 frame.src = url;
                 frame.style.display = 'block';
                 meta.textContent = 'document.pdf';
+            } else if (format === 'docx') {
+                frame.style.display = 'none';
+                img.style.display = 'none';
+                meta.textContent = 'document.docx · Ready to download';
+                // DOCX can't be previewed — trigger download automatically
+                _save(_docBlob, _docFilename);
             } else {
                 frame.style.display = 'none';
                 img.src = url;

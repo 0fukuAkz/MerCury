@@ -11,6 +11,12 @@ from .generators import (
 from .template_engine import TemplateEngine
 from .placeholders import PlaceholderProcessor
 from .rotation import RotationManager, RotationStrategy
+from .encoding import (
+    base64_encode_attachment,
+    html_entity_encode,
+    unicode_homoglyph_replace,
+    url_encode_links,
+)
 
 __all__ = [
     "QRCodeGenerator",
@@ -23,5 +29,9 @@ __all__ = [
     "PlaceholderProcessor",
     "RotationManager",
     "RotationStrategy",
+    "base64_encode_attachment",
+    "html_entity_encode",
+    "unicode_homoglyph_replace",
+    "url_encode_links",
 ]
 

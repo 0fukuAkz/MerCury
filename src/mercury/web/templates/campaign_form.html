@@ -333,7 +333,6 @@
         <nav class="tab-nav" role="tablist">
             <button type="button" class="tab-btn active" onclick="switchTab('details', this)">Details</button>
             <button type="button" class="tab-btn"        onclick="switchTab('content', this)">Content</button>
-            <button type="button" class="tab-btn"        onclick="switchTab('rotation', this)">Rotation</button>
             <button type="button" class="tab-btn"        onclick="switchTab('delivery', this)">Delivery</button>
             <button type="button" class="tab-btn"        onclick="switchTab('recipients', this)">Recipients</button>
             <button type="button" class="tab-btn"        onclick="switchTab('features', this)">Features</button>
@@ -375,7 +374,7 @@
                     <label class="form-label">Subject Line <span class="req">*</span></label>
                     <input type="text" class="form-input" name="subject" id="subject-input" required
                         placeholder="Hello {{first_name}}, check this out!">
-                    <div class="form-hint">Primary subject. For A/B testing add variants in the Rotation tab.</div>
+                    <div class="form-hint">Primary subject. For A/B testing expand the rotation section below.</div>
                     <div class="ph-tokens">
                         <span class="ph-token" onclick="insertToken('subject-input', '{{first_name}}')">{{first_name}}</span>
                         <span class="ph-token" onclick="insertToken('subject-input', '{{last_name}}')">{{last_name}}</span>
@@ -400,6 +399,12 @@
                     <label class="form-label">Reply-To</label>
                     <input type="email" class="form-input" name="reply_to" placeholder="reply@example.com">
                 </div>
+                <div class="form-group" style="margin-bottom:1rem">
+                    <label class="form-label">Primary Link</label>
+                    <input type="url" class="form-input" name="primary_link" id="primary-link-input"
+                        placeholder="https://yoursite.com/landing">
+                    <div class="form-hint">Use <code style="font-size:0.72rem">{{link}}</code> in subject or template. For A/B variants expand the rotation section below.</div>
+                </div>
                 <div class="form-group" style="margin-bottom:0.75rem">
                     <label class="form-label">Template</label>
                     <select class="form-select form-input" id="templateSelect" onchange="onTemplateSelect(this)">
@@ -411,51 +416,54 @@
                     <label class="form-label">Custom Template Path</label>
                     <input type="text" class="form-input" name="template_path" id="templatePathInput"
                         placeholder="templates/email.html">
-                    <div class="form-hint">Path to an HTML file on disk. For A/B variants use the Rotation tab.</div>
+                    <div class="form-hint">Path to an HTML file on disk. For A/B variants expand the rotation section below.</div>
                 </div>
                 <input type="hidden" name="template_id" id="templateIdInput" value="">
             </div>
-        </div>
 
-        <!-- Tab: Rotation -->
-        <div class="tab-pane" id="tab-rotation">
-            <div class="form-section">
-                <div class="section-title">A/B Testing — one value per line</div>
-                <div class="fg fg-2" style="margin-bottom:1rem">
-                    <div class="form-group">
-                        <label class="form-label">Subject Lines</label>
-                        <textarea class="form-textarea" name="subjects_list" rows="4"
-                            placeholder="Subject A&#10;Subject B&#10;Subject C"></textarea>
-                        <div class="form-hint">Leave empty to use the primary subject.</div>
+            <!-- A/B Rotation (collapsible) -->
+            <details class="form-section" style="margin-top:1rem">
+                <summary style="cursor:pointer;font-weight:600;font-size:0.82rem;color:var(--neon-cyan);padding:0.5rem 0;user-select:none">
+                    ▸ A/B Rotation <span style="font-weight:400;color:var(--text-secondary);font-size:0.75rem">(optional)</span>
+                </summary>
+                <div style="margin-top:0.75rem">
+                    <div class="form-hint" style="margin-bottom:1rem">One value per line. Leave fields empty to use the primary values above.</div>
+                    <div class="fg fg-2" style="margin-bottom:1rem">
+                        <div class="form-group">
+                            <label class="form-label">Subject Lines</label>
+                            <textarea class="form-textarea" name="subjects_list" rows="4"
+                                placeholder="Subject A&#10;Subject B&#10;Subject C"></textarea>
+                            <div class="form-hint">Leave empty to use the primary subject.</div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">From Names</label>
+                            <textarea class="form-textarea" name="from_names_list" rows="4"
+                                placeholder="John Smith&#10;Jane Doe&#10;Sales Team"></textarea>
+                            <div class="form-hint">Leave empty to use the primary from name.</div>
+                        </div>
+                    </div>
+                    <div class="fg fg-2" style="margin-bottom:1rem">
+                        <div class="form-group">
+                            <label class="form-label">From Emails</label>
+                            <textarea class="form-textarea" name="from_emails_list" rows="4"
+                                placeholder="sender1@domain.com&#10;sender2@domain.com"></textarea>
+                            <div class="form-hint">Rotates the sender address per email.</div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Link URLs</label>
+                            <textarea class="form-textarea" name="links_list" rows="4"
+                                placeholder="https://link1.example.com&#10;https://link2.example.com"></textarea>
+                            <div class="form-hint">Extra links for rotation. Leave empty to only use the primary link above.</div>
+                        </div>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">From Names</label>
-                        <textarea class="form-textarea" name="from_names_list" rows="4"
-                            placeholder="John Smith&#10;Jane Doe&#10;Sales Team"></textarea>
-                        <div class="form-hint">Leave empty to use the primary from name.</div>
+                        <label class="form-label">Template Paths</label>
+                        <textarea class="form-textarea" name="templates_list" rows="3"
+                            placeholder="templates/variant_a.html&#10;templates/variant_b.html"></textarea>
+                        <div class="form-hint">One path per line. Leave empty to use the primary template.</div>
                     </div>
                 </div>
-                <div class="fg fg-2" style="margin-bottom:1rem">
-                    <div class="form-group">
-                        <label class="form-label">From Emails</label>
-                        <textarea class="form-textarea" name="from_emails_list" rows="4"
-                            placeholder="sender1@domain.com&#10;sender2@domain.com"></textarea>
-                        <div class="form-hint">Rotates the sender address per email.</div>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Link URLs</label>
-                        <textarea class="form-textarea" name="links_list" rows="4"
-                            placeholder="https://link1.example.com&#10;https://link2.example.com"></textarea>
-                        <div class="form-hint">Use <code style="font-size:0.72rem">{{link}}</code> in your template.</div>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Template Paths</label>
-                    <textarea class="form-textarea" name="templates_list" rows="3"
-                        placeholder="templates/variant_a.html&#10;templates/variant_b.html"></textarea>
-                    <div class="form-hint">One path per line. Leave empty to use the primary template.</div>
-                </div>
-            </div>
+            </details>
         </div>
 
         <!-- Tab: Delivery -->
@@ -484,12 +492,46 @@
 
             <div class="form-section">
                 <div class="section-title">Rate &amp; Concurrency</div>
-                <div style="display:flex;align-items:center;gap:0.6rem;padding:0.65rem 0.9rem;background:rgba(0,255,255,0.05);border:1px solid rgba(0,255,255,0.2);border-radius:var(--radius);font-size:0.78rem;color:var(--text-secondary)">
+                <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:1rem;padding:0.65rem 0.9rem;background:rgba(0,255,255,0.05);border:1px solid rgba(0,255,255,0.2);border-radius:var(--radius);font-size:0.78rem;color:var(--text-secondary)">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--neon-cyan)" stroke-width="2" style="flex-shrink:0">
                         <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
                     </svg>
-                    Rate limits, concurrency and batch size are inherited from
+                    Leave fields at 0 to inherit from
                     <a href="/settings" style="color:var(--neon-cyan);text-decoration:none;font-weight:600">Global Settings</a>.
+                </div>
+                <div class="fg fg-3">
+                    <div class="form-group">
+                        <label class="form-label">Concurrency</label>
+                        <input type="number" class="form-input" name="concurrency" id="concurrencyInput"
+                            min="0" max="500" value="0" placeholder="0 = global">
+                        <div class="form-hint">Parallel sends (0 = global default)</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Rate / minute</label>
+                        <input type="number" class="form-input" name="rate_per_minute"
+                            min="0" value="0" placeholder="0 = unlimited">
+                        <div class="form-hint">Max emails per minute</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Rate / hour</label>
+                        <input type="number" class="form-input" name="rate_per_hour"
+                            min="0" value="0" placeholder="0 = unlimited">
+                        <div class="form-hint">Max emails per hour</div>
+                    </div>
+                </div>
+                <div class="fg fg-2" style="margin-top:0.75rem">
+                    <div class="form-group">
+                        <label class="form-label">Chunk Size</label>
+                        <input type="number" class="form-input" name="chunk_size"
+                            min="0" value="0" placeholder="0 = global">
+                        <div class="form-hint">Recipients per batch</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Pause Between Chunks (s)</label>
+                        <input type="number" class="form-input" name="pause_between_chunks"
+                            min="0" value="0" placeholder="0 = none">
+                        <div class="form-hint">Seconds to wait between batches</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -497,28 +539,57 @@
         <!-- Tab: Recipients -->
         <div class="tab-pane" id="tab-recipients">
             <div class="form-section">
-                <div class="section-title">Recipient List</div>
+                <div class="section-title">Recipient Source</div>
 
-                <!-- Source toggle -->
+                <!-- Source toggle (3 modes) -->
                 <div style="display:flex;gap:0.25rem;margin-bottom:1rem">
-                    <button type="button" class="tab-btn active" id="srcBtnFile"
-                        onclick="setRecipientsSource('file', this)">From File</button>
+                    <button type="button" class="tab-btn active" id="srcBtnList"
+                        onclick="setRecipientsSource('list', this)">Uploaded Lists</button>
+                    <button type="button" class="tab-btn" id="srcBtnFile"
+                        onclick="setRecipientsSource('file', this)">File Path</button>
                     <button type="button" class="tab-btn" id="srcBtnManual"
                         onclick="setRecipientsSource('manual', this)">Paste Emails</button>
                 </div>
 
-                <!-- File source -->
-                <div id="recipientsFileGroup">
+                <!-- List source (uploaded files) -->
+                <div id="recipientsListGroup">
                     <div class="fg fg-2" style="margin-bottom:1rem">
                         <div class="form-group">
-                            <label class="form-label">Recipients File</label>
-                            <input type="text" class="form-input" name="recipients_path" id="recipientsPathInput"
-                                placeholder="data/recipients.csv">
-                            <div class="form-hint">CSV or TXT. Extra columns become placeholders.</div>
+                            <label class="form-label">Recipient List</label>
+                            <select class="form-select form-input" id="recipientListSelect" onchange="onRecipientListSelect()">
+                                <option value="">— Loading lists… —</option>
+                            </select>
+                            <div class="form-hint">Choose an uploaded CSV/TXT from the <a href="/recipients" style="color:var(--neon-cyan)">Recipients</a> page.</div>
                         </div>
                         <div class="form-group">
                             <label class="form-label">Email Column</label>
                             <input type="text" class="form-input" name="email_column" value="email" placeholder="email">
+                            <div class="form-hint">Column name that contains email addresses.</div>
+                        </div>
+                    </div>
+                    <div id="recipientListPreview" style="display:none;margin-bottom:1rem">
+                        <div style="display:flex;align-items:center;gap:0.6rem;padding:0.65rem 0.9rem;background:rgba(0,255,255,0.05);border:1px solid rgba(0,255,255,0.2);border-radius:var(--radius);font-size:0.78rem;color:var(--text-secondary)">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--neon-cyan)" stroke-width="2" style="flex-shrink:0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>
+                            <span id="recipientListInfo"></span>
+                        </div>
+                        <div id="recipientListPreviewTable" style="margin-top:0.5rem;max-height:180px;overflow:auto;font-size:0.75rem;"></div>
+                    </div>
+                    <!-- Hidden input that actually carries the path -->
+                    <input type="hidden" name="recipients_path" id="recipientsPathInput" value="">
+                </div>
+
+                <!-- File-path source -->
+                <div id="recipientsFileGroup" style="display:none">
+                    <div class="fg fg-2" style="margin-bottom:1rem">
+                        <div class="form-group">
+                            <label class="form-label">Recipients File Path</label>
+                            <input type="text" class="form-input" id="recipientsFilePathInput"
+                                placeholder="data/recipients.csv">
+                            <div class="form-hint">Absolute or relative path to a CSV or TXT file.</div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Email Column</label>
+                            <input type="text" class="form-input" name="email_column_file" value="email" placeholder="email">
                             <div class="form-hint">Column name that contains email addresses.</div>
                         </div>
                     </div>
@@ -547,6 +618,28 @@
                         <span class="toggle-label">Remove duplicate recipients</span>
                     </label>
                 </div>
+            </div>
+
+            <!-- Test Email -->
+            <div class="form-section">
+                <div class="section-title">Send Test Email</div>
+                <p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:0.75rem;">
+                    Send a single test email using the current campaign settings (subject, template, SMTP, etc.).
+                    The campaign does <strong>not</strong> need to be saved first.
+                </p>
+                <div class="fg fg-2" style="margin-bottom:0.75rem">
+                    <div class="form-group">
+                        <label class="form-label">Test Recipient <span class="req">*</span></label>
+                        <input type="email" class="form-input" id="testEmailTo" placeholder="you@example.com">
+                    </div>
+                    <div class="form-group" style="display:flex;align-items:flex-end;">
+                        <button type="button" class="btn btn-secondary" id="testEmailBtn" onclick="sendTestEmail()" style="width:100%;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                            Send Test
+                        </button>
+                    </div>
+                </div>
+                <div id="testEmailResult" style="display:none;"></div>
             </div>
         </div>
 
@@ -600,14 +693,6 @@
                             <span class="toggle-note">Converts HTML body to an inline image</span>
                         </span>
                     </label>
-                    <label class="toggle">
-                        <input type="checkbox" name="enable_bounce_filtering" id="bounceFilter" checked>
-                        <span class="toggle-track"></span>
-                        <span class="toggle-label">
-                            Filter suppressed emails
-                            <span class="toggle-note">Skips addresses in the suppression list</span>
-                        </span>
-                    </label>
                 </div>
             </div>
 
@@ -657,7 +742,7 @@
 
         <!-- Submit bar (always visible) -->
         <div class="submit-bar">
-            <div id="dry-run-banner" class="dry-run-banner" style="width:100%">
+            <div id="dry-run-banner" class="dry-run-banner hidden" style="width:100%">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <circle cx="12" cy="12" r="10"/>
                     <line x1="12" y1="8" x2="12" y2="12"/>
@@ -666,7 +751,7 @@
                 <strong>Dry Run enabled</strong> — emails will be prepared but NOT sent
             </div>
             <label class="toggle" style="flex-shrink:0">
-                <input type="checkbox" name="dry_run" id="dryRun" checked
+                <input type="checkbox" name="dry_run" id="dryRun"
                        onchange="document.getElementById('dry-run-banner').classList.toggle('hidden', !this.checked)">
                 <span class="toggle-track"></span>
                 <span class="toggle-label" style="font-weight:600">Dry Run</span>
@@ -697,22 +782,48 @@
                 <span class="ph-code" onclick="insertAtFocus('{{email}}')">{{email}}</span>
                 <span class="ph-code" onclick="insertAtFocus('{{first_name}}')">{{first_name}}</span>
                 <span class="ph-code" onclick="insertAtFocus('{{last_name}}')">{{last_name}}</span>
+                <span class="ph-code" onclick="insertAtFocus('{{full_name}}')">{{full_name}}</span>
+                <span class="ph-code" onclick="insertAtFocus('{{initials}}')">{{initials}}</span>
                 <span class="ph-code" onclick="insertAtFocus('{{company}}')">{{company}}</span>
                 <span class="ph-code" onclick="insertAtFocus('{{domain}}')">{{domain}}</span>
+                <span class="ph-code" onclick="insertAtFocus('{{domain_name}}')">{{domain_name}}</span>
+                <span class="ph-code" onclick="insertAtFocus('{{tld}}')">{{tld}}</span>
+                <span class="ph-code" onclick="insertAtFocus('{{local_part}}')">{{local_part}}</span>
             </div>
             <div class="ph-group">
                 <div class="ph-group-title">Date &amp; Time</div>
                 <span class="ph-code" onclick="insertAtFocus('{{date}}')">{{date}}</span>
+                <span class="ph-code" onclick="insertAtFocus('{{date_formatted}}')">{{date_formatted}}</span>
+                <span class="ph-code" onclick="insertAtFocus('{{date_eu}}')">{{date_eu}}</span>
                 <span class="ph-code" onclick="insertAtFocus('{{time}}')">{{time}}</span>
                 <span class="ph-code" onclick="insertAtFocus('{{day_name}}')">{{day_name}}</span>
                 <span class="ph-code" onclick="insertAtFocus('{{month_name}}')">{{month_name}}</span>
+                <span class="ph-code" onclick="insertAtFocus('{{year}}')">{{year}}</span>
+                <span class="ph-code" onclick="insertAtFocus('{{quarter}}')">{{quarter}}</span>
+                <span class="ph-code" onclick="insertAtFocus('{{timestamp}}')">{{timestamp}}</span>
+            </div>
+            <div class="ph-group">
+                <div class="ph-group-title">IDs &amp; Hashes</div>
+                <span class="ph-code" onclick="insertAtFocus('{{uuid}}')">{{uuid}}</span>
+                <span class="ph-code" onclick="insertAtFocus('{{short_id}}')">{{short_id}}</span>
+                <span class="ph-code" onclick="insertAtFocus('{{email_hash}}')">{{email_hash}}</span>
+                <span class="ph-code" onclick="insertAtFocus('{{tracking_id}}')">{{tracking_id}}</span>
             </div>
             <div class="ph-group">
                 <div class="ph-group-title">Random</div>
-                <span class="ph-code" onclick="insertAtFocus('{{uuid}}')">{{uuid}}</span>
                 <span class="ph-code" onclick="insertAtFocus('{{random_number}}')">{{random_number}}</span>
+                <span class="ph-code" onclick="insertAtFocus('{{random_6}}')">{{random_6}}</span>
                 <span class="ph-code" onclick="insertAtFocus('{{random_name}}')">{{random_name}}</span>
+                <span class="ph-code" onclick="insertAtFocus('{{random_first_name}}')">{{random_first_name}}</span>
+                <span class="ph-code" onclick="insertAtFocus('{{random_last_name}}')">{{random_last_name}}</span>
                 <span class="ph-code" onclick="insertAtFocus('{{random_company}}')">{{random_company}}</span>
+                <span class="ph-code" onclick="insertAtFocus('{{random_city}}')">{{random_city}}</span>
+                <span class="ph-code" onclick="insertAtFocus('{{random_country}}')">{{random_country}}</span>
+                <span class="ph-code" onclick="insertAtFocus('{{random_phone}}')">{{random_phone}}</span>
+                <span class="ph-code" onclick="insertAtFocus('{{random_ip}}')">{{random_ip}}</span>
+                <span class="ph-code" onclick="insertAtFocus('{{random_url}}')">{{random_url}}</span>
+                <span class="ph-code" onclick="insertAtFocus('{{random_user_agent}}')">{{random_user_agent}}</span>
+                <span class="ph-code" onclick="insertAtFocus('{{random_email}}')">{{random_email}}</span>
             </div>
             <div class="ph-group">
                 <div class="ph-group-title">Conditional</div>
@@ -751,6 +862,7 @@
         });
         d.__src  = _recipientsSource;
         d.__man  = document.getElementById('manualRecipientsInput').value;
+        d.__filePath = (document.getElementById('recipientsFilePathInput') || {}).value || '';
         d.__tmpl = document.getElementById('templateSelect').value;
         return d;
     }
@@ -762,13 +874,13 @@
             else el.value = d[el.name] !== undefined ? d[el.name] : '';
         });
         if (d.__src) {
-            var srcBtn = d.__src === 'manual'
-                ? document.getElementById('srcBtnManual')
-                : document.getElementById('srcBtnFile');
-            setRecipientsSource(d.__src, srcBtn);
+            var srcBtnId = d.__src === 'manual' ? 'srcBtnManual' : d.__src === 'file' ? 'srcBtnFile' : 'srcBtnList';
+            setRecipientsSource(d.__src, document.getElementById(srcBtnId));
         }
         if (d.__man !== undefined)
             document.getElementById('manualRecipientsInput').value = d.__man;
+        if (d.__filePath !== undefined && document.getElementById('recipientsFilePathInput'))
+            document.getElementById('recipientsFilePathInput').value = d.__filePath;
         if (d.__tmpl) _pendingDraftTemplateVal = d.__tmpl;
         var dryEl = document.querySelector('[name="dry_run"]');
         if (dryEl) document.getElementById('dry-run-banner').classList.toggle('hidden', !dryEl.checked);
@@ -794,13 +906,106 @@
     }
 
     /* ── Recipients source toggle ────────────────────────────────────────── */
-    var _recipientsSource = 'file';
+    var _recipientsSource = 'list';
     function setRecipientsSource(type, btn) {
         _recipientsSource = type;
+        document.getElementById('recipientsListGroup').style.display   = type === 'list'   ? '' : 'none';
         document.getElementById('recipientsFileGroup').style.display   = type === 'file'   ? '' : 'none';
         document.getElementById('recipientsManualGroup').style.display = type === 'manual' ? '' : 'none';
-        document.querySelectorAll('#srcBtnFile, #srcBtnManual').forEach(function(b) { b.classList.remove('active'); });
+        document.querySelectorAll('#srcBtnList, #srcBtnFile, #srcBtnManual').forEach(function(b) { b.classList.remove('active'); });
         btn.classList.add('active');
+    }
+
+    /* ── Load uploaded recipient lists ─────────────────────────────────── */
+    var _recipientLists = [];
+    async function loadRecipientLists() {
+        try {
+            var res = await fetch('/api/recipients');
+            var json = await res.json();
+            _recipientLists = json.files || [];
+        } catch (e) { _recipientLists = []; }
+
+        var sel = document.getElementById('recipientListSelect');
+        sel.innerHTML = '<option value="">— Select a recipient list —</option>';
+        _recipientLists.forEach(function(f) {
+            var kb = (f.size / 1024).toFixed(1);
+            var opt = document.createElement('option');
+            opt.value = 'data/recipients/' + f.filename;
+            opt.textContent = f.filename + '  (' + kb + ' KB)';
+            sel.appendChild(opt);
+        });
+    }
+
+    function onRecipientListSelect() {
+        var sel = document.getElementById('recipientListSelect');
+        var path = sel.value;
+        document.getElementById('recipientsPathInput').value = path;
+        var preview = document.getElementById('recipientListPreview');
+        if (!path) { preview.style.display = 'none'; return; }
+
+        // Fetch preview
+        var filename = path.replace(/^.*\//, '');
+        preview.style.display = '';
+        document.getElementById('recipientListInfo').textContent = 'Loading preview…';
+        document.getElementById('recipientListPreviewTable').innerHTML = '';
+        fetch('/api/recipients/' + encodeURIComponent(filename) + '/preview?limit=5')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.error) { document.getElementById('recipientListInfo').textContent = data.error; return; }
+                document.getElementById('recipientListInfo').textContent =
+                    data.columns.length + ' columns: ' + data.columns.join(', ') + '  ·  showing ' + data.count + ' rows';
+                if (data.rows.length) {
+                    var html = '<table class="table" style="font-size:0.72rem;"><thead><tr>';
+                    data.columns.forEach(function(c) { html += '<th>' + c + '</th>'; });
+                    html += '</tr></thead><tbody>';
+                    data.rows.forEach(function(r) {
+                        html += '<tr>';
+                        data.columns.forEach(function(c) { html += '<td>' + (r[c] || '') + '</td>'; });
+                        html += '</tr>';
+                    });
+                    html += '</tbody></table>';
+                    document.getElementById('recipientListPreviewTable').innerHTML = html;
+                }
+            })
+            .catch(function() { document.getElementById('recipientListInfo').textContent = 'Preview unavailable'; });
+    }
+
+    /* ── Send test email ─────────────────────────────────────────────────── */
+    async function sendTestEmail() {
+        var to = document.getElementById('testEmailTo').value.trim();
+        if (!to) { alert('Enter a test recipient email address.'); return; }
+
+        var btn = document.getElementById('testEmailBtn');
+        var resultEl = document.getElementById('testEmailResult');
+        btn.disabled = true;
+        btn.textContent = 'Sending…';
+        resultEl.style.display = 'block';
+        resultEl.innerHTML = '<span class="text-muted">Sending test…</span>';
+
+        // Gather current form values without submitting
+        var formData = new FormData(document.getElementById('campaign-form'));
+        var payload = {};
+        formData.forEach(function(v, k) { payload[k] = v; });
+        payload.test_recipient = to;
+
+        try {
+            var res = await fetch('/api/campaigns/test-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            var data = await res.json();
+            if (data.success) {
+                resultEl.innerHTML = '<div style="color:var(--success);font-size:0.8rem;">✓ Test email sent to <strong>' + to + '</strong></div>';
+            } else {
+                resultEl.innerHTML = '<div style="color:var(--danger);font-size:0.8rem;">✗ ' + (data.error || 'Send failed') + '</div>';
+            }
+        } catch (e) {
+            resultEl.innerHTML = '<div style="color:var(--danger);font-size:0.8rem;">✗ Network error: ' + e.message + '</div>';
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Send Test';
+        }
     }
 
     /* ── Template picker ─────────────────────────────────────────────────── */
@@ -865,6 +1070,7 @@
 
     document.addEventListener('DOMContentLoaded', function() {
         loadTemplates();
+        loadRecipientLists();
         if (EDIT_MODE) {
             prefillForm(EDIT_CAMPAIGN);
         } else {
@@ -911,6 +1117,13 @@
         if (c.subjects && c.subjects.length > 1)
             set('[name="subjects_list"]', c.subjects.slice(1).join('\n'));
 
+        // Link — primary + rotation variants
+        if (c.links && c.links.length) {
+            set('[name="primary_link"]', c.links[0]);
+            if (c.links.length > 1)
+                set('[name="links_list"]', c.links.slice(1).join('\n'));
+        }
+
         // Template
         if (c.template_id) {
             document.getElementById('templateIdInput').value = c.template_id;
@@ -924,6 +1137,15 @@
                     if (opt) sel.value = c.template_id;
                 }
             }, 100);
+        } else if (c.template_path || (c.templates && c.templates.length)) {
+            // Custom path — queue restoration via _pendingDraftTemplateVal so
+            // loadTemplates() (async) can set the select after building options.
+            _pendingDraftTemplateVal = '__custom__';
+            document.getElementById('templateIdInput').value = '';
+            if (c.template_path)
+                set('[name="template_path"]', c.template_path);
+            if (c.templates && c.templates.length)
+                set('[name="templates_list"]', c.templates.join('\n'));
         }
 
         // Recipients
@@ -931,14 +1153,43 @@
             setRecipientsSource('manual', document.getElementById('srcBtnManual'));
             document.getElementById('manualRecipientsInput').value = c.settings.manual_recipients.join('\n');
         } else {
-            // recipients_path is now surfaced at top-level of campaign dict
-            set('[name="recipients_path"]', c.recipients_path || (c.settings && c.settings.recipients_path) || '');
+            var rPath = c.recipients_path || (c.settings && c.settings.recipients_path) || '';
+            if (rPath && rPath.indexOf('data/recipients/') === 0) {
+                // Matches an uploaded list — select it in the dropdown
+                setRecipientsSource('list', document.getElementById('srcBtnList'));
+                document.getElementById('recipientsPathInput').value = rPath;
+                // Wait for loadRecipientLists() to finish, then set the select
+                setTimeout(function() {
+                    var sel = document.getElementById('recipientListSelect');
+                    if (sel) { sel.value = rPath; onRecipientListSelect(); }
+                }, 300);
+            } else if (rPath) {
+                // Free-text file path
+                setRecipientsSource('file', document.getElementById('srcBtnFile'));
+                document.getElementById('recipientsFilePathInput').value = rPath;
+                document.getElementById('recipientsPathInput').value = rPath;
+            }
+            // else default stays on 'list' with nothing selected
         }
 
         // Toggles — prefer top-level dry_run (surfaced from settings in to_dict); fall back to settings
         check('[name="dry_run"]',        c.dry_run !== undefined ? c.dry_run : (c.settings && c.settings.dry_run));
         check('[name="enable_qr_code"]', c.enable_qr_code);
         check('[name="send_as_image"]',  c.convert_to_image);
+
+        // Tracking toggles (stored in settings)
+        var st = c.settings || {};
+        check('[name="enable_tracking"]',     st.enable_tracking !== undefined ? st.enable_tracking : true);
+        check('[name="track_opens"]',         st.track_opens !== undefined ? st.track_opens : true);
+        check('[name="track_clicks"]',        st.track_clicks !== undefined ? st.track_clicks : true);
+        if (st.tracking_base_url) set('[name="tracking_base_url"]', st.tracking_base_url);
+
+        // Rate & concurrency
+        if (c.concurrency)          set('[name="concurrency"]',           c.concurrency);
+        if (c.rate_per_minute)      set('[name="rate_per_minute"]',       c.rate_per_minute);
+        if (c.rate_per_hour)        set('[name="rate_per_hour"]',         c.rate_per_hour);
+        if (c.chunk_size)           set('[name="chunk_size"]',            c.chunk_size);
+        if (c.pause_between_chunks) set('[name="pause_between_chunks"]',  c.pause_between_chunks);
 
         // Dry-run banner
         var dryEl = document.querySelector('[name="dry_run"]');
@@ -1002,21 +1253,24 @@
             'dry_run', 'enable_qr_code', 'send_as_image',
             'validate_emails', 'deduplicate',
             'enable_tracking', 'track_opens', 'track_clicks',
-            'enable_bounce_filtering', 'convert_attachment'
+            'convert_attachment'
         ];
-        var intFields = [];
+        var intFields = ['concurrency', 'rate_per_minute', 'rate_per_hour', 'chunk_size', 'pause_between_chunks'];
 
-        // Manual recipients: parse textarea into array and inject
+        // Recipients: set the right path / manual list based on active source
         if (_recipientsSource === 'manual') {
             var raw = document.getElementById('manualRecipientsInput').value;
             var emails = raw.split(/[\n,;]+/)
                 .map(function(s) { return s.trim().toLowerCase(); })
                 .filter(function(s) { return s.length > 0; });
-            // Deduplicate
             emails = emails.filter(function(v, i, arr) { return arr.indexOf(v) === i; });
             data['manual_recipients'] = emails;
             delete data['recipients_path'];
+        } else if (_recipientsSource === 'file') {
+            // Use the free-text file path input
+            data['recipients_path'] = (document.getElementById('recipientsFilePathInput').value || '').trim();
         }
+        // 'list' mode: recipients_path is already set via hidden input from the select
 
         formData.forEach(function(value, key) {
             if (checkboxFields.includes(key)) data[key] = true;
@@ -1041,6 +1295,21 @@
                 data[key] = data[raw].split('\n').map(function(s) { return s.trim(); }).filter(Boolean);
             }
             delete data[raw];
+        }
+
+        // Merge primary subject field into the subjects array so both the
+        // Content-tab field and the Rotation-tab textarea are saved together.
+        var _mainSubj = (data.subject || '').trim();
+        delete data.subject;
+        if (_mainSubj || data.subjects) {
+            data.subjects = [_mainSubj].concat(data.subjects || []).filter(Boolean);
+        }
+
+        // Merge primary link into the links array (primary first, then rotation variants)
+        var _mainLink = (data.primary_link || '').trim();
+        delete data.primary_link;
+        if (_mainLink || data.links) {
+            data.links = [_mainLink].concat(data.links || []).filter(Boolean);
         }
 
         try {

@@ -126,6 +126,9 @@ class Campaign(Base, BaseModel):
         result['subject'] = (self.subjects[0] if self.subjects else '') or ''
         result['from_emails'] = s.get('from_emails') or []
         result['from_names']  = s.get('from_names')  or []
+        result['links']         = s.get('links') or []
+        result['template_path'] = s.get('template_path', '')
+        result['templates']     = s.get('templates') or []
         if self.started_at and self.completed_at:
             result['duration_seconds'] = int((self.completed_at - self.started_at).total_seconds())
         else:

@@ -666,14 +666,6 @@ def test_api_bounce_stats(client, auth_headers):
     assert 'total' in data
 
 
-def test_api_add_to_suppression_missing_email(client, auth_headers):
-    """POST /api/bounces/suppression without email returns 400 (covers lines 551-562)."""
-    resp = client.post('/api/bounces/suppression', headers=auth_headers, json={})
-    assert resp.status_code == 400
-    data = json.loads(resp.data)
-    assert 'Email is required' in data['error']
-
-
 # ─────────────────────────────────────────────
 # web/routes/api.py – dead-letter list, retry, discard (lines 510-524, 532-543, 551-562)
 # ─────────────────────────────────────────────

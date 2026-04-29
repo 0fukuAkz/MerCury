@@ -668,7 +668,6 @@ class TestSendCommand:
                 service.load_recipients_from_text.return_value = [
                     {"email": "u@test.com"}
                 ]
-                service.bounce_service = None
                 mock_run.return_value = {"sent": 1, "failed": 0}
 
                 result = runner.invoke(cli, ["send", "cfg.yaml", "--yes"])
@@ -696,44 +695,10 @@ class TestSendCommand:
                 service.load_recipients_from_csv.return_value = [
                     {"email": f"u{i}@test.com"} for i in range(5)
                 ]
-                service.bounce_service = None
                 mock_run.return_value = {"sent": 2, "failed": 0}
 
                 result = runner.invoke(cli, ["send", "cfg.yaml", "--yes", "--to", "2"])
                 assert result.exit_code == 0
-
-    def test_send_with_bounce_service_suppression(self, runner):
-        """Lines 349-353: suppressed emails are filtered out."""
-        with runner.isolated_filesystem():
-            with open("cfg.yaml", "w") as f:
-                f.write("")
-            with patch(
-                "mercury.services.campaign_service.load_campaign_from_yaml"
-            ) as mock_load, patch(
-                "mercury.services.campaign_service.CampaignService"
-            ) as MockService, patch(
-                "asyncio.run"
-            ) as mock_run:
-                config = Mock()
-                config.recipients_path = "r.csv"
-                config.dry_run = False
-                mock_load.return_value = config
-
-                service = MockService.return_value
-                service.load_recipients_from_csv.return_value = [
-                    {"email": "allowed@test.com"},
-                    {"email": "suppressed@test.com"},
-                ]
-                bounce_svc = MagicMock()
-                bounce_svc.filter_recipients.return_value = (
-                    ["allowed@test.com"],  # allowed
-                    ["suppressed@test.com"],  # suppressed
-                )
-                service.bounce_service = bounce_svc
-                mock_run.return_value = {"sent": 1, "failed": 0}
-
-                result = runner.invoke(cli, ["send", "cfg.yaml", "--yes"])
-                assert "Skipping 1 suppressed" in result.output
 
     def test_send_with_failed_emails(self, runner):
         """Line 389: failed > 0 shows 'Check logs' message."""
@@ -756,7 +721,6 @@ class TestSendCommand:
                 service.load_recipients_from_csv.return_value = [
                     {"email": "u@test.com"}
                 ]
-                service.bounce_service = None
                 mock_run.return_value = {"sent": 0, "failed": 1}
 
                 result = runner.invoke(cli, ["send", "cfg.yaml", "--yes"])
@@ -783,7 +747,6 @@ class TestSendCommand:
                 service.load_recipients_from_csv.return_value = [
                     {"email": "u@test.com"}
                 ]
-                service.bounce_service = None
                 mock_run.return_value = {"sent": 1, "failed": 0}
 
                 result = runner.invoke(

@@ -17,7 +17,7 @@ from ..security.auth import get_user_by_id, hash_password
 from ..data.repositories import UserRepository
 
 # Import extensions (limiter, socketio)
-from .extensions import socketio
+from .extensions import socketio, start_background_loop
 from .events import register_socketio_events
 
 # Import routes
@@ -123,6 +123,10 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
     # Register SocketIO events
     register_socketio_events(socketio)
 
+    # Eagerly start the shared background asyncio loop so the first request
+    # doesn't pay the start cost. (run_async() also starts it lazily.)
+    start_background_loop()
+
     # Inject ui_theme into every template so base.html can set data-theme
     from ..services.settings_service import SettingsService
 
@@ -140,15 +144,19 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
             init_db()
             
             # --- Run Alembic migrations to head ---
-            try:
-                _alembic_ini = os.path.join(
-                    os.path.dirname(__file__), '..', '..', '..', 'alembic.ini'
-                )
-                _alembic_cfg = AlembicConfig(os.path.abspath(_alembic_ini))
-                alembic_command.upgrade(_alembic_cfg, 'head')
-                logger.info("Database migrations applied successfully")
-            except Exception as ex:
-                logger.warning(f"Alembic migration failed (may be a fresh DB or already current): {ex}")
+            # Set MERCURY_SKIP_BOOT_MIGRATIONS=1 to disable. Required for
+            # multi-worker / multi-instance deploys, where migrations should
+            # be run once out-of-band before workers start.
+            if os.environ.get('MERCURY_SKIP_BOOT_MIGRATIONS', '').lower() not in ('1', 'true', 'yes'):
+                try:
+                    _alembic_ini = os.path.join(
+                        os.path.dirname(__file__), '..', '..', '..', 'alembic.ini'
+                    )
+                    _alembic_cfg = AlembicConfig(os.path.abspath(_alembic_ini))
+                    alembic_command.upgrade(_alembic_cfg, 'head')
+                    logger.info("Database migrations applied successfully")
+                except Exception as ex:
+                    logger.warning(f"Alembic migration failed (may be a fresh DB or already current): {ex}")
             # --------------------------------------
             
             # Create default admin if none exists

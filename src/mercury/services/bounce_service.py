@@ -58,13 +58,11 @@ class BounceRecord:
 
 class BounceService:
     """
-    Service for handling email bounces and maintaining suppression lists.
+    Service for handling email bounces.
     
     Features:
     - Categorize bounces (hard/soft)
-    - Maintain suppression list
     - Track soft bounce counts
-    - Export suppression list
     """
     
     # Soft bounce threshold - after this many soft bounces, treat as hard
@@ -73,53 +71,9 @@ class BounceService:
     def __init__(self, suppression_file: Optional[str] = None):
         """
         Initialize bounce service.
-        
-        Args:
-            suppression_file: Path to suppression list file
         """
-        self.suppression_file = suppression_file or os.environ.get(
-            'SUPPRESSION_FILE',
-            'data/suppression_list.txt'
-        )
-        
-        self._suppression_list: Set[str] = set()
         self._soft_bounce_counts: Dict[str, int] = {}
         self._bounces: List[BounceRecord] = []
-        
-        # Load existing suppression list
-        self._load_suppression_list()
-    
-    def _load_suppression_list(self) -> None:
-        """Load suppression list from file."""
-        if not os.path.exists(self.suppression_file):
-            return
-        
-        try:
-            with open(self.suppression_file, 'r', encoding='utf-8') as f:
-                for line in f:
-                    email = line.strip().lower()
-                    if email and not email.startswith('#'):
-                        self._suppression_list.add(email)
-            
-            logger.info(f"Loaded {len(self._suppression_list)} suppressed emails")
-            
-        except Exception as e:
-            logger.error(f"Failed to load suppression list: {e}")
-    
-    def _save_suppression_list(self) -> None:
-        """Save suppression list to file."""
-        try:
-            os.makedirs(os.path.dirname(self.suppression_file) or '.', exist_ok=True)
-            
-            with open(self.suppression_file, 'w', encoding='utf-8') as f:
-                f.write(f"# Suppression list - Updated {datetime.now(UTC).isoformat()}\n")
-                for email in sorted(self._suppression_list):
-                    f.write(f"{email}\n")
-            
-            logger.debug(f"Saved {len(self._suppression_list)} suppressed emails")
-            
-        except Exception as e:
-            logger.error(f"Failed to save suppression list: {e}")
     
     def categorize_bounce(
         self,
@@ -221,20 +175,13 @@ class BounceService:
         
         self._bounces.append(record)
         
-        # Handle based on bounce type
+        # Track soft bounce counts
         if bounce_type == BounceType.HARD:
-            self.add_to_suppression_list(email)
-            logger.info(f"Hard bounce: {email} - Added to suppression list")
-        
+            logger.info(f"Hard bounce: {email}")
         elif bounce_type == BounceType.SOFT:
             count = self._soft_bounce_counts.get(email, 0) + 1
             self._soft_bounce_counts[email] = count
-            
-            if count >= self.SOFT_BOUNCE_THRESHOLD:
-                self.add_to_suppression_list(email)
-                logger.info(f"Soft bounce threshold reached: {email} - Added to suppression list")
-            else:
-                logger.debug(f"Soft bounce {count}/{self.SOFT_BOUNCE_THRESHOLD}: {email}")
+            logger.debug(f"Soft bounce {count}/{self.SOFT_BOUNCE_THRESHOLD}: {email}")
         
         return record
     
@@ -268,9 +215,8 @@ class BounceService:
         )
         
         self._bounces.append(record)
-        self.add_to_suppression_list(email)
         
-        logger.warning(f"Spam complaint: {email} - Added to suppression list")
+        logger.warning(f"Spam complaint: {email}")
         
         return record
     
@@ -304,59 +250,10 @@ class BounceService:
         )
         
         self._bounces.append(record)
-        self.add_to_suppression_list(email)
         
-        logger.info(f"Unsubscribe: {email} - Added to suppression list")
+        logger.info(f"Unsubscribe: {email}")
         
         return record
-    
-    def add_to_suppression_list(self, email: str) -> None:
-        """Add email to suppression list."""
-        email = email.lower().strip()
-        if email not in self._suppression_list:
-            self._suppression_list.add(email)
-            self._save_suppression_list()
-    
-    def remove_from_suppression_list(self, email: str) -> bool:
-        """Remove email from suppression list."""
-        email = email.lower().strip()
-        if email in self._suppression_list:
-            self._suppression_list.discard(email)
-            self._save_suppression_list()
-            return True
-        return False
-    
-    def is_suppressed(self, email: str) -> bool:
-        """Check if email is on suppression list."""
-        return email.lower().strip() in self._suppression_list
-    
-    def filter_recipients(self, emails: List[str]) -> tuple[List[str], List[str]]:
-        """
-        Filter recipient list against suppression list.
-        
-        Args:
-            emails: List of email addresses
-            
-        Returns:
-            Tuple of (allowed_emails, suppressed_emails)
-        """
-        allowed = []
-        suppressed = []
-        
-        for email in emails:
-            if self.is_suppressed(email):
-                suppressed.append(email)
-            else:
-                allowed.append(email)
-        
-        if suppressed:
-            logger.info(f"Filtered {len(suppressed)} suppressed emails from {len(emails)} recipients")
-        
-        return allowed, suppressed
-    
-    def get_suppression_list(self) -> List[str]:
-        """Get current suppression list."""
-        return sorted(self._suppression_list)
     
     def get_bounce_stats(self) -> Dict[str, Any]:
         """Get bounce statistics."""
@@ -371,51 +268,12 @@ class BounceService:
             'soft_bounces': len(soft_bounces),
             'complaints': len(complaints),
             'unsubscribes': len(unsubscribes),
-            'suppression_list_size': len(self._suppression_list),
+            'suppression_list_size': 0,
             'by_category': {
                 category.value: len([b for b in self._bounces if b.category == category])
                 for category in BounceCategory
             }
         }
     
-    def export_suppression_list(self, filepath: str) -> int:
-        """
-        Export suppression list to file.
-        
-        Args:
-            filepath: Output file path
-            
-        Returns:
-            Number of emails exported
-        """
-        with open(filepath, 'w', encoding='utf-8') as f:
-            f.write(f"# Suppression list export - {datetime.now(UTC).isoformat()}\n")
-            for email in sorted(self._suppression_list):
-                f.write(f"{email}\n")
-        
-        return len(self._suppression_list)
-    
-    def import_suppression_list(self, filepath: str) -> int:
-        """
-        Import emails to suppression list.
-        
-        Args:
-            filepath: Input file path
-            
-        Returns:
-            Number of emails imported
-        """
-        count = 0
-        with open(filepath, 'r', encoding='utf-8') as f:
-            for line in f:
-                email = line.strip().lower()
-                if email and not email.startswith('#') and '@' in email:
-                    if email not in self._suppression_list:
-                        self._suppression_list.add(email)
-                        count += 1
-        
-        self._save_suppression_list()
-        logger.info(f"Imported {count} emails to suppression list")
-        
-        return count
+
 

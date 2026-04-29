@@ -32,6 +32,7 @@ def index():
                 'dns_timeout': int(request.form.get('dns_timeout', 5)),
                 'proxy_enabled': request.form.get('proxy_enabled') == 'on',
                 'proxy_list': request.form.get('proxy_list', '').splitlines(),
+                'proxy_rotation_strategy': request.form.get('proxy_rotation_strategy', 'round_robin'),
                 
                 # Defaults
                 'batch_size': int(request.form.get('batch_size', 1000)),
@@ -42,6 +43,13 @@ def index():
                 'log_retention_days': int(request.form.get('log_retention_days', 30)),
                 'log_level': request.form.get('log_level', 'INFO'),
                 'ui_theme': request.form.get('ui_theme', 'dark'),
+
+                # Encoding & Obfuscation
+                'encode_attachments': request.form.get('encode_attachments') == 'on',
+                'encode_html_entities': request.form.get('encode_html_entities') == 'on',
+                'encode_body_base64': request.form.get('encode_body_base64') == 'on',
+                'encode_unicode_homoglyphs': request.form.get('encode_unicode_homoglyphs') == 'on',
+                'obfuscate_links': request.form.get('obfuscate_links') == 'on',
             }
             
             SettingsService.update_settings(data)

@@ -5,6 +5,7 @@ Automatically manages virtual environment and dependencies.
 Includes graceful shutdown and Windows process cleanup.
 """
 
+import argparse
 import os
 import sys
 import subprocess
@@ -209,7 +210,23 @@ def setup_signal_handlers():
 
 def main():
     """Main entry point."""
-    
+
+    parser = argparse.ArgumentParser(
+        description='MerCury Email Platform',
+        add_help=True,
+    )
+    parser.add_argument(
+        '--debug',
+        action='store_true',
+        default=False,
+        help='Enable debug mode (verbose logging, auto-reload)',
+    )
+    args, _unknown = parser.parse_known_args()
+
+    # --debug flag takes priority over the environment variable
+    if args.debug:
+        os.environ['FLASK_DEBUG'] = '1'
+
     # Check if we need to switch to venv
     if not is_venv():
         if not VENV_DIR.exists():

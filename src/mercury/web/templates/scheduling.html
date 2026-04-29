@@ -77,6 +77,19 @@
                 </div>
             </div>
 
+            <div id="recurring-interval-fields" style="display: none;">
+                <div class="form-group">
+                    <label class="form-label">Timezone</label>
+                    <input type="text" class="form-input" name="timezone" placeholder="UTC">
+                    <small class="text-muted">e.g. America/New_York, Europe/London, Asia/Tokyo</small>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Max Runs</label>
+                    <input type="number" class="form-input" name="max_runs" placeholder="0 = unlimited" min="0">
+                    <small class="text-muted">Stop automatically after this many executions (0 = run indefinitely)</small>
+                </div>
+            </div>
+
             <button type="submit" class="btn btn-primary">Create Scheduled Job</button>
         </form>
     </div>
@@ -113,6 +126,7 @@
         document.getElementById('once-fields').style.display = type === 'once' ? 'block' : 'none';
         document.getElementById('recurring-fields').style.display = type === 'recurring' ? 'block' : 'none';
         document.getElementById('interval-fields').style.display = type === 'interval' ? 'block' : 'none';
+        document.getElementById('recurring-interval-fields').style.display = (type === 'recurring' || type === 'interval') ? 'block' : 'none';
     }
 
     async function loadJobs() {

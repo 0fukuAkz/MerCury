@@ -343,14 +343,6 @@ def send(ctx, config_file, preview, limit, yes):
     if limit:
         recipients = recipients[:limit]
     
-    # Filter suppressed
-    if service.bounce_service:
-        emails = [r.get('email', r) if isinstance(r, dict) else r for r in recipients]
-        allowed, suppressed = service.bounce_service.filter_recipients(emails)
-        if suppressed:
-            click.echo(f"Skipping {len(suppressed)} suppressed")
-            recipients = [r for r in recipients if (r.get('email', r) if isinstance(r, dict) else r) in allowed]
-    
     # Summary
     click.echo(f"Campaign: {config.name}")
     click.echo(f"From: {config.from_name} <{config.from_email}>")
@@ -532,7 +524,8 @@ def generate_image(input_file, output_file):
 @click.argument('what', type=click.Choice(['server', 'web', 'dashboard']), default='server')
 @click.option('-p', '--port', default=8080, help='Port number')
 @click.option('--open', 'open_browser', is_flag=True, help='Open browser')
-def start(what, port, open_browser):
+@click.option('--debug', is_flag=True, default=False, help='Enable debug mode')
+def start(what, port, open_browser, debug):
     """
     Start web dashboard.
     
@@ -541,6 +534,7 @@ def start(what, port, open_browser):
       sender start server
       sender start server --port 3000
       sender start --open
+      sender start --debug
     """
     banner()
     
@@ -554,12 +548,12 @@ def start(what, port, open_browser):
         import webbrowser
         webbrowser.open(f'http://127.0.0.1:{port}')
     
-    app = create_app()
+    app = create_app(config={'DEBUG': debug})
     
     if socketio:
-        socketio.run(app, host='127.0.0.1', port=port, debug=False)
+        socketio.run(app, host='127.0.0.1', port=port, debug=debug)
     else:
-        app.run(host='127.0.0.1', port=port, debug=False)
+        app.run(host='127.0.0.1', port=port, debug=debug)
 
 
 # =============================================================================

@@ -37,6 +37,10 @@ def _build_config_from_campaign(campaign) -> CampaignConfig:
         elif campaign.template.html_content:
             html_content = campaign.template.html_content
 
+    # Fallback: custom template path stored in settings
+    if not template_path and not html_content:
+        template_path = settings.get('template_path', '')
+
     return CampaignConfig(
         name=campaign.name,
         description=campaign.description or "",
@@ -50,6 +54,7 @@ def _build_config_from_campaign(campaign) -> CampaignConfig:
         template_id=campaign.template_id,
         template_path=template_path,
         html_content=html_content,
+        templates=settings.get('templates') or None,
         recipients_path=campaign.settings.get("recipients_path", "") if settings else "",
         manual_recipients=settings.get("manual_recipients"),
         links=settings.get("links"),
@@ -62,6 +67,10 @@ def _build_config_from_campaign(campaign) -> CampaignConfig:
         send_as_image=campaign.convert_to_image or False,
         smtp_rotation=campaign.smtp_rotation_strategy or "weighted",
         dry_run=bool(settings.get("dry_run", False)),
+        enable_tracking=bool(settings.get("enable_tracking", True)),
+        track_opens=bool(settings.get("track_opens", True)),
+        track_clicks=bool(settings.get("track_clicks", True)),
+        tracking_base_url=settings.get("tracking_base_url") or "",
     )
 
 

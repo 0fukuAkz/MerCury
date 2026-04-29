@@ -81,7 +81,7 @@ class EmailResult:
     """Result of email send operation."""
     success: bool
     recipient: str
-    correlation_id: str
+    correlation_id: Optional[str]
     timestamp: datetime
     smtp_server: Optional[str] = None
     smtp_response: Optional[str] = None
@@ -178,7 +178,8 @@ class AsyncEmailSender:
         attachments: Optional[List[Dict[str, Any]]] = None,
         headers: Optional[Dict[str, str]] = None,
         correlation_id: Optional[str] = None,
-        preferred_smtp: Optional[str] = None
+        preferred_smtp: Optional[str] = None,
+        force_base64_body: bool = False
     ) -> EmailResult:
         """
         Send single email asynchronously.
@@ -249,7 +250,8 @@ class AsyncEmailSender:
             
             # Set content
             msg.set_content("This message requires HTML support.")
-            msg.add_alternative(html_body, subtype='html')
+            html_cte = 'base64' if force_base64_body else None
+            msg.add_alternative(html_body, subtype='html', cte=html_cte)
             
             # Add attachments
             if attachments:

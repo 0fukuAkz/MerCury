@@ -155,18 +155,6 @@ def test_api_scheduling_create_invalid(client, auth_headers):
     response = client.post('/api/scheduling/jobs', headers=auth_headers, json={})
     assert response.status_code == 400
 
-@patch('mercury.services.bounce_service.BounceService.get_suppression_list')
-def test_api_bounces(mock_sup, client, auth_headers):
-    mock_sup.return_value = []
-    response = client.get('/api/bounces/suppression', headers=auth_headers)
-    assert response.status_code == 200
-    
-    response_add = client.post('/api/bounces/suppression', headers=auth_headers, json={'email': 'bounce@exp.com'})
-    assert response_add.status_code == 200
-
-    response_rm = client.delete('/api/bounces/suppression/bounce@exp.com', headers=auth_headers)
-    assert response_rm.status_code == 200
-
 @patch('mercury.services.dead_letter_service.DeadLetterService.get_statistics')
 def test_api_dead_letter(mock_stats, client, auth_headers):
     mock_stats.return_value = {}

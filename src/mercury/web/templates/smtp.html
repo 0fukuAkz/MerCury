@@ -139,6 +139,22 @@
     }
     @media (max-width: 800px) { .edit-row-grid { grid-template-columns: 1fr 1fr; } }
 
+    /* ── Metrics cell ── */
+    .smtp-metrics { min-width: 140px; }
+    .smtp-metrics-nums { display: flex; align-items: center; gap: 0.35rem; font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; margin-bottom: 0.35rem; }
+    .smtp-metrics-sent { color: var(--neon-green); font-weight: 600; }
+    .smtp-metrics-fail { color: var(--error); font-weight: 600; }
+    .smtp-metrics-sep { color: var(--text-muted); }
+    .smtp-metrics-total { color: var(--text-muted); font-size: 0.68rem; margin-left: 0.15rem; }
+    .smtp-bar-wrap { width: 100%; height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; overflow: hidden; display: flex; }
+    .smtp-bar-ok { height: 100%; background: var(--neon-green); transition: width 0.4s ease; }
+    .smtp-bar-err { height: 100%; background: var(--error); transition: width 0.4s ease; }
+    .smtp-rate-badge { display: inline-block; font-size: 0.62rem; font-weight: 700; padding: 0.1rem 0.4rem; border-radius: 999px; margin-top: 0.3rem; }
+    .smtp-rate-badge.great { background: rgba(57,255,20,0.12); color: var(--neon-green); }
+    .smtp-rate-badge.good  { background: rgba(0,255,255,0.1); color: var(--neon-cyan); }
+    .smtp-rate-badge.warn  { background: rgba(255,107,53,0.12); color: var(--warning); }
+    .smtp-rate-badge.bad   { background: rgba(255,0,85,0.12); color: var(--error); }
+
     /* ── Empty state ── */
     .empty-state {
         text-align: center; padding: 3rem 1rem; color: var(--text-muted);
@@ -252,7 +268,7 @@
                 <th>TLS</th>
                 <th>Status</th>
                 <th>Circuit</th>
-                <th>Sent / Failed</th>
+                <th>Metrics</th>
                 <th>Rate</th>
                 <th>Actions</th>
             </tr>
@@ -359,10 +375,30 @@
                     '<td>' + tlsBadge + '</td>',
                     '<td>' + statusBadge + '</td>',
                     '<td>' + circuitBadge + '</td>',
-                    '<td class="font-mono" style="font-size:0.78rem">' +
-                        esc(s.total_sent || 0) + ' / ' +
-                        '<span style="color:var(--error)">' + esc(s.total_failed || 0) + '</span>' +
-                    '</td>',
+                    (function() {
+                        var sent = s.total_sent || 0;
+                        var fail = s.total_failed || 0;
+                        var total = sent + fail;
+                        var pct = total > 0 ? Math.round(sent / total * 100) : 100;
+                        var okW = total > 0 ? (sent / total * 100) : 0;
+                        var errW = total > 0 ? (fail / total * 100) : 0;
+                        var cls = pct >= 98 ? 'great' : pct >= 90 ? 'good' : pct >= 75 ? 'warn' : 'bad';
+                        return '<td class="smtp-metrics">' +
+                            '<div class="smtp-metrics-nums">' +
+                                '<span class="smtp-metrics-sent">' + sent.toLocaleString() + '</span>' +
+                                '<span class="smtp-metrics-sep">/</span>' +
+                                '<span class="smtp-metrics-fail">' + fail.toLocaleString() + '</span>' +
+                                (total > 0 ? '<span class="smtp-metrics-total">(' + total.toLocaleString() + ')</span>' : '') +
+                            '</div>' +
+                            (total > 0
+                                ? '<div class="smtp-bar-wrap">' +
+                                    '<div class="smtp-bar-ok" style="width:' + okW.toFixed(1) + '%"></div>' +
+                                    '<div class="smtp-bar-err" style="width:' + errW.toFixed(1) + '%"></div>' +
+                                  '</div>' +
+                                  '<span class="smtp-rate-badge ' + cls + '">' + pct + '% success</span>'
+                                : '<span style="font-size:0.68rem;color:var(--text-muted)">No activity</span>') +
+                            '</td>';
+                    })(),
                     '<td class="font-mono" style="font-size:0.78rem">' +
                         esc(s.current_minute_count || 0) + '/' + esc(s.max_per_minute || 30) + '/min' +
                     '</td>',

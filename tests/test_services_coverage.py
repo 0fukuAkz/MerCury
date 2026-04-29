@@ -74,7 +74,7 @@ class TestDeadLetterServiceCoverage:
 
 
 # ---------------------------------------------------------------------------
-# bounce_service - lines 46, 95, 106-107, 121-122, 181-185, 292-311, 327, 391-396
+# bounce_service - bounce categorization and recording
 # ---------------------------------------------------------------------------
 
 class TestBounceServiceCoverage:
@@ -99,41 +99,10 @@ class TestBounceServiceCoverage:
         assert d['category'] == 'invalid_address'
         assert d['smtp_code'] == '550'
 
-    def test_load_suppression_list_missing_file(self):
-        """Line 95: _load_suppression_list when file doesn't exist."""
-        from mercury.services.bounce_service import BounceService
-        svc = BounceService(suppression_file='/nonexistent/path/file.txt')
-        # Should silently skip (no exception)
-        assert len(svc._suppression_list) == 0
-
-    def test_load_suppression_list_read_error(self):
-        """Lines 106-107: _load_suppression_list catches read errors."""
-        from mercury.services.bounce_service import BounceService
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
-            f.write("valid@example.com\n")
-            fname = f.name
-
-        try:
-            with patch('builtins.open', side_effect=PermissionError("no permission")):
-                svc = BounceService(suppression_file=fname)
-            # Should not raise, just log
-            assert len(svc._suppression_list) == 0
-        finally:
-            os.unlink(fname)
-
-    def test_save_suppression_list_error(self):
-        """Lines 121-122: _save_suppression_list catches write errors."""
-        from mercury.services.bounce_service import BounceService
-        svc = BounceService(suppression_file='/nonexistent/path/file.txt')
-
-        with patch('builtins.open', side_effect=PermissionError("no write")):
-            # Should not raise
-            svc._save_suppression_list()
-
     def test_categorize_bounce_smtp_code_5xx(self):
         """Lines 181-185: categorize_bounce with 5xx SMTP codes."""
         from mercury.services.bounce_service import BounceService, BounceType, BounceCategory
-        svc = BounceService(suppression_file='/tmp/test_supp.txt')
+        svc = BounceService()
 
         # 550 -> HARD / INVALID_ADDRESS
         btype, cat = svc.categorize_bounce("550", "some unknown message")
@@ -148,33 +117,10 @@ class TestBounceServiceCoverage:
     def test_process_unsubscribe(self):
         """Lines 292-311: process_unsubscribe."""
         from mercury.services.bounce_service import BounceService, BounceType
-        with tempfile.TemporaryDirectory() as tmpdir:
-            svc = BounceService(suppression_file=os.path.join(tmpdir, 'supp.txt'))
-            record = svc.process_unsubscribe("user@example.com", campaign_id="c1")
-            assert record.bounce_type == BounceType.UNSUBSCRIBE
-            assert record.email == "user@example.com"
-            assert svc.is_suppressed("user@example.com")
-
-    def test_remove_from_suppression_list_not_found(self):
-        """Line 327: remove_from_suppression_list returns False when not found."""
-        from mercury.services.bounce_service import BounceService
-        with tempfile.TemporaryDirectory() as tmpdir:
-            svc = BounceService(suppression_file=os.path.join(tmpdir, 'supp.txt'))
-            result = svc.remove_from_suppression_list("notexist@example.com")
-            assert result is False
-
-    def test_export_suppression_list(self):
-        """Lines 391-396: export_suppression_list."""
-        from mercury.services.bounce_service import BounceService
-        with tempfile.TemporaryDirectory() as tmpdir:
-            svc = BounceService(suppression_file=os.path.join(tmpdir, 'supp.txt'))
-            svc._suppression_list = {"a@test.com", "b@test.com"}
-            export_path = os.path.join(tmpdir, 'export.txt')
-            count = svc.export_suppression_list(export_path)
-            assert count == 2
-            with open(export_path) as f:
-                lines = f.read()
-            assert "a@test.com" in lines
+        svc = BounceService()
+        record = svc.process_unsubscribe("user@example.com", campaign_id="c1")
+        assert record.bounce_type == BounceType.UNSUBSCRIBE
+        assert record.email == "user@example.com"
 
 
 # ---------------------------------------------------------------------------

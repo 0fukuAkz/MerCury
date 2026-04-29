@@ -39,6 +39,7 @@ class ScheduledJob:
     last_run: Optional[datetime] = None
     next_run: Optional[datetime] = None
     run_count: int = 0
+    max_runs: Optional[int] = None
     enabled: bool = True
     metadata: Dict[str, Any] = field(default_factory=dict)
     
@@ -55,6 +56,7 @@ class ScheduledJob:
             'last_run': self.last_run.isoformat() if self.last_run else None,
             'next_run': self.next_run.isoformat() if self.next_run else None,
             'run_count': self.run_count,
+            'max_runs': self.max_runs,
             'enabled': self.enabled
         }
 
@@ -104,6 +106,12 @@ class SchedulerService:
             job = self._jobs[job_id]
             job.last_run = datetime.now(UTC)
             job.run_count += 1
+            
+            # Auto-cancel if max_runs reached
+            if job.max_runs and job.run_count >= job.max_runs:
+                self.cancel_job(job_id)
+                logger.info(f"Job {job.name} reached max_runs ({job.max_runs}), cancelled")
+                return
             
             # Update next run time
             scheduler_job = self._scheduler.get_job(job_id)
@@ -187,6 +195,8 @@ class SchedulerService:
         cron_expression: str,
         callback: Callable,
         campaign_id: Optional[str] = None,
+        timezone: Optional[str] = None,
+        max_runs: Optional[int] = None,
         **kwargs
     ) -> ScheduledJob:
         """
@@ -210,6 +220,7 @@ class SchedulerService:
             scheduled_at=datetime.now(UTC),
             campaign_id=campaign_id,
             cron_expression=cron_expression,
+            max_runs=max_runs,
             metadata=kwargs
         )
         
@@ -218,13 +229,16 @@ class SchedulerService:
         
         # Parse cron expression
         parts = cron_expression.split()
-        trigger = CronTrigger(
+        trigger_kwargs = dict(
             minute=parts[0] if len(parts) > 0 else '*',
             hour=parts[1] if len(parts) > 1 else '*',
             day=parts[2] if len(parts) > 2 else '*',
             month=parts[3] if len(parts) > 3 else '*',
             day_of_week=parts[4] if len(parts) > 4 else '*'
         )
+        if timezone:
+            trigger_kwargs['timezone'] = timezone
+        trigger = CronTrigger(**trigger_kwargs)
         
         self._scheduler.add_job(
             self._execute_job,
@@ -252,6 +266,8 @@ class SchedulerService:
         callback: Callable,
         campaign_id: Optional[str] = None,
         start_immediately: bool = False,
+        timezone: Optional[str] = None,
+        max_runs: Optional[int] = None,
         **kwargs
     ) -> ScheduledJob:
         """
@@ -276,13 +292,17 @@ class SchedulerService:
             scheduled_at=datetime.now(UTC),
             campaign_id=campaign_id,
             interval_seconds=interval_seconds,
+            max_runs=max_runs,
             metadata=kwargs
         )
         
         self._jobs[job_id] = job
         self._callbacks[job_id] = callback
         
-        trigger = IntervalTrigger(seconds=interval_seconds)
+        trigger_kwargs = dict(seconds=interval_seconds)
+        if timezone:
+            trigger_kwargs['timezone'] = timezone
+        trigger = IntervalTrigger(**trigger_kwargs)
         
         self._scheduler.add_job(
             self._execute_job,

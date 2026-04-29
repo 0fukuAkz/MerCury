@@ -17,16 +17,27 @@ class ConnectionPoolException(Exception):
     pass
 
 
-def _create_circuit_breaker(server_name: str = "default") -> CircuitBreaker:
-    """Factory function to create a circuit breaker with default config."""
+def _create_circuit_breaker(
+    server_name: str = "default",
+    *,
+    failure_threshold: int = 5,
+    success_threshold: int = 3,
+    timeout_seconds: int = 60,
+    monitor_window_seconds: int = 300,
+) -> CircuitBreaker:
+    """Factory function to create a circuit breaker.
+
+    Defaults match the previous hard-coded values; per-server overrides flow
+    in through ``SMTPServerConfig`` fields and ultimately ``from_dict``.
+    """
     return CircuitBreaker(
         server_name=server_name,
         config=CircuitBreakerConfig(
-            failure_threshold=5,
-            success_threshold=3,
-            timeout_seconds=60,
-            monitor_window_seconds=300
-        )
+            failure_threshold=failure_threshold,
+            success_threshold=success_threshold,
+            timeout_seconds=timeout_seconds,
+            monitor_window_seconds=monitor_window_seconds,
+        ),
     )
 
 
@@ -48,7 +59,13 @@ class SMTPServerConfig:
     priority: int = 0
     max_per_minute: int = 30
     max_per_hour: int = 500
-    
+
+    # Circuit breaker tuning (per-server overrides; None = use defaults).
+    cb_failure_threshold: Optional[int] = None
+    cb_success_threshold: Optional[int] = None
+    cb_timeout_seconds: Optional[int] = None
+    cb_monitor_window_seconds: Optional[int] = None
+
     # Runtime state - circuit_breaker will be initialized in __post_init__
     circuit_breaker: CircuitBreaker = field(default=None)
     current_minute_count: int = 0
@@ -62,7 +79,16 @@ class SMTPServerConfig:
     def __post_init__(self):
         """Initialize circuit breaker after dataclass initialization."""
         if self.circuit_breaker is None:
-            self.circuit_breaker = _create_circuit_breaker(self.name)
+            cb_kwargs = {}
+            if self.cb_failure_threshold is not None:
+                cb_kwargs['failure_threshold'] = self.cb_failure_threshold
+            if self.cb_success_threshold is not None:
+                cb_kwargs['success_threshold'] = self.cb_success_threshold
+            if self.cb_timeout_seconds is not None:
+                cb_kwargs['timeout_seconds'] = self.cb_timeout_seconds
+            if self.cb_monitor_window_seconds is not None:
+                cb_kwargs['monitor_window_seconds'] = self.cb_monitor_window_seconds
+            self.circuit_breaker = _create_circuit_breaker(self.name, **cb_kwargs)
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'SMTPServerConfig':
@@ -83,6 +109,10 @@ class SMTPServerConfig:
             priority=data.get('priority', 0),
             max_per_minute=data.get('max_per_minute', 30),
             max_per_hour=data.get('max_per_hour', 500),
+            cb_failure_threshold=data.get('cb_failure_threshold'),
+            cb_success_threshold=data.get('cb_success_threshold'),
+            cb_timeout_seconds=data.get('cb_timeout_seconds'),
+            cb_monitor_window_seconds=data.get('cb_monitor_window_seconds'),
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -233,6 +263,7 @@ class AsyncConnectionPool:
             if self._initialized:
                 return
             
+            last_exc: Optional[Exception] = None
             for _ in range(min(2, self.pool_size)):  # Start with 2 connections
                 try:
                     conn = AsyncSMTPConnection(self.config)
@@ -240,9 +271,17 @@ class AsyncConnectionPool:
                     self.connections.append(conn)
                     await self.available.put(conn)
                 except Exception as e:
+                    last_exc = e
                     logger.warning(f"Failed to create initial connection: {e}")
             
             self._initialized = True
+
+            # All warm connections failed — fail fast so the caller (campaign runner)
+            # sees the real error immediately instead of spawning hundreds of doomed
+            # send tasks that each silently fail with the same error.
+            if last_exc is not None and not self.connections:
+                self._initialized = False  # allow retry once credentials are fixed
+                raise last_exc
     
     async def _replenish_one(self):
         """

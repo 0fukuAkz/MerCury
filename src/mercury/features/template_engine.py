@@ -156,10 +156,9 @@ class TemplateEngine:
         # Build extra placeholders
         extras = extra_placeholders or {}
         
-        # Add link placeholder
-        if link:
-            extras['link'] = link
-            extras['url'] = link
+        # Add link placeholder (always provide key so {{link}} resolves)
+        extras['link'] = link or ''
+        extras['url'] = link or ''
         
         # Generate or add QR code
         if qr_code_data_url:
