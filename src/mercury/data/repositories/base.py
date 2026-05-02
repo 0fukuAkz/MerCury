@@ -31,6 +31,19 @@ class BaseRepository(Generic[T]):
         self.session.commit()
         self.session.refresh(entity)
         return entity
+
+    def bulk_create(self, entities: List[T]) -> int:
+        """Insert many entities in a single transaction.
+
+        Skips per-row ``refresh()`` for throughput; auto-generated primary
+        keys are still populated by SQLAlchemy after flush. Returns the
+        number of rows added.
+        """
+        if not entities:
+            return 0
+        self.session.add_all(entities)
+        self.session.commit()
+        return len(entities)
     
     def update(self, entity: T) -> T:
         """Update existing entity."""

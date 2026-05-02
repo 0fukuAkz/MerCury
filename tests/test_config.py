@@ -26,6 +26,8 @@ def test_expand_env_vars_default():
     assert expand_env_vars("${MISSING:-default}") == "default"
 
 def test_expand_env_vars_missing_no_default(caplog):
+    import logging
+    caplog.set_level(logging.WARNING)
     assert expand_env_vars("${MISSING_VAR}") == "${MISSING_VAR}"
     assert "Environment variable MISSING_VAR not set" in caplog.text
 

@@ -57,9 +57,14 @@ data/.encryption.key
 
 # Testing
 .coverage
+coverage.xml
 htmlcov/
 .pytest_cache/
 .tox/
+
+# Runtime / process state
+data/.mercury.pid
+*.pid
 
 # OS
 .DS_Store

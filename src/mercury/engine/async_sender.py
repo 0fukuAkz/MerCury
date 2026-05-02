@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import mimetypes
+import re
 from typing import Optional, Dict, Any, List, Callable, Awaitable
 from email.message import EmailMessage
 from email.utils import formataddr, formatdate, make_msgid
@@ -27,53 +28,83 @@ from ..exceptions import (
 logger = logging.getLogger(__name__)
 
 
+_LEADING_CODE_RE = re.compile(r'^\s*(\d{3})\b')
+
+
+def _smtp_status_code(error: Exception) -> Optional[int]:
+    """Extract a numeric SMTP status code, preferring the structured attribute.
+
+    Order:
+      1. aiosmtplib response exceptions expose ``code`` as an int.
+      2. As a fallback, parse a leading 3-digit code from ``str(error)`` —
+         covers raw exceptions like ``Exception("550 5.1.1 User unknown")``.
+    Lower-level transport errors (TimeoutError, ConnectionError) have neither.
+    """
+    code = getattr(error, 'code', None)
+    if isinstance(code, int) and 200 <= code < 600:
+        return code
+    match = _LEADING_CODE_RE.match(str(error))
+    if match:
+        parsed = int(match.group(1))
+        if 200 <= parsed < 600:
+            return parsed
+    return None
+
+
 def categorize_smtp_error(error: Exception) -> tuple[bool, str, Exception]:
     """
     Categorize SMTP errors and convert to custom exceptions.
-    
+
+    Strategy (in order):
+      1. Class-based dispatch for transport errors and auth errors.
+      2. Numeric SMTP status code (RFC 5321) when the server responded.
+      3. Keyword heuristics on the exception text as a final fallback for
+         drivers / proxies that surface non-standard error shapes.
+
     Args:
         error: Exception from SMTP operation
-        
+
     Returns:
         Tuple of (is_transient, error_type, converted_exception)
     """
-    error_str = str(error).lower()
-    
-    # Check for connection errors first
+    err_msg = str(error)
+
+    # 1. Transport-layer errors — never have an SMTP code.
     if isinstance(error, (aiosmtplib.SMTPServerDisconnected, ConnectionError, asyncio.TimeoutError)):
-        converted = SMTPConnectionError(str(error), smtp_response=str(error))
-        return True, 'connection_error', converted
-    
-    # Check for authentication errors
+        return True, 'connection_error', SMTPConnectionError(err_msg, smtp_response=err_msg)
+
+    # 2. Auth errors — always permanent regardless of code.
     if isinstance(error, aiosmtplib.SMTPAuthenticationError):
-        converted = SMTPAuthenticationError(str(error), smtp_response=str(error))
-        return False, 'authentication_error', converted
-    
-    # Check for rate limiting
-    if any(keyword in error_str for keyword in ['rate limit', 'throttl', 'too many', '421', '450', '451', '452']):
-        converted = SMTPRateLimitError(str(error), smtp_response=str(error))
-        return True, 'rate_limit', converted
-    
-    # Check for mailbox errors
-    if any(keyword in error_str for keyword in ['mailbox', 'does not exist', 'unknown user', 'no such', '550', '551']):
-        converted = SMTPMailboxError(str(error), smtp_response=str(error))
-        return False, 'mailbox_error', converted
-    
-    # Check for other transient errors
-    transient_keywords = ['timeout', 'temporarily', 'busy', 'try again', 'connection', 'disconnect']
-    if any(keyword in error_str for keyword in transient_keywords):
-        converted = TransientSMTPError(str(error), smtp_response=str(error))
-        return True, 'transient', converted
-    
-    # Check for permanent errors
-    permanent_keywords = ['invalid', 'disabled', 'blocked', 'spam', 'blacklist', '552', '553', '554']
-    if any(keyword in error_str for keyword in permanent_keywords):
-        converted = PermanentSMTPError(str(error), smtp_response=str(error))
-        return False, 'permanent', converted
-    
-    # Default to transient for unknown errors (safer for retries)
-    converted = TransientSMTPError(str(error), smtp_response=str(error))
-    return True, 'unknown', converted
+        return False, 'authentication_error', SMTPAuthenticationError(err_msg, smtp_response=err_msg)
+
+    # 3. RFC 5321 status code dispatch.
+    code = _smtp_status_code(error)
+    if code is not None:
+        # Specific buckets first; then 4xx = transient, 5xx = permanent.
+        if code in (421, 450, 451, 452):
+            return True, 'rate_limit', SMTPRateLimitError(err_msg, smtp_response=err_msg)
+        if code in (550, 551, 553):
+            return False, 'mailbox_error', SMTPMailboxError(err_msg, smtp_response=err_msg)
+        if code in (552, 554):
+            return False, 'permanent', PermanentSMTPError(err_msg, smtp_response=err_msg)
+        if 400 <= code < 500:
+            return True, 'transient', TransientSMTPError(err_msg, smtp_response=err_msg)
+        if 500 <= code < 600:
+            return False, 'permanent', PermanentSMTPError(err_msg, smtp_response=err_msg)
+
+    # 4. Keyword heuristics (last resort, locale-fragile).
+    error_str = err_msg.lower()
+    if any(k in error_str for k in ['rate limit', 'throttl', 'too many']):
+        return True, 'rate_limit', SMTPRateLimitError(err_msg, smtp_response=err_msg)
+    if any(k in error_str for k in ['mailbox', 'does not exist', 'unknown user', 'no such']):
+        return False, 'mailbox_error', SMTPMailboxError(err_msg, smtp_response=err_msg)
+    if any(k in error_str for k in ['timeout', 'temporarily', 'busy', 'try again', 'disconnect']):
+        return True, 'transient', TransientSMTPError(err_msg, smtp_response=err_msg)
+    if any(k in error_str for k in ['invalid', 'disabled', 'blocked', 'spam', 'blacklist']):
+        return False, 'permanent', PermanentSMTPError(err_msg, smtp_response=err_msg)
+
+    # 5. Default: transient (safer for retries on unknown errors).
+    return True, 'unknown', TransientSMTPError(err_msg, smtp_response=err_msg)
 
 
 @dataclass

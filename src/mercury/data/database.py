@@ -2,7 +2,8 @@
 
 import os
 import threading
-from typing import Generator
+from contextlib import contextmanager
+from typing import Generator, Iterator
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session, declarative_base
 
@@ -75,4 +76,30 @@ def get_session_direct() -> Session:
                 _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=get_engine())
 
     return _SessionLocal()
+
+
+@contextmanager
+def session_scope() -> Iterator[Session]:
+    """Context manager for a database session.
+
+    Replaces the ``session = get_session_direct(); try: ... finally: session.close()``
+    pattern used throughout the codebase. On unhandled exceptions the session
+    is rolled back before close to avoid leaving a poisoned transaction.
+
+    Example:
+        with session_scope() as session:
+            repo = CampaignRepository(session)
+            return repo.get_recent(10)
+    """
+    session = get_session_direct()
+    try:
+        yield session
+    except Exception:
+        try:
+            session.rollback()
+        except Exception:
+            pass
+        raise
+    finally:
+        session.close()
 

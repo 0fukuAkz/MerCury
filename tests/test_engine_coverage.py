@@ -261,16 +261,19 @@ class TestReset:
         """Verify _groups.clear() is the first action of reset()."""
         aggregator = ErrorAggregator()
         aggregator.add_error(SMTPConnectionError("fail"), "u@t.com", is_transient=True)
-        # Monkey-patch to stop after _groups.clear()
-        original_clear = aggregator._groups.clear
+
+        # Wrap _groups in a dict subclass so we can intercept .clear() — built-in
+        # dict's .clear is a slot and can't be reassigned.
         cleared = []
+        original_groups = aggregator._groups
 
-        def patched_clear():
-            original_clear()
-            cleared.append(True)
-            raise StopIteration("stop here")
+        class _ObservedDict(dict):
+            def clear(self_inner):
+                super().clear()
+                cleared.append(True)
+                raise StopIteration("stop here")
 
-        aggregator._groups.clear = patched_clear
+        aggregator._groups = _ObservedDict(original_groups)
         with pytest.raises(StopIteration):
             aggregator.reset()
         assert cleared  # confirms _groups.clear() was called
@@ -1066,17 +1069,26 @@ class TestAsyncConnectionPool:
         assert count_after_first == count_after_second
 
     @pytest.mark.asyncio
-    async def test_initialize_logs_warning_on_connection_failure(self, base_config):
-        """Line 265: failed initial connection logs warning, pool still initializes."""
+    async def test_initialize_logs_warning_on_connection_failure(self, base_config, caplog):
+        """When all warm connections fail, initialize() logs and re-raises.
+
+        The pool used to silently swallow the failure; the fail-fast guard
+        now surfaces it so the campaign runner sees the real cause instead
+        of spawning hundreds of doomed send tasks.
+        """
+        import logging
+        caplog.set_level(logging.WARNING)
         pool = AsyncConnectionPool(base_config, pool_size=2)
         with patch.object(
             AsyncSMTPConnection,
             "connect",
             side_effect=ConnectionError("SMTP down"),
         ):
-            await pool.initialize()
-        assert pool._initialized is True
+            with pytest.raises(ConnectionError):
+                await pool.initialize()
+        assert pool._initialized is False  # reset so retry is possible
         assert len(pool.connections) == 0
+        assert "Failed to create initial connection" in caplog.text
 
     @pytest.mark.asyncio
     async def test_get_connection_stale_triggers_replacement(self, base_config):

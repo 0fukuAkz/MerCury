@@ -58,7 +58,46 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
             "Set the SECRET_KEY environment variable to a strong random value before running in production."
         )
     app.config['SECRET_KEY'] = _secret_key
+
+    # Production env-var preflight: surface common mis-configurations at boot
+    # rather than failing in surprising ways much later.
+    if _is_production:
+        _prod_warnings: list[str] = []
+        if 'ADMIN_PASSWORD' not in os.environ:
+            _prod_warnings.append(
+                "ADMIN_PASSWORD not set — the bootstrap admin will be created with "
+                "the well-known default 'admin'. Set ADMIN_PASSWORD before first boot."
+            )
+        if not os.environ.get('API_KEYS', '').strip():
+            _prod_warnings.append(
+                "API_KEYS not set — programmatic API access will be disabled."
+            )
+        _rls = os.environ.get('RATE_LIMIT_STORAGE', 'memory://')
+        if _rls.startswith('memory://'):
+            _prod_warnings.append(
+                "RATE_LIMIT_STORAGE is in-memory — limits reset on restart and are "
+                "not shared across workers. Use a redis:// URL in production."
+            )
+        for _w in _prod_warnings:
+            logger.warning("Production preflight: %s", _w)
     app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload
+
+    # Session cookie hardening.
+    # - HttpOnly always (defense against XSS reading session cookie).
+    # - SameSite=Lax always (CSRF mitigation for cross-site form posts).
+    # - Secure only in production (dev usually runs over plain http://).
+    # Operators can override SESSION_COOKIE_SECURE via env if running TLS-terminated
+    # behind a proxy in non-prod, or vice versa.
+    app.config['SESSION_COOKIE_HTTPONLY'] = True
+    app.config['SESSION_COOKIE_SAMESITE'] = os.environ.get('SESSION_COOKIE_SAMESITE', 'Lax')
+    _cookie_secure_env = os.environ.get('SESSION_COOKIE_SECURE')
+    if _cookie_secure_env is not None:
+        app.config['SESSION_COOKIE_SECURE'] = _cookie_secure_env.lower() in ('1', 'true', 'yes')
+    else:
+        app.config['SESSION_COOKIE_SECURE'] = _is_production
+    app.config['REMEMBER_COOKIE_HTTPONLY'] = True
+    app.config['REMEMBER_COOKIE_SAMESITE'] = app.config['SESSION_COOKIE_SAMESITE']
+    app.config['REMEMBER_COOKIE_SECURE'] = app.config['SESSION_COOKIE_SECURE']
     
     # Force JSON output in production for structured logging (Docker/CloudWatch/ELK)
     is_prod = app.config['ENV'] == 'production'
@@ -126,6 +165,48 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
     # Eagerly start the shared background asyncio loop so the first request
     # doesn't pay the start cost. (run_async() also starts it lazily.)
     start_background_loop()
+
+    # Security response headers. Applied to every response. Conservative by
+    # default; operators can override via the documented env vars below.
+    _csp = os.environ.get(
+        'CONTENT_SECURITY_POLICY',
+        # default-src 'self' covers scripts/styles/images/fonts. 'unsafe-inline'
+        # is required because the dashboard templates embed inline <script>
+        # blocks for SocketIO bootstrap; tighten later by extracting them.
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: blob:; "
+        "connect-src 'self' ws: wss:; "
+        "frame-ancestors 'none'"
+    )
+    _hsts_max_age = int(os.environ.get('HSTS_MAX_AGE', '31536000'))  # 1 year
+
+    @app.after_request
+    def _set_security_headers(response):
+        # Resist MIME-sniffing attacks.
+        response.headers.setdefault('X-Content-Type-Options', 'nosniff')
+        # Block framing (clickjacking). CSP frame-ancestors covers modern browsers,
+        # X-Frame-Options covers older ones.
+        response.headers.setdefault('X-Frame-Options', 'DENY')
+        # Don't leak referrer paths to third parties.
+        response.headers.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
+        # Disable powerful browser features the dashboard doesn't use.
+        response.headers.setdefault(
+            'Permissions-Policy',
+            'camera=(), microphone=(), geolocation=(), payment=()'
+        )
+        # CSP — opt-out by setting CONTENT_SECURITY_POLICY=''.
+        if _csp:
+            response.headers.setdefault('Content-Security-Policy', _csp)
+        # HSTS — only over HTTPS, only in production. Browsers ignore the
+        # header on plain HTTP, but skipping it here keeps logs clean.
+        if _is_production and _hsts_max_age > 0:
+            response.headers.setdefault(
+                'Strict-Transport-Security',
+                f'max-age={_hsts_max_age}; includeSubDomains'
+            )
+        return response
 
     # Inject ui_theme into every template so base.html can set data-theme
     from ..services.settings_service import SettingsService

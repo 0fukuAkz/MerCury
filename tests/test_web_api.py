@@ -28,12 +28,14 @@ def test_api_status(client):
 # /api/campaigns
 
 def test_api_list_campaigns(client):
-    with patch('mercury.web.routes.api.CampaignService') as MockService:
-        service = MockService.return_value
+    # The route reads via CampaignRepository.get_recent(), not CampaignService —
+    # patch the actual call site.
+    with patch('mercury.web.routes.api.CampaignRepository') as MockRepo:
+        repo = MockRepo.return_value
         campaign = Mock()
         campaign.to_dict.return_value = {'id': 1, 'name': 'Test'}
-        service.list_campaigns.return_value = [campaign]
-        
+        repo.get_recent.return_value = [campaign]
+
         response = client.get('/api/campaigns')
         assert response.status_code == 200
         data = json.loads(response.data)

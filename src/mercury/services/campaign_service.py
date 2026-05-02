@@ -11,7 +11,8 @@ from dataclasses import dataclass
 
 from ..data.database import get_session_direct, init_db
 from ..data.repositories import (
-    CampaignRepository
+    CampaignRepository,
+    LogRepository,
 )
 from ..data.models import (
     Campaign, CampaignStatus,
@@ -520,14 +521,9 @@ class CampaignService:
                                 correlation_id=email_result.correlation_id or None
                             ))
                     
-                    # Batch insert to DB
+                    # Batch insert to DB via repository
                     if db_logs:
-                        # Todo: Use bulk_save_objects or add a valid batch method to BaseRepository
-                        # Using loop for now as BaseRepository.create commits one by one if not careful,
-                        # but specialized add_all is better. 
-                        # Ideally: log_repo.bulk_create(db_logs)
-                        session.add_all(db_logs)
-                        session.commit()
+                        LogRepository(session).bulk_create(db_logs)
 
                     total_stats['chunks_processed'] += 1
                     
