@@ -73,38 +73,40 @@ class TestCampaignServiceErrors:
 
     @pytest.mark.asyncio
     async def test_run_campaign_db_commit_error(self, service):
-        """Verify campaign stops if DB commit fails during batch."""
+        """Verify campaign stops if DB persistence fails during batch.
+
+        run_campaign now batches log writes through LogRepository.bulk_create,
+        so the failure surface lives there, not on raw session.commit.
+        """
         # Setup
         service._current_campaign = Campaign(id=1, name="Test")
         recipients = [{"email": "test@example.com"}]
-        
+
         # Mock dependencies
         mock_result = MagicMock()
         mock_result.results = [MagicMock(success=True, recipient="test@example.com", server_name="smtp1")]
         service.email_service.send_bulk = MagicMock(return_value=mod_result_future(mock_result))
 
         with patch('mercury.services.campaign_service.get_session_direct') as mock_session_cls, \
-             patch('mercury.services.campaign_service.LogRepository'), \
+             patch('mercury.services.campaign_service.LogRepository') as MockLogRepo, \
              patch('mercury.services.campaign_service.AsyncFileLogger') as MockLogger:
-             
-            # Setup session commit to fail
+
             mock_session = mock_session_cls.return_value
-            mock_session.commit.side_effect = SQLAlchemyError("Commit Failed")
-            
+            # Simulate persistence failure inside bulk_create — the new code path.
+            MockLogRepo.return_value.bulk_create.side_effect = SQLAlchemyError("Commit Failed")
+
             # Setup logger context managers
             mock_logger_instance = MagicMock()
             mock_logger_instance.log_success = MagicMock(return_value=mod_result_future(None))
             mock_logger_instance.log_failure = MagicMock(return_value=mod_result_future(None))
-            
+
             MockLogger.return_value.__aenter__.return_value = mock_logger_instance
-            
-            # Run
+
             with pytest.raises(SQLAlchemyError, match="Commit Failed"):
                 await service.run_campaign(recipients)
-            
-            # Verify clean up (session closed)
+
+            # Verify clean up (session closed) and running flag cleared.
             mock_session.close.assert_called()
-            # Verify running flag cleared
             assert service._running is False
 
 def mod_result_future(result):

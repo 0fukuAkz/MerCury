@@ -89,8 +89,16 @@ class PlaceholderProcessor:
                 first_name = parts[0].capitalize()
                 if len(parts) > 1:
                     last_name = parts[-1].capitalize()
-        
-        full_name = f"{first_name} {last_name}".strip() or local_part.capitalize()
+
+        # Respect explicit full_name / name from recipient_data so callers can
+        # override the email-derived default. Without this, an explicit
+        # placeholders={"name": "Alice"} would lose to the email-derived "U1".
+        full_name = (
+            recipient_data.get('full_name')
+            or recipient_data.get('name')
+            or f"{first_name} {last_name}".strip()
+            or local_part.capitalize()
+        )
         
         # Generate unique IDs
         unique_id = str(uuid.uuid4())

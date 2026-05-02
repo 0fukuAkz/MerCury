@@ -94,30 +94,24 @@ def test_api_add_smtp(client):
         assert data['success'] is True
 
 def test_api_test_smtp(client):
+    """Route /api/smtp/test/<int:server_id> looks up by id, then runs the
+    async test_connection on the shared background loop via run_async."""
     with patch('mercury.web.routes.api.SMTPRepository') as MockRepo, \
-         patch('mercury.web.routes.api.SMTPService') as MockService:
-        
-        # Mock Repo
+         patch('mercury.web.routes.api.SMTPService') as MockService, \
+         patch('mercury.web.routes.api.run_async',
+               return_value={'success': True, 'server': 'primary'}):
+
         repo = MockRepo.return_value
         server = Mock()
+        server.name = 'primary'
+        server.get_connection_config.return_value = {'name': 'primary', 'host': 'h', 'port': 587}
+        repo.get.return_value = server
         repo.get_all.return_value = [server]
-        
-        # Mock Service
-        service = MockService.return_value
-        # Mock async test_connection
-        async def mock_test(name):
-             return {'success': True, 'server': name}
-        service.test_connection.side_effect = mock_test
-        
-        with patch('asyncio.new_event_loop') as mock_new_loop, \
-             patch('asyncio.set_event_loop'):
-             
-             mock_loop = Mock()
-             mock_new_loop.return_value = mock_loop
-             mock_loop.run_until_complete.side_effect = lambda coro: {'success': True, 'server': 'primary'}
-             
-             response = client.post('/api/smtp/test/primary')
-        
+
+        MockService.return_value.load_from_config = Mock()
+
+        response = client.post('/api/smtp/test/1')
+
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data['success'] is True

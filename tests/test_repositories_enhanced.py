@@ -159,22 +159,27 @@ def test_campaign_search(campaign_repo, mock_session):
     assert "LIKE" in str(args[0]) or "ilike" in str(args[0]).lower()
 
 def test_campaign_increment_counters(campaign_repo, mock_session):
-    # Initialize counters to 0 to avoid TypeError on +=
+    # CampaignRepository.get() goes through session.execute(...).scalar_one_or_none(),
+    # not session.get(), so the .execute() chain is what we mock.
     c1 = Campaign(id=1, sent_count=0, delivered_count=0, failed_count=0)
-    mock_session.get.return_value = c1
-    
+    mock_result = Mock()
+    mock_result.scalar_one_or_none.return_value = c1
+    mock_session.execute.return_value = mock_result
+
     campaign_repo.increment_counters(1, sent=10, delivered=5)
-    
+
     assert c1.sent_count == 10
     assert c1.delivered_count == 5
     mock_session.commit.assert_called_once()
 
 def test_campaign_update_status(campaign_repo, mock_session):
     c1 = Campaign(id=1, status=CampaignStatus.DRAFT)
-    mock_session.get.return_value = c1
-    
+    mock_result = Mock()
+    mock_result.scalar_one_or_none.return_value = c1
+    mock_session.execute.return_value = mock_result
+
     campaign_repo.update_status(1, CampaignStatus.PAUSED)
-    
+
     assert c1.status == CampaignStatus.PAUSED
     mock_session.commit.assert_called_once()
 

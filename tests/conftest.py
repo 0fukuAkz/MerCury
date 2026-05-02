@@ -1,11 +1,33 @@
 """Pytest configuration and shared fixtures."""
 
+import logging
 import pytest
 import asyncio
 from typing import AsyncGenerator, Generator
 from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
+
+
+@pytest.fixture(autouse=True)
+def _restore_log_propagation():
+    """Ensure mercury.* loggers can be captured by caplog before each test.
+
+    Other tests (and app-fixture init via configure_logging) can leave loggers
+    in states that prevent pytest's caplog fixture from capturing records:
+    propagate=False, disabled=True, or a level filter above WARNING. Restore
+    a clean state before each test runs.
+    """
+    # Undo any global logging.disable() set by an earlier test.
+    logging.disable(logging.NOTSET)
+    for name in list(logging.root.manager.loggerDict.keys()):
+        if name == 'mercury' or name.startswith('mercury.'):
+            lg = logging.getLogger(name)
+            lg.propagate = True
+            lg.disabled = False
+            if lg.level > logging.WARNING and lg.level != logging.NOTSET:
+                lg.setLevel(logging.NOTSET)
+    yield
 
 from mercury.data.database import Base
 from mercury.data.models import User, Template, SMTPServer, Recipient, Campaign
