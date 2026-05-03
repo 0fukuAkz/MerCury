@@ -29,8 +29,8 @@ def test_api_status(client):
 
 def test_api_list_campaigns(client):
     # The route reads via CampaignRepository.get_recent(), not CampaignService —
-    # patch the actual call site.
-    with patch('mercury.web.routes.api.CampaignRepository') as MockRepo:
+    # patch the actual call site (now in the api.campaigns submodule).
+    with patch('mercury.web.routes.api.campaigns.CampaignRepository') as MockRepo:
         repo = MockRepo.return_value
         campaign = Mock()
         campaign.to_dict.return_value = {'id': 1, 'name': 'Test'}
@@ -43,7 +43,7 @@ def test_api_list_campaigns(client):
         assert data['campaigns'][0]['name'] == 'Test'
 
 def test_api_create_campaign(client):
-    with patch('mercury.web.routes.api.CampaignService') as MockService:
+    with patch('mercury.web.routes.api.campaigns.CampaignService') as MockService:
         service = MockService.return_value
         campaign = Mock()
         campaign.id = 999
@@ -67,7 +67,7 @@ def test_api_create_campaign_validation(client):
 # /api/smtp
 
 def test_api_list_smtp(client):
-    with patch('mercury.web.routes.api.SMTPRepository') as MockRepo:
+    with patch('mercury.web.routes.api.smtp.SMTPRepository') as MockRepo:
         repo = MockRepo.return_value
         server = Mock()
         server.to_dict.return_value = {'host': 'smtp.test'}
@@ -80,7 +80,7 @@ def test_api_list_smtp(client):
         assert data['servers'][0]['host'] == 'smtp.test'
 
 def test_api_add_smtp(client):
-    with patch('mercury.web.routes.api.SMTPService') as MockService:
+    with patch('mercury.web.routes.api.smtp.SMTPService') as MockService:
         service = MockService.return_value
         server = Mock()
         server.to_dict.return_value = {'host': 'new.smtp'}
@@ -96,9 +96,9 @@ def test_api_add_smtp(client):
 def test_api_test_smtp(client):
     """Route /api/smtp/test/<int:server_id> looks up by id, then runs the
     async test_connection on the shared background loop via run_async."""
-    with patch('mercury.web.routes.api.SMTPRepository') as MockRepo, \
-         patch('mercury.web.routes.api.SMTPService') as MockService, \
-         patch('mercury.web.routes.api.run_async',
+    with patch('mercury.web.routes.api.smtp.SMTPRepository') as MockRepo, \
+         patch('mercury.web.routes.api.smtp.SMTPService') as MockService, \
+         patch('mercury.web.routes.api.smtp.run_async',
                return_value={'success': True, 'server': 'primary'}):
 
         repo = MockRepo.return_value
@@ -119,7 +119,7 @@ def test_api_test_smtp(client):
 # /api/templates
 
 def test_api_list_templates(client):
-    with patch('mercury.web.routes.api.TemplateRepository') as MockRepo:
+    with patch('mercury.web.routes.api.templates.TemplateRepository') as MockRepo:
         repo = MockRepo.return_value
         tpl = Mock()
         tpl.to_dict.return_value = {'name': 'T1'}
@@ -131,7 +131,7 @@ def test_api_list_templates(client):
         assert len(data['templates']) == 1
 
 def test_api_preview_template(client):
-    with patch('mercury.web.routes.api.TemplateEngine') as MockEngine:
+    with patch('mercury.web.routes.api.templates.TemplateEngine') as MockEngine:
         engine = MockEngine.return_value
         engine.preview.return_value = "<html>Preview</html>"
         engine.get_used_placeholders.return_value = ["name"]
@@ -147,7 +147,7 @@ def test_api_preview_template(client):
 # /api/logs & /api/stats
 
 def test_api_logs(client):
-    with patch('mercury.web.routes.api.LogRepository') as MockRepo:
+    with patch('mercury.web.routes.api.logs_stats.LogRepository') as MockRepo:
         MockRepo.return_value.get_recent_success.return_value = [
             MagicMock(recipient_email='a'), MagicMock(recipient_email='b')
         ]
@@ -167,7 +167,7 @@ def test_api_logs(client):
         assert len(json.loads(resp.data)['failures']) == 2
 
 def test_api_stats(client):
-     with patch('mercury.web.routes.api.LogRepository') as MockRepo:
+     with patch('mercury.web.routes.api.logs_stats.LogRepository') as MockRepo:
         MockRepo.return_value.get_global_stats.return_value = {
             'total_sent': 2, 'total_failed': 1, 'total_attempts': 3
         }

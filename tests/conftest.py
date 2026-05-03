@@ -187,7 +187,8 @@ def app(db_engine):
     from sqlalchemy.orm import sessionmaker
     TestSession = sessionmaker(bind=db_engine)
 
-    # Patch DB init and Admin creation
+    # Patch DB init and Admin creation. The api package re-exports
+    # `get_session_direct`, so the original patch path still works.
     with patch('mercury.web.app.init_db'), \
          patch('mercury.web.app.UserRepository') as MockRepo, \
          patch('mercury.web.app.get_app_context', return_value=mock_context), \

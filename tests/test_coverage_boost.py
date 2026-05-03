@@ -31,7 +31,11 @@ def app_no_login(db_engine):
          patch('mercury.data.database.get_session_direct', side_effect=TestSession), \
          patch('mercury.services.smtp_service.get_session_direct', side_effect=TestSession), \
          patch('mercury.services.campaign_service.get_session_direct', side_effect=TestSession), \
-         patch('mercury.web.routes.api.get_session_direct', side_effect=TestSession), \
+         patch('mercury.web.routes.api.campaigns.get_session_direct', side_effect=TestSession), \
+         patch('mercury.web.routes.api.smtp.get_session_direct', side_effect=TestSession), \
+         patch('mercury.web.routes.api.templates.get_session_direct', side_effect=TestSession), \
+         patch('mercury.web.routes.api.logs_stats.get_session_direct', side_effect=TestSession), \
+         patch('mercury.web.routes.api.dead_letter.get_session_direct', side_effect=TestSession), \
          patch('mercury.web.routes.templates.get_session_direct', side_effect=TestSession), \
          patch('mercury.web.app.get_session_direct', side_effect=TestSession), \
          patch('mercury.services.identity_service.get_session_direct', side_effect=TestSession), \
@@ -409,7 +413,7 @@ def test_api_delete_smtp_not_found(cl):
 
 def test_api_list_dead_letters(cl):
     """GET /api/dead-letter."""
-    with patch('mercury.web.routes.api.get_session_direct') as mock_sess:
+    with patch('mercury.web.routes.api.dead_letter.get_session_direct') as mock_sess:
         mock_session = MagicMock()
         mock_sess.return_value = mock_session
         with patch('mercury.data.repositories.dead_letter.DeadLetterRepository') as MockRepo:
@@ -426,7 +430,7 @@ def test_api_list_dead_letters(cl):
 
 def test_api_retry_dead_letter(cl):
     """POST /api/dead-letter/<id>/retry."""
-    with patch('mercury.web.routes.api.get_session_direct') as mock_sess:
+    with patch('mercury.web.routes.api.dead_letter.get_session_direct') as mock_sess:
         mock_session = MagicMock()
         mock_sess.return_value = mock_session
         with patch('mercury.services.dead_letter_service.DeadLetterService') as MockSvc:
@@ -439,7 +443,7 @@ def test_api_retry_dead_letter(cl):
 
 def test_api_discard_dead_letter(cl):
     """DELETE /api/dead-letter/<id>."""
-    with patch('mercury.web.routes.api.get_session_direct') as mock_sess:
+    with patch('mercury.web.routes.api.dead_letter.get_session_direct') as mock_sess:
         mock_session = MagicMock()
         mock_sess.return_value = mock_session
         with patch('mercury.services.dead_letter_service.DeadLetterService') as MockSvc:
@@ -456,7 +460,7 @@ def test_api_discard_dead_letter(cl):
 
 def test_api_list_recipients(cl, tmp_path):
     """GET /api/recipients."""
-    with patch('mercury.web.routes.api._recipients_dir', return_value=str(tmp_path)):
+    with patch('mercury.web.routes.api.recipients._recipients_dir', return_value=str(tmp_path)):
         # Create a test CSV file
         csv_file = tmp_path / 'test.csv'
         csv_file.write_text('email\nuser@example.com\n')
@@ -467,7 +471,7 @@ def test_api_list_recipients(cl, tmp_path):
 def test_api_upload_recipients(cl, tmp_path):
     """POST /api/recipients/upload."""
     import io
-    with patch('mercury.web.routes.api._recipients_dir', return_value=str(tmp_path)):
+    with patch('mercury.web.routes.api.recipients._recipients_dir', return_value=str(tmp_path)):
         data = {
             'file': (io.BytesIO(b'email\nuser1@example.com\nuser2@example.com\n'), 'test.csv'),
         }
@@ -490,7 +494,7 @@ def test_api_preview_recipients(cl, tmp_path):
     """GET /api/recipients/<filename>/preview."""
     csv_file = tmp_path / 'preview.csv'
     csv_file.write_text('email,name\nuser@example.com,User\n')
-    with patch('mercury.web.routes.api._recipients_dir', return_value=str(tmp_path)):
+    with patch('mercury.web.routes.api.recipients._recipients_dir', return_value=str(tmp_path)):
         resp = cl.get('/api/recipients/preview.csv/preview', headers={'X-API-Key': 'test_api_key'})
     assert resp.status_code == 200
     data = json.loads(resp.data)
@@ -499,7 +503,7 @@ def test_api_preview_recipients(cl, tmp_path):
 
 def test_api_preview_recipients_not_found(cl, tmp_path):
     """GET /api/recipients/<filename>/preview missing file."""
-    with patch('mercury.web.routes.api._recipients_dir', return_value=str(tmp_path)):
+    with patch('mercury.web.routes.api.recipients._recipients_dir', return_value=str(tmp_path)):
         resp = cl.get('/api/recipients/missing.csv/preview', headers={'X-API-Key': 'test_api_key'})
     assert resp.status_code == 404
 
@@ -508,7 +512,7 @@ def test_api_delete_recipient_file(cl, tmp_path):
     """DELETE /api/recipients/<filename>."""
     csv_file = tmp_path / 'delete_me.csv'
     csv_file.write_text('email\nuser@example.com\n')
-    with patch('mercury.web.routes.api._recipients_dir', return_value=str(tmp_path)):
+    with patch('mercury.web.routes.api.recipients._recipients_dir', return_value=str(tmp_path)):
         resp = cl.delete('/api/recipients/delete_me.csv', headers={'X-API-Key': 'test_api_key'})
     assert resp.status_code == 200
     assert not csv_file.exists()
@@ -516,7 +520,7 @@ def test_api_delete_recipient_file(cl, tmp_path):
 
 def test_api_delete_recipient_file_not_found(cl, tmp_path):
     """DELETE /api/recipients/<filename> missing file."""
-    with patch('mercury.web.routes.api._recipients_dir', return_value=str(tmp_path)):
+    with patch('mercury.web.routes.api.recipients._recipients_dir', return_value=str(tmp_path)):
         resp = cl.delete('/api/recipients/missing.csv', headers={'X-API-Key': 'test_api_key'})
     assert resp.status_code == 404
 
