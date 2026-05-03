@@ -557,6 +557,62 @@ def start(what, port, open_browser, debug):
 
 
 # =============================================================================
+# Database management
+# =============================================================================
+
+@cli.group('db')
+def db():
+    """Database / migration management."""
+
+
+@db.command('migrate')
+@click.option(
+    '--revision', default='head',
+    help='Target revision (default: head). Use a revision id to upgrade/downgrade to a specific point.',
+)
+def db_migrate(revision: str):
+    """Apply Alembic migrations to the database.
+
+    Run this once before starting the web app in multi-worker / multi-instance
+    deployments — set MERCURY_SKIP_BOOT_MIGRATIONS=1 in those environments so
+    workers don't race the upgrade at boot.
+    """
+    import os
+    from alembic.config import Config as AlembicConfig
+    from alembic import command as alembic_command
+
+    alembic_ini = os.path.abspath(os.path.join(
+        os.path.dirname(__file__), '..', '..', '..', 'alembic.ini'
+    ))
+    if not os.path.isfile(alembic_ini):
+        click.echo(f"Error: alembic.ini not found at {alembic_ini}", err=True)
+        raise SystemExit(1)
+
+    cfg = AlembicConfig(alembic_ini)
+    click.echo(f"Applying migrations -> {revision}")
+    try:
+        alembic_command.upgrade(cfg, revision)
+        click.echo("Migrations applied")
+    except Exception as e:
+        click.echo(f"Migration failed: {e}", err=True)
+        raise SystemExit(1)
+
+
+@db.command('current')
+def db_current():
+    """Show the current database revision."""
+    import os
+    from alembic.config import Config as AlembicConfig
+    from alembic import command as alembic_command
+
+    alembic_ini = os.path.abspath(os.path.join(
+        os.path.dirname(__file__), '..', '..', '..', 'alembic.ini'
+    ))
+    cfg = AlembicConfig(alembic_ini)
+    alembic_command.current(cfg, verbose=True)
+
+
+# =============================================================================
 # Entry point
 # =============================================================================
 
