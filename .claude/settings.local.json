@@ -48,7 +48,8 @@
       "Bash(sed -i '' -e 's/def test_senders_add_email_service_exception\\(client\\):/def test_senders_add_email_service_exception\\(logged_in_client\\):/' -e 's/def test_senders_add_name_service_exception\\(client\\):/def test_senders_add_name_service_exception\\(logged_in_client\\):/' -e 's/def test_settings_post_service_exception\\(client\\):/def test_settings_post_service_exception\\(logged_in_client\\):/' tests/test_web_routes_coverage.py)",
       "Bash(sed -n '300,353p' tests/test_web_routes_coverage.py)",
       "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(grep -v \":0$\")"
     ]
   },
   "outputStyle": "Explanatory"

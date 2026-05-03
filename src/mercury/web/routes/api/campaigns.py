@@ -8,7 +8,7 @@ from . import (
     api_key_or_login_required,
     limiter,
     run_async,
-    get_session_direct,
+    session_scope,
     CampaignRepository,
     SMTPRepository,
     TemplateRepository,
@@ -23,13 +23,10 @@ from . import (
 @limiter.limit("30/minute")
 def api_list_campaigns():
     """List all email campaigns."""
-    session = get_session_direct()
-    try:
+    with session_scope() as session:
         repo = CampaignRepository(session)
         campaigns = repo.get_recent(200)
         return jsonify({'campaigns': [c.to_dict() for c in campaigns]})
-    finally:
-        session.close()
 
 
 @api_bp.route('/campaigns', methods=['POST'])
@@ -107,13 +104,10 @@ def api_create_campaign():
     service.initialize()
     campaign = service.create_campaign(config)
 
-    session = get_session_direct()
-    try:
+    with session_scope() as session:
         repo = CampaignRepository(session)
         fresh = repo.get(campaign.id)
         campaign_dict = fresh.to_dict() if fresh else campaign.to_dict()
-    finally:
-        session.close()
 
     return jsonify({
         'success': True,
@@ -126,15 +120,12 @@ def api_create_campaign():
 @limiter.limit("60/minute")
 def api_get_campaign(campaign_id):
     """Get a single campaign by ID."""
-    session = get_session_direct()
-    try:
+    with session_scope() as session:
         repo = CampaignRepository(session)
         campaign = repo.get(campaign_id)
         if not campaign:
             return jsonify({'error': 'Campaign not found'}), 404
         return jsonify({'campaign': campaign.to_dict()})
-    finally:
-        session.close()
 
 
 @api_bp.route('/campaigns/<int:campaign_id>', methods=['PUT'])
@@ -142,8 +133,7 @@ def api_get_campaign(campaign_id):
 @limiter.limit("20/minute")
 def api_update_campaign(campaign_id):
     """Update an existing campaign (draft/scheduled only)."""
-    session = get_session_direct()
-    try:
+    with session_scope() as session:
         repo = CampaignRepository(session)
         campaign = repo.get(campaign_id)
         if not campaign:
@@ -213,8 +203,6 @@ def api_update_campaign(campaign_id):
 
         repo.update(campaign)
         return jsonify({'success': True, 'campaign': campaign.to_dict()})
-    finally:
-        session.close()
 
 
 @api_bp.route('/campaigns/<int:campaign_id>', methods=['DELETE'])
@@ -229,8 +217,7 @@ def api_delete_campaign(campaign_id):
     if svc:
         svc.stop()
 
-    session = get_session_direct()
-    try:
+    with session_scope() as session:
         repo = CampaignRepository(session)
         campaign = repo.get(campaign_id)
         if not campaign:
@@ -241,8 +228,6 @@ def api_delete_campaign(campaign_id):
             repo.update(campaign)
         repo.delete(campaign)
         return jsonify({'success': True})
-    finally:
-        session.close()
 
 
 @api_bp.route('/campaigns/bulk-delete', methods=['POST'])
@@ -263,8 +248,7 @@ def api_bulk_delete_campaigns():
         if svc:
             svc.stop()
 
-    session = get_session_direct()
-    try:
+    with session_scope() as session:
         repo = CampaignRepository(session)
         deleted = 0
         not_found = []
@@ -279,8 +263,6 @@ def api_bulk_delete_campaigns():
             repo.delete(campaign)
             deleted += 1
         return jsonify({'success': True, 'deleted': deleted, 'not_found': not_found})
-    finally:
-        session.close()
 
 
 @api_bp.route('/campaigns/<int:campaign_id>/clone', methods=['POST'])
@@ -289,8 +271,7 @@ def api_bulk_delete_campaigns():
 def api_clone_campaign(campaign_id):
     """Clone an existing campaign as a new draft."""
     from ....data.models.campaign import Campaign, CampaignStatus
-    session = get_session_direct()
-    try:
+    with session_scope() as session:
         repo = CampaignRepository(session)
         src = repo.get(campaign_id)
         if not src:
@@ -316,8 +297,6 @@ def api_clone_campaign(campaign_id):
         )
         clone = repo.create(clone)
         return jsonify({'success': True, 'campaign': clone.to_dict()})
-    finally:
-        session.close()
 
 
 @api_bp.route('/campaigns/test-email', methods=['POST'])
@@ -340,29 +319,23 @@ def api_send_test_email():
 
     try:
         # Load SMTP servers
-        session = get_session_direct()
-        try:
+        with session_scope() as session:
             smtp_repo = SMTPRepository(session)
             smtp_servers = smtp_repo.get_all()
             smtp_configs = [s.get_connection_config() for s in smtp_servers if s.is_enabled]
             if not smtp_configs:
                 return jsonify({'success': False, 'error': 'No active SMTP servers configured'}), 400
-        finally:
-            session.close()
 
         # Optionally load the template
         template_id = data.get('template_id')
         template_path = data.get('template_path')
         html_body = None
         if template_id:
-            session = get_session_direct()
-            try:
+            with session_scope() as session:
                 trepo = TemplateRepository(session)
                 tpl = trepo.get(int(template_id))
                 if tpl:
                     html_body = tpl.html_content
-            finally:
-                session.close()
         elif template_path:
             import os
             if os.path.isfile(template_path):
@@ -426,16 +399,13 @@ def api_start_campaign(campaign_id):
     if campaign_id in _active_services:
         return jsonify({'error': 'Campaign already running'}), 409
 
-    session = get_session_direct()
-    try:
+    with session_scope() as session:
         repo = CampaignRepository(session)
         campaign = repo.get(campaign_id)
         if not campaign:
             return jsonify({'error': 'Campaign not found'}), 404
         if campaign.status not in ('draft', 'scheduled'):
             return jsonify({'error': f'Cannot start campaign with status: {campaign.status}'}), 400
-    finally:
-        session.close()
 
     from flask import current_app
     from ...extensions import socketio

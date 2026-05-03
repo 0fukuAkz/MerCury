@@ -187,15 +187,17 @@ def app(db_engine):
     from sqlalchemy.orm import sessionmaker
     TestSession = sessionmaker(bind=db_engine)
 
-    # Patch DB init and Admin creation. The api package re-exports
-    # `get_session_direct`, so the original patch path still works.
+    # Patch DB init and Admin creation. Patching `get_session_direct` at its
+    # *source* module is sufficient for the api package because routes now
+    # call `session_scope()` which does runtime lookup. Per-submodule
+    # patches remain for callers that still snapshot the function at import
+    # time (services, web.app, web.routes.templates).
     with patch('mercury.web.app.init_db'), \
          patch('mercury.web.app.UserRepository') as MockRepo, \
          patch('mercury.web.app.get_app_context', return_value=mock_context), \
          patch('mercury.data.database.get_session_direct', side_effect=TestSession), \
          patch('mercury.services.smtp_service.get_session_direct', side_effect=TestSession), \
          patch('mercury.services.campaign_service.get_session_direct', side_effect=TestSession), \
-         patch('mercury.web.routes.api.get_session_direct', side_effect=TestSession), \
          patch('mercury.web.routes.templates.get_session_direct', side_effect=TestSession), \
          patch('mercury.web.app.get_session_direct', side_effect=TestSession), \
          patch('mercury.services.identity_service.get_session_direct', side_effect=TestSession), \

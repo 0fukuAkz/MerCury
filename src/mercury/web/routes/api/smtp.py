@@ -7,7 +7,7 @@ from . import (
     api_key_or_login_required,
     limiter,
     run_async,
-    get_session_direct,
+    session_scope,
     SMTPRepository,
     SMTPService,
 )
@@ -18,13 +18,10 @@ from . import (
 @limiter.limit("30/minute")
 def api_list_smtp():
     """List all configured SMTP servers."""
-    session = get_session_direct()
-    try:
+    with session_scope() as session:
         repo = SMTPRepository(session)
         servers = repo.get_all()
         return jsonify({'servers': [s.to_dict() for s in servers]})
-    finally:
-        session.close()
 
 
 @api_bp.route('/smtp', methods=['POST'])
@@ -55,8 +52,7 @@ def api_add_smtp():
 @limiter.limit("5/minute")
 def api_test_smtp(server_id: int):
     """Test connection to a specific SMTP server by id."""
-    session = get_session_direct()
-    try:
+    with session_scope() as session:
         repo = SMTPRepository(session)
         server = repo.get(server_id)
         if not server:
@@ -68,8 +64,6 @@ def api_test_smtp(server_id: int):
 
         result = run_async(service.test_connection(server.name))
         return jsonify(result)
-    finally:
-        session.close()
 
 
 @api_bp.route('/smtp/<name>', methods=['PUT'])
@@ -78,8 +72,7 @@ def api_test_smtp(server_id: int):
 def api_update_smtp(name):
     """Update an existing SMTP server by name."""
     data = request.get_json(silent=True) or {}
-    session = get_session_direct()
-    try:
+    with session_scope() as session:
         repo = SMTPRepository(session)
         server = repo.get_by_name(name)
         if not server:
@@ -98,8 +91,6 @@ def api_update_smtp(name):
             server.use_ssl = bool(data['use_ssl'])
         repo.update(server)
         return jsonify({'success': True, 'server': server.to_dict()})
-    finally:
-        session.close()
 
 
 @api_bp.route('/smtp/<name>', methods=['DELETE'])
@@ -107,13 +98,10 @@ def api_update_smtp(name):
 @limiter.limit("10/minute")
 def api_delete_smtp(name):
     """Delete a specific SMTP server by name."""
-    session = get_session_direct()
-    try:
+    with session_scope() as session:
         repo = SMTPRepository(session)
         server = repo.get_by_name(name)
         if not server:
             return jsonify({'success': False, 'error': 'Server not found'}), 404
         repo.delete(server)
         return jsonify({'success': True})
-    finally:
-        session.close()

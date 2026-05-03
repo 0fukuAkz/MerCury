@@ -6,7 +6,7 @@ from . import (
     api_bp,
     api_key_or_login_required,
     limiter,
-    get_session_direct,
+    session_scope,
     TemplateRepository,
     TemplateEngine,
 )
@@ -17,13 +17,10 @@ from . import (
 @limiter.limit("30/minute")
 def api_list_templates():
     """List email templates."""
-    session = get_session_direct()
-    try:
+    with session_scope() as session:
         repo = TemplateRepository(session)
         templates = repo.get_active()
         return jsonify({'templates': [t.to_dict() for t in templates]})
-    finally:
-        session.close()
 
 
 @api_bp.route('/templates/preview', methods=['POST'])

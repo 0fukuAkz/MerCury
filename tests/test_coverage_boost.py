@@ -31,11 +31,6 @@ def app_no_login(db_engine):
          patch('mercury.data.database.get_session_direct', side_effect=TestSession), \
          patch('mercury.services.smtp_service.get_session_direct', side_effect=TestSession), \
          patch('mercury.services.campaign_service.get_session_direct', side_effect=TestSession), \
-         patch('mercury.web.routes.api.campaigns.get_session_direct', side_effect=TestSession), \
-         patch('mercury.web.routes.api.smtp.get_session_direct', side_effect=TestSession), \
-         patch('mercury.web.routes.api.templates.get_session_direct', side_effect=TestSession), \
-         patch('mercury.web.routes.api.logs_stats.get_session_direct', side_effect=TestSession), \
-         patch('mercury.web.routes.api.dead_letter.get_session_direct', side_effect=TestSession), \
          patch('mercury.web.routes.templates.get_session_direct', side_effect=TestSession), \
          patch('mercury.web.app.get_session_direct', side_effect=TestSession), \
          patch('mercury.services.identity_service.get_session_direct', side_effect=TestSession), \
@@ -413,7 +408,7 @@ def test_api_delete_smtp_not_found(cl):
 
 def test_api_list_dead_letters(cl):
     """GET /api/dead-letter."""
-    with patch('mercury.web.routes.api.dead_letter.get_session_direct') as mock_sess:
+    with patch('mercury.data.database.get_session_direct') as mock_sess:
         mock_session = MagicMock()
         mock_sess.return_value = mock_session
         with patch('mercury.data.repositories.dead_letter.DeadLetterRepository') as MockRepo:
@@ -430,7 +425,7 @@ def test_api_list_dead_letters(cl):
 
 def test_api_retry_dead_letter(cl):
     """POST /api/dead-letter/<id>/retry."""
-    with patch('mercury.web.routes.api.dead_letter.get_session_direct') as mock_sess:
+    with patch('mercury.data.database.get_session_direct') as mock_sess:
         mock_session = MagicMock()
         mock_sess.return_value = mock_session
         with patch('mercury.services.dead_letter_service.DeadLetterService') as MockSvc:
@@ -443,7 +438,7 @@ def test_api_retry_dead_letter(cl):
 
 def test_api_discard_dead_letter(cl):
     """DELETE /api/dead-letter/<id>."""
-    with patch('mercury.web.routes.api.dead_letter.get_session_direct') as mock_sess:
+    with patch('mercury.data.database.get_session_direct') as mock_sess:
         mock_session = MagicMock()
         mock_sess.return_value = mock_session
         with patch('mercury.services.dead_letter_service.DeadLetterService') as MockSvc:

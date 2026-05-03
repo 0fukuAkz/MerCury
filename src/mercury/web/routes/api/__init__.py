@@ -32,7 +32,7 @@ from flask import Blueprint
 # Patching `mercury.web.routes.api.X` therefore intercepts the route's binding.
 from ...decorators import api_key_or_login_required  # noqa: F401
 from ...extensions import limiter, run_async  # noqa: F401
-from ....data.database import get_session_direct  # noqa: F401
+from ....data.database import get_session_direct, session_scope  # noqa: F401
 from ....data.repositories import (  # noqa: F401
     CampaignRepository,
     SMTPRepository,
