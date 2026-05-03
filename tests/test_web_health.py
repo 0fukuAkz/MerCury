@@ -23,12 +23,14 @@ def test_health_detailed_success(client, mock_auth):
         mock_conn = MagicMock()
         mock_engine.connect.return_value.__enter__.return_value = mock_conn
         
-        # Mock SMTP
-        with patch('mercury.web.routes.health.get_session_direct') as mock_limit_session, \
+        # Mock SMTP. session_scope is a context manager — configure
+        # __enter__/__exit__ so `with session_scope() as session:` works.
+        with patch('mercury.web.routes.health.session_scope') as mock_session_scope, \
              patch('mercury.web.routes.health.SMTPRepository') as MockRepo:
-            
+
             mock_session = Mock()
-            mock_limit_session.return_value = mock_session
+            mock_session_scope.return_value.__enter__.return_value = mock_session
+            mock_session_scope.return_value.__exit__.return_value = None
             
             mock_repo_instance = Mock()
             MockRepo.return_value = mock_repo_instance
@@ -57,7 +59,7 @@ def test_health_detailed_failures(client, mock_auth):
         mock_get_engine.side_effect = Exception("DB Connection Failed")
         
         # Mock SMTP Failure
-        with patch('mercury.web.routes.health.get_session_direct') as mock_limit_session:
+        with patch('mercury.web.routes.health.session_scope') as mock_limit_session:
              mock_limit_session.side_effect = Exception("SMTP DB Failed")
              
              # Mock Disk Warning (low space)

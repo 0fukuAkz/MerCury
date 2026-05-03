@@ -3,7 +3,7 @@
 from urllib.parse import urlparse
 from flask import Blueprint, request, abort, make_response, redirect
 from ...services.tracking_service import TrackingService, TRACKING_PIXEL_GIF, _email_id_registry
-from ...data.database import get_session_direct
+from ...data.database import session_scope
 from ...data.models import EmailLog
 
 tracking_bp = Blueprint('tracking', __name__, url_prefix='/track')
@@ -27,8 +27,7 @@ def _lookup_recipient(email_id: str) -> str:
 def _update_email_log(email_id: str, event_type: str):
     """Update EmailLog open/click counts in the database."""
     try:
-        session = get_session_direct()
-        try:
+        with session_scope() as session:
             log = session.query(EmailLog).filter(
                 EmailLog.correlation_id == email_id
             ).first()
@@ -38,8 +37,6 @@ def _update_email_log(email_id: str, event_type: str):
                 elif event_type == 'click':
                     log.click_count = (log.click_count or 0) + 1
                 session.commit()
-        finally:
-            session.close()
     except Exception:
         pass  # Best-effort; don't break tracking response
 

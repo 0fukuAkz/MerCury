@@ -45,7 +45,6 @@ def app_no_login(db_engine):
          patch('mercury.services.smtp_service.get_session_direct', side_effect=TestSession), \
          patch('mercury.services.campaign_service.get_session_direct', side_effect=TestSession), \
          patch('mercury.web.routes.api.get_session_direct', side_effect=TestSession), \
-         patch('mercury.web.routes.templates.get_session_direct', side_effect=TestSession), \
          patch('mercury.web.app.get_session_direct', side_effect=TestSession), \
          patch('mercury.services.identity_service.get_session_direct', side_effect=TestSession), \
          patch('mercury.services.settings_service.get_session_direct', side_effect=TestSession), \
@@ -197,7 +196,6 @@ def test_create_app_with_explicit_app_context(db_engine):
          patch('mercury.services.smtp_service.get_session_direct', side_effect=TestSession), \
          patch('mercury.services.campaign_service.get_session_direct', side_effect=TestSession), \
          patch('mercury.web.routes.api.get_session_direct', side_effect=TestSession), \
-         patch('mercury.web.routes.templates.get_session_direct', side_effect=TestSession), \
          patch('mercury.services.identity_service.get_session_direct', side_effect=TestSession), \
          patch('mercury.services.settings_service.get_session_direct', side_effect=TestSession), \
          patch.dict(os.environ, {'API_KEYS': 'test_api_key'}):
@@ -430,7 +428,7 @@ def test_templates_save_exception(logged_in_client):
         MockRepo.return_value.get_all.return_value = []
         MockRepo.return_value.create = MagicMock(side_effect=Exception("DB error"))
         # Trigger the exception path by making session.add raise
-        with patch('mercury.web.routes.templates.get_session_direct') as mock_sess:
+        with patch('mercury.data.database.get_session_direct') as mock_sess:
             mock_session = MagicMock()
             mock_session.add.side_effect = Exception("DB error")
             mock_session.__enter__ = lambda s: s
@@ -524,7 +522,7 @@ def test_templates_toggle_exception(logged_in_client, db_engine):
         mock_repo.get.return_value = mock_template
 
         # Make session.commit raise
-        with patch('mercury.web.routes.templates.get_session_direct') as mock_sess:
+        with patch('mercury.data.database.get_session_direct') as mock_sess:
             mock_session = MagicMock()
             mock_session.commit.side_effect = Exception("DB error")
             mock_sess.return_value = mock_session

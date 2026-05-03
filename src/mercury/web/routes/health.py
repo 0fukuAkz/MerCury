@@ -2,7 +2,7 @@
 
 from flask import Blueprint, jsonify
 from sqlalchemy import text
-from ...data.database import get_engine, get_session_direct
+from ...data.database import get_engine, session_scope
 from ...data.repositories import SMTPRepository
 import shutil
 
@@ -68,13 +68,10 @@ def detailed_health_check():
         
     # Check SMTP (can we read config?)
     try:
-        session = get_session_direct()
-        try:
+        with session_scope() as session:
             repo = SMTPRepository(session)
             servers = repo.get_active()
             status['components']['smtp']['count'] = len(servers)
-        finally:
-            session.close()
     except Exception as e:
         # Don't fail overall health if just SMTP list fails, but mark degraded
         status['status'] = 'degraded'

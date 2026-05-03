@@ -31,7 +31,6 @@ def app_no_login(db_engine):
          patch('mercury.data.database.get_session_direct', side_effect=TestSession), \
          patch('mercury.services.smtp_service.get_session_direct', side_effect=TestSession), \
          patch('mercury.services.campaign_service.get_session_direct', side_effect=TestSession), \
-         patch('mercury.web.routes.templates.get_session_direct', side_effect=TestSession), \
          patch('mercury.web.app.get_session_direct', side_effect=TestSession), \
          patch('mercury.services.identity_service.get_session_direct', side_effect=TestSession), \
          patch('mercury.services.settings_service.get_session_direct', side_effect=TestSession), \
@@ -137,7 +136,7 @@ def test_update_email_log_open(db_engine):
     finally:
         session.close()
 
-    with patch('mercury.web.routes.tracking.get_session_direct', side_effect=sessionmaker(bind=db_engine)):
+    with patch('mercury.data.database.get_session_direct', side_effect=sessionmaker(bind=db_engine)):
         _update_email_log('track-open-test', 'open')
 
     session2 = Session()
@@ -168,7 +167,7 @@ def test_update_email_log_click(db_engine):
     finally:
         session.close()
 
-    with patch('mercury.web.routes.tracking.get_session_direct', side_effect=sessionmaker(bind=db_engine)):
+    with patch('mercury.data.database.get_session_direct', side_effect=sessionmaker(bind=db_engine)):
         _update_email_log('track-click-test', 'click')
 
     session2 = Session()
@@ -183,7 +182,7 @@ def test_update_email_log_no_match(db_engine):
     """_update_email_log with unknown email_id does not crash."""
     from mercury.web.routes.tracking import _update_email_log
 
-    with patch('mercury.web.routes.tracking.get_session_direct', side_effect=sessionmaker(bind=db_engine)):
+    with patch('mercury.data.database.get_session_direct', side_effect=sessionmaker(bind=db_engine)):
         _update_email_log('nonexistent-id', 'open')  # should not raise
 
 
