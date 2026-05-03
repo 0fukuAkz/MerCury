@@ -520,20 +520,21 @@ class TestCheckCommand:
     """Cover check command missing lines."""
 
     def test_check_config_exception_adds_error(self, runner):
-        """Lines 239-240: exception during config loading adds error and exits 1."""
+        """Lines 239-240: exception during config loading adds error and exits 1.
+
+        ``check`` does ``from ..services.campaign_service import
+        load_campaign_from_yaml`` inside the function, so patching the
+        symbol on its source module (looked up at call time) is enough —
+        no need to wrap the click callback.
+        """
         with runner.isolated_filesystem():
             with open("bad.yaml", "w") as f:
                 f.write("dummy")
             with patch(
-                "mercury.cli.main.check.callback.__wrapped__",
-                side_effect=Exception("parse error"),
+                "mercury.services.campaign_service.load_campaign_from_yaml",
+                side_effect=Exception("YAML parse error"),
             ):
-                # Patch the actual import inside the command
-                with patch(
-                    "mercury.services.campaign_service.load_campaign_from_yaml",
-                    side_effect=Exception("YAML parse error"),
-                ):
-                    result = runner.invoke(cli, ["check", "bad.yaml"])
+                result = runner.invoke(cli, ["check", "bad.yaml"])
             assert result.exit_code == 1
             assert "YAML parse error" in result.output
 
@@ -951,7 +952,7 @@ class TestVerboseFlag:
     def test_verbose_flag_sets_debug_level(self, runner):
         """Line 52: -v sets DEBUG logging level."""
         with runner.isolated_filesystem():
-            with patch("mercury.utils.logging_config.configure_logging") as mock_log:
+            with patch("mercury.cli.main.configure_logging") as mock_log:
                 result = runner.invoke(cli, ["-v", "new", "template"])
             # With --verbose the level argument should be 'DEBUG'
             mock_log.assert_called_once()
@@ -963,7 +964,7 @@ class TestVerboseFlag:
     def test_quiet_flag_sets_warning_level(self, runner):
         """Line 52: -q sets WARNING logging level."""
         with runner.isolated_filesystem():
-            with patch("mercury.utils.logging_config.configure_logging") as mock_log:
+            with patch("mercury.cli.main.configure_logging") as mock_log:
                 result = runner.invoke(cli, ["-q", "new", "template"])
             mock_log.assert_called_once()
             call_kwargs = mock_log.call_args

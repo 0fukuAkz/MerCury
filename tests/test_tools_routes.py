@@ -58,12 +58,13 @@ def test_render_content_image(logged_in_client):
     assert response.data.startswith(b'\x89PNG\r\n\x1a\n')
 
 def test_render_content_invalid_format(logged_in_client):
-    """Test render fail with bad format."""
+    """Test render fail with bad format. Route now accepts pdf/image/docx —
+    use a truly unsupported format to exercise the rejection path."""
     response = logged_in_client.post('/tools/render', data={
         'content': '<b>test</b>',
-        'format': 'docx'
+        'format': 'xyz_unsupported',
     })
-    
+
     assert response.status_code == 400
     assert b'Invalid format' in response.data
 

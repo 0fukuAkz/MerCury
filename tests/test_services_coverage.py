@@ -163,8 +163,8 @@ class TestCampaignServiceCoverage:
         mock_settings.hourly_limit = 1000
         mock_settings.default_reply_to = ""
 
-        with patch('mercury.services.campaign_service.SettingsService') as MockSettings, \
-             patch('mercury.services.campaign_service.IdentityService') as MockIdentity:
+        with patch('mercury.services.settings_service.SettingsService') as MockSettings, \
+             patch('mercury.services.identity_service.IdentityService') as MockIdentity:
             MockSettings.get_settings.return_value = mock_settings
             MockIdentity.get_emails.return_value = [mock_email1, mock_email2]
             MockIdentity.get_names.return_value = [mock_name1, mock_name2]
@@ -197,8 +197,8 @@ class TestCampaignServiceCoverage:
         mock_settings.hourly_limit = 0
         mock_settings.default_reply_to = ""
 
-        with patch('mercury.services.campaign_service.SettingsService') as MockSettings, \
-             patch('mercury.services.campaign_service.IdentityService') as MockIdentity:
+        with patch('mercury.services.settings_service.SettingsService') as MockSettings, \
+             patch('mercury.services.identity_service.IdentityService') as MockIdentity:
             MockSettings.get_settings.return_value = mock_settings
             MockIdentity.get_emails.return_value = []
             MockIdentity.get_names.return_value = [mock_name1, mock_name2]
@@ -225,8 +225,8 @@ class TestCampaignServiceCoverage:
         mock_settings.hourly_limit = 0
         mock_settings.default_reply_to = "reply@test.com"
 
-        with patch('mercury.services.campaign_service.SettingsService') as MockSettings, \
-             patch('mercury.services.campaign_service.IdentityService') as MockIdentity:
+        with patch('mercury.services.settings_service.SettingsService') as MockSettings, \
+             patch('mercury.services.identity_service.IdentityService') as MockIdentity:
             MockSettings.get_settings.return_value = mock_settings
             MockIdentity.get_emails.return_value = []
             MockIdentity.get_names.return_value = []
@@ -241,7 +241,12 @@ class TestCampaignServiceCoverage:
         assert config.reply_to == "reply@test.com"
 
     def test_load_config_with_placeholders(self):
-        """Lines 206-207: load_config applies static placeholders."""
+        """load_config copies static placeholders into the placeholder processor.
+
+        load_config writes directly into ``email_service._placeholder_processor
+        .static_placeholders`` (a dict) rather than calling a method, so the
+        assertion has to inspect the dict, not a mocked call.
+        """
         from mercury.services.campaign_service import CampaignService, CampaignConfig
         with patch.object(CampaignService, '_setup_signal_handlers'):
             svc = CampaignService()
@@ -249,19 +254,22 @@ class TestCampaignServiceCoverage:
         config = CampaignConfig(
             name="test",
             from_email="sender@test.com",
-            placeholders={"company": "Acme"}
+            placeholders={"company": "Acme"},
         )
 
         mock_settings = MagicMock()
         mock_settings.hourly_limit = 0
         mock_settings.default_reply_to = ""
 
-        mock_template_engine = MagicMock()
+        # Use a real dict for static_placeholders so assignment behaves naturally.
+        static_placeholders: dict = {}
+        mock_processor = MagicMock()
+        mock_processor.static_placeholders = static_placeholders
         mock_email_svc = MagicMock()
-        mock_email_svc._template_engine = mock_template_engine
+        mock_email_svc._placeholder_processor = mock_processor
 
-        with patch('mercury.services.campaign_service.SettingsService') as MockSettings, \
-             patch('mercury.services.campaign_service.IdentityService') as MockIdentity:
+        with patch('mercury.services.settings_service.SettingsService') as MockSettings, \
+             patch('mercury.services.identity_service.IdentityService') as MockIdentity:
             MockSettings.get_settings.return_value = mock_settings
             MockIdentity.get_emails.return_value = []
             MockIdentity.get_names.return_value = []
@@ -272,7 +280,7 @@ class TestCampaignServiceCoverage:
             with patch('mercury.services.campaign_service.EmailService', return_value=mock_email_svc):
                 svc.load_config(config)
 
-        mock_template_engine.add_static_placeholder.assert_called_with("company", "Acme")
+        assert static_placeholders == {"company": "Acme"}
 
     def test_load_recipients_from_csv_missing_column(self):
         """Lines 322-341: load_recipients_from_csv with case-insensitive column match."""

@@ -298,22 +298,22 @@ def test_health_detailed_disk_exception(client):
 # web/routes/senders.py – exception branches (lines 30-32, 62-64)
 # ─────────────────────────────────────────────
 
-def test_senders_add_email_service_exception(client):
+def test_senders_add_email_service_exception(logged_in_client):
     """POST /senders/emails service exception flashes 'Failed to add email' (covers lines 30-32)."""
     with patch('mercury.web.routes.senders.IdentityService.add_email',
                side_effect=Exception("DB error")):
-        resp = client.post('/senders/emails', data={
+        resp = logged_in_client.post('/senders/emails', data={
             'email': 'fail@example.com',
         }, follow_redirects=True)
     assert resp.status_code == 200
     assert b'Failed to add email' in resp.data
 
 
-def test_senders_add_name_service_exception(client):
+def test_senders_add_name_service_exception(logged_in_client):
     """POST /senders/names service exception flashes 'Failed to add name' (covers lines 62-64)."""
     with patch('mercury.web.routes.senders.IdentityService.add_name',
                side_effect=Exception("DB error")):
-        resp = client.post('/senders/names', data={
+        resp = logged_in_client.post('/senders/names', data={
             'name': 'Fail Name',
         }, follow_redirects=True)
     assert resp.status_code == 200
@@ -324,11 +324,11 @@ def test_senders_add_name_service_exception(client):
 # web/routes/settings.py – general exception branch (lines 51-53)
 # ─────────────────────────────────────────────
 
-def test_settings_post_service_exception(client):
+def test_settings_post_service_exception(logged_in_client):
     """POST /settings/ general exception flashes 'Failed to update settings' (covers 51-53)."""
     with patch('mercury.web.routes.settings.SettingsService.update_settings',
                side_effect=Exception("DB error")):
-        resp = client.post('/settings/', data={
+        resp = logged_in_client.post('/settings/', data={
             'daily_limit': '500',
             'hourly_limit': '100',
             'min_delay': '1.0',
