@@ -19,6 +19,7 @@
 
         <form action="{{ url_for('senders.add_email') }}" method="POST" class="mb-4"
             style="background: var(--bg-tertiary); padding: 1rem; border-radius: var(--radius);">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
                 <input type="email" name="email" class="form-input" placeholder="new@example.com" required>
             </div>
@@ -56,6 +57,7 @@
                         <div style="display: flex; gap: 0.5rem;">
                             <form action="{{ url_for('senders.toggle_email', id=email.id) }}" method="POST"
                                 style="display:inline;">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" class="btn btn-secondary"
                                     style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
                                     {{ 'Disable' if email.is_active else 'Enable' }}
@@ -63,6 +65,7 @@
                             </form>
                             <form action="{{ url_for('senders.delete_email', id=email.id) }}" method="POST"
                                 style="display:inline;" onsubmit="return confirm('Delete this email?');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" class="btn btn-secondary"
                                     style="padding: 0.25rem 0.5rem; font-size: 0.75rem; color: var(--error); border-color: var(--error);">
                                     Del
@@ -89,6 +92,7 @@
 
         <form action="{{ url_for('senders.add_name') }}" method="POST" class="mb-4"
             style="background: var(--bg-tertiary); padding: 1rem; border-radius: var(--radius);">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
                 <input type="text" name="name" class="form-input" placeholder="John Doe" required>
             </div>
@@ -126,6 +130,7 @@
                         <div style="display: flex; gap: 0.5rem;">
                             <form action="{{ url_for('senders.toggle_name', id=name.id) }}" method="POST"
                                 style="display:inline;">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" class="btn btn-secondary"
                                     style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
                                     {{ 'Disable' if name.is_active else 'Enable' }}
@@ -133,6 +138,7 @@
                             </form>
                             <form action="{{ url_for('senders.delete_name', id=name.id) }}" method="POST"
                                 style="display:inline;" onsubmit="return confirm('Delete this name?');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" class="btn btn-secondary"
                                     style="padding: 0.25rem 0.5rem; font-size: 0.75rem; color: var(--error); border-color: var(--error);">
                                     Del

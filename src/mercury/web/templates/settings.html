@@ -235,6 +235,7 @@
 </div>
 
 <form method="POST" id="settingsForm">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <div class="cfg-layout">
 
     <!-- ── Sidebar ── -->

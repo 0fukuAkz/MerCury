@@ -7,6 +7,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_socketio import SocketIO
 from flask_login import current_user
+from flask_wtf.csrf import CSRFProtect
 
 def _get_rate_limit_key():
     """Get rate limit key based on user or IP."""
@@ -38,6 +39,13 @@ socketio = SocketIO(
     async_mode='threading',
     cors_allowed_origins=_cors_origins,
 )
+
+# CSRF protection for browser form POSTs. The api blueprint is exempted
+# inside AppContext.initialize() because it's gated by X-API-Key (or session
+# cookies on a different code path); the tracking blueprint is exempted
+# because tracking pixels / link-click redirects are GETs from external
+# clients and don't carry a session token.
+csrf = CSRFProtect()
 
 # Single shared asyncio event loop for all background async work.
 # Lazily started — importing this module no longer spawns a thread.

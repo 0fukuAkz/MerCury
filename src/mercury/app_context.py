@@ -36,25 +36,46 @@ class AppContext:
     def initialize(self, app: Flask) -> None:
         """
         Initialize all dependencies with the Flask app.
-        
+
         Args:
             app: Flask application instance
         """
         if self.is_initialized:
             logger.warning("AppContext already initialized")
             return
-        
+
         # Import extensions here to avoid circular imports
-        from .web.extensions import limiter, socketio
-        
+        from .web.extensions import limiter, socketio, csrf
+
         # Initialize rate limiter
         limiter.init_app(app)
         self.limiter = limiter
-        
+
         # Initialize SocketIO
         socketio.init_app(app)
         self.socketio = socketio
-        
+
+        # Initialize CSRF protection. Honors WTF_CSRF_ENABLED app config — the
+        # test fixture sets it to False so existing tests don't need updates.
+        csrf.init_app(app)
+
+        # Exempt blueprints that don't use cookie-session auth:
+        #   - api_bp:      gated by X-API-Key for automation; cookie users
+        #                  hitting /api/* still have SameSite=Lax + the
+        #                  api_key_or_login_required gate.
+        #   - tracking_bp: GET endpoints for open-pixel / click-redirect from
+        #                  external email clients — no token to validate.
+        #   - health_bp:   public liveness / readiness probes.
+        try:
+            from .web.routes.api import api_bp
+            from .web.routes.tracking import tracking_bp
+            from .web.routes.health import health_bp
+            csrf.exempt(api_bp)
+            csrf.exempt(tracking_bp)
+            csrf.exempt(health_bp)
+        except Exception as e:
+            logger.warning("Could not exempt blueprints from CSRF: %s", e)
+
         self.is_initialized = True
         logger.info("AppContext initialized successfully")
     
