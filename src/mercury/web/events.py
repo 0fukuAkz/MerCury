@@ -105,11 +105,10 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
             finally:
                 session.close()
 
-        _emit('campaign_started', {
-            'campaign_id': campaign_id,
-            'status': 'sending',
-            'timestamp': datetime.now(UTC).isoformat(),
-        })
+        # Note: 'campaign_started' was already emitted synchronously by the
+        # WebSocket handler as a request-acknowledgment; the thread continues
+        # the work but doesn't re-emit. 'campaign_progress' below will signal
+        # that recipients are loaded and sending is actually underway.
 
         # Notify webhooks
         try:
@@ -274,7 +273,15 @@ def register_socketio_events(sio: SocketIO):
 
     @sio.on('start_campaign')
     def handle_start_campaign(data):
-        """Start campaign via WebSocket."""
+        """Start campaign via WebSocket.
+
+        Emits ``campaign_started`` synchronously as an acknowledgment of the
+        request — UI clients then know their start was accepted and can
+        switch to a "starting…" state immediately. The actual DB load and
+        recipient fetch happen on the background thread, which emits
+        ``campaign_progress`` once recipients are loaded and
+        ``campaign_error`` if anything fails.
+        """
         if not current_user.is_authenticated:
             return
 
@@ -286,6 +293,14 @@ def register_socketio_events(sio: SocketIO):
         if campaign_id in _active_services:
             emit('campaign_error', {'campaign_id': campaign_id, 'error': 'Campaign already running'})
             return
+
+        # Acknowledge synchronously so the test client / UI sees the event
+        # without racing the background thread's DB load.
+        sio.emit('campaign_started', {
+            'campaign_id': campaign_id,
+            'status': 'sending',
+            'timestamp': datetime.now(UTC).isoformat(),
+        })
 
         app = current_app._get_current_object()
         t = threading.Thread(
