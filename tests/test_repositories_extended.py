@@ -148,11 +148,7 @@ class TestSMTPRepositoryExtended:
         assert s.failure_count == 0
         assert s.status == SMTPServerStatus.ACTIVE.value
 
-    def test_rate_counts(self, session):
-        repo = SMTPRepository(session)
-        s = repo.create(SMTPServer(name="S_Rate", host="smtp.test.com"))
-        
-        repo.update_rate_counts(s.id, minute_count=10, hour_count=50)
-        session.refresh(s)
-        assert s.current_minute_count == 10
-        assert s.current_hour_count == 50
+    # test_rate_counts deleted: SMTPRepository.update_rate_counts and the
+    # underlying current_minute_count / current_hour_count columns were
+    # removed in migration d7a2f8e4b9c1 — rate counters are per-process
+    # in-memory state on SMTPServerRuntime, never persisted.

@@ -40,11 +40,10 @@ class SMTPServer(Base, BaseModel):
     status = Column(String(50), default=SMTPServerStatus.ACTIVE.value)
     is_enabled = Column(Boolean, default=True)
     
-    # Rate limiting
+    # Rate limiting (per-process limits enforced in-memory by the engine;
+    # only the *configured* maxima are persisted, not the live counters).
     max_per_hour = Column(Integer, default=500)
     max_per_minute = Column(Integer, default=30)
-    current_hour_count = Column(Integer, default=0)
-    current_minute_count = Column(Integer, default=0)
     
     # Load balancing
     weight = Column(Float, default=1.0)

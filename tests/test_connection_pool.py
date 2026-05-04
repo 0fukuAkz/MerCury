@@ -103,10 +103,10 @@ async def test_async_pool_get_release(server_config):
 
 def test_smtp_pool_selection_weighted(server_config, mock_circuit_breaker):
     config1 = server_config
-    config1.circuit_breaker = mock_circuit_breaker
+    config1.runtime.circuit_breaker = mock_circuit_breaker
     
     config2 = SMTPServerConfig(name="s2", host="h2", weight=2.0)
-    config2.circuit_breaker = mock_circuit_breaker
+    config2.runtime.circuit_breaker = mock_circuit_breaker
     
     # Fix: use selection_strategy
     pool = SMTPConnectionPool([config1, config2], selection_strategy='weighted')
@@ -116,10 +116,10 @@ def test_smtp_pool_selection_weighted(server_config, mock_circuit_breaker):
 
 def test_smtp_pool_selection_round_robin(server_config, mock_circuit_breaker):
     config1 = server_config
-    config1.circuit_breaker = mock_circuit_breaker
+    config1.runtime.circuit_breaker = mock_circuit_breaker
     
     config2 = SMTPServerConfig(name="s2", host="h2")
-    config2.circuit_breaker = mock_circuit_breaker
+    config2.runtime.circuit_breaker = mock_circuit_breaker
     
     pool = SMTPConnectionPool([config1, config2], selection_strategy='round_robin')
     
@@ -133,10 +133,10 @@ def test_smtp_pool_selection_round_robin(server_config, mock_circuit_breaker):
 
 def test_smtp_pool_selection_priority(server_config, mock_circuit_breaker):
     config1 = server_config # priority 10
-    config1.circuit_breaker = mock_circuit_breaker
+    config1.runtime.circuit_breaker = mock_circuit_breaker
     
     config2 = SMTPServerConfig(name="s2", host="h2", priority=20)
-    config2.circuit_breaker = mock_circuit_breaker
+    config2.runtime.circuit_breaker = mock_circuit_breaker
     
     pool = SMTPConnectionPool([config1, config2], selection_strategy='priority')
     
@@ -197,7 +197,7 @@ async def test_pool_release_invalid(server_config):
 
 @pytest.mark.asyncio
 async def test_smtp_pool_acquire(server_config, mock_circuit_breaker):
-    server_config.circuit_breaker = mock_circuit_breaker
+    server_config.runtime.circuit_breaker = mock_circuit_breaker
     pool = SMTPConnectionPool([server_config])
     
     # Mock the internal AsyncConnectionPool

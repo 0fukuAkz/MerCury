@@ -42,8 +42,36 @@ def _create_circuit_breaker(
 
 
 @dataclass
+class SMTPServerRuntime:
+    """Per-process mutable runtime state for an SMTP server.
+
+    Separated from ``SMTPServerConfig`` so the config itself can stay
+    immutable / hashable / cacheable, and so it's obvious what state lives
+    only in this worker's memory (vs. what's persisted in the DB).
+
+    Counters here intentionally do NOT round-trip to the database — the
+    earlier ``current_minute_count`` / ``current_hour_count`` columns were
+    dropped in migration ``d7a2f8e4b9c1`` because each worker maintains its
+    own independent counter and persisting one-of-many is meaningless.
+    """
+    circuit_breaker: CircuitBreaker
+    current_minute_count: int = 0
+    current_hour_count: int = 0
+    total_sent: int = 0
+    total_failures: int = 0
+    consecutive_failures: int = 0
+    last_minute_reset: datetime = field(default_factory=lambda: datetime.now(UTC))
+    last_hour_reset: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+
+@dataclass
 class SMTPServerConfig:
-    """SMTP server configuration."""
+    """SMTP server configuration.
+
+    Static configuration only — connection details, rate-limit *caps*, and
+    circuit-breaker tuning. Mutable per-process counters live on the
+    ``runtime`` companion (see ``SMTPServerRuntime``).
+    """
     name: str
     host: str
     port: int = 587
@@ -66,19 +94,13 @@ class SMTPServerConfig:
     cb_timeout_seconds: Optional[int] = None
     cb_monitor_window_seconds: Optional[int] = None
 
-    # Runtime state - circuit_breaker will be initialized in __post_init__
-    circuit_breaker: CircuitBreaker = field(default=None)
-    current_minute_count: int = 0
-    current_hour_count: int = 0
-    total_sent: int = 0
-    total_failures: int = 0
-    consecutive_failures: int = 0
-    last_minute_reset: datetime = field(default_factory=lambda: datetime.now(UTC))
-    last_hour_reset: datetime = field(default_factory=lambda: datetime.now(UTC))
-    
+    # Mutable runtime state — initialized in __post_init__ so callers don't
+    # have to construct it explicitly.
+    runtime: SMTPServerRuntime = field(default=None)
+
     def __post_init__(self):
-        """Initialize circuit breaker after dataclass initialization."""
-        if self.circuit_breaker is None:
+        """Initialize the runtime companion (circuit breaker + counters)."""
+        if self.runtime is None:
             cb_kwargs = {}
             if self.cb_failure_threshold is not None:
                 cb_kwargs['failure_threshold'] = self.cb_failure_threshold
@@ -88,8 +110,40 @@ class SMTPServerConfig:
                 cb_kwargs['timeout_seconds'] = self.cb_timeout_seconds
             if self.cb_monitor_window_seconds is not None:
                 cb_kwargs['monitor_window_seconds'] = self.cb_monitor_window_seconds
-            self.circuit_breaker = _create_circuit_breaker(self.name, **cb_kwargs)
-    
+            self.runtime = SMTPServerRuntime(
+                circuit_breaker=_create_circuit_breaker(self.name, **cb_kwargs),
+            )
+
+    # ---- Back-compat read-through properties ---------------------------------
+    # External code (engine internals, smtp_service stats display) historically
+    # reached straight for these names on the config object. Keeping read
+    # access available avoids a wider sweep right now; writers must go through
+    # the methods below or `config.runtime.X = ...` directly.
+    @property
+    def circuit_breaker(self) -> CircuitBreaker:
+        return self.runtime.circuit_breaker
+
+    @property
+    def current_minute_count(self) -> int:
+        return self.runtime.current_minute_count
+
+    @property
+    def current_hour_count(self) -> int:
+        return self.runtime.current_hour_count
+
+    @property
+    def total_sent(self) -> int:
+        return self.runtime.total_sent
+
+    @property
+    def total_failures(self) -> int:
+        return self.runtime.total_failures
+
+    @property
+    def consecutive_failures(self) -> int:
+        return self.runtime.consecutive_failures
+    # ---------------------------------------------------------------------------
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'SMTPServerConfig':
         """Create config from dictionary."""
@@ -133,34 +187,36 @@ class SMTPServerConfig:
             'max_per_minute': self.max_per_minute,
             'max_per_hour': self.max_per_hour,
         }
-    
+
     def check_rate_limits(self) -> bool:
         """Check if within rate limits."""
         now = datetime.now(UTC)
-        
+        rt = self.runtime
+
         # Reset minute counter
-        if (now - self.last_minute_reset).total_seconds() >= 60:
-            self.current_minute_count = 0
-            self.last_minute_reset = now
-        
+        if (now - rt.last_minute_reset).total_seconds() >= 60:
+            rt.current_minute_count = 0
+            rt.last_minute_reset = now
+
         # Reset hour counter
-        if (now - self.last_hour_reset).total_seconds() >= 3600:
-            self.current_hour_count = 0
-            self.last_hour_reset = now
-        
+        if (now - rt.last_hour_reset).total_seconds() >= 3600:
+            rt.current_hour_count = 0
+            rt.last_hour_reset = now
+
         return (
-            self.current_minute_count < self.max_per_minute and
-            self.current_hour_count < self.max_per_hour
+            rt.current_minute_count < self.max_per_minute and
+            rt.current_hour_count < self.max_per_hour
         )
-    
+
     def increment_counters(self):
         """Increment rate limit counters."""
-        self.current_minute_count += 1
-        self.current_hour_count += 1
-    
+        rt = self.runtime
+        rt.current_minute_count += 1
+        rt.current_hour_count += 1
+
     def can_execute(self) -> bool:
         """Check if server can accept requests (circuit breaker + rate limits)."""
-        return self.circuit_breaker.is_available() and self.check_rate_limits()
+        return self.runtime.circuit_breaker.is_available() and self.check_rate_limits()
 
 
 class AsyncSMTPConnection:
@@ -499,15 +555,17 @@ class SMTPConnectionPool:
     
     def record_success(self, config: SMTPServerConfig):
         """Record successful send."""
-        config.circuit_breaker.record_success()
-        config.total_sent += 1
-        config.consecutive_failures = 0
-    
+        rt = config.runtime
+        rt.circuit_breaker.record_success()
+        rt.total_sent += 1
+        rt.consecutive_failures = 0
+
     def record_failure(self, config: SMTPServerConfig, error: Exception):
         """Record failed send."""
-        config.circuit_breaker.record_failure(error)
-        config.total_failures += 1
-        config.consecutive_failures += 1
+        rt = config.runtime
+        rt.circuit_breaker.record_failure(error)
+        rt.total_failures += 1
+        rt.consecutive_failures += 1
         
         # Check for rate limiting
         error_str = str(error).lower()

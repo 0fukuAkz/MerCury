@@ -75,12 +75,3 @@ class SMTPRepository(BaseRepository[SMTPServer]):
             self.session.commit()
         return server
     
-    def update_rate_counts(self, server_id: int, minute_count: int = 0, hour_count: int = 0):
-        """Update rate limiting counters."""
-        server = self.get(server_id)
-        if server:
-            server.current_minute_count = minute_count
-            server.current_hour_count = hour_count
-            self.session.commit()
-        return server
-

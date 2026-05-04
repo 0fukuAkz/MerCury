@@ -970,7 +970,7 @@ class TestSMTPServerConfig:
 
     def test_check_rate_limits_minute_reset(self, base_config):
         """Lines 113-114: minute counter resets after 60s."""
-        base_config.current_minute_count = 5
+        base_config.runtime.current_minute_count = 5
         base_config.last_minute_reset = datetime.now(UTC) - timedelta(seconds=61)
         result = base_config.check_rate_limits()
         assert base_config.current_minute_count == 0
@@ -978,14 +978,14 @@ class TestSMTPServerConfig:
 
     def test_check_rate_limits_hour_reset(self, base_config):
         """Lines 118-119: hour counter resets after 3600s."""
-        base_config.current_hour_count = 10
+        base_config.runtime.current_hour_count = 10
         base_config.last_hour_reset = datetime.now(UTC) - timedelta(seconds=3601)
         base_config.check_rate_limits()
         assert base_config.current_hour_count == 0
 
     def test_check_rate_limits_exceeded(self, base_config):
         """Returns False when limits exceeded."""
-        base_config.current_minute_count = 1000
+        base_config.runtime.current_minute_count = 1000
         assert base_config.check_rate_limits() is False
 
     def test_can_execute_circuit_breaker_open(self, base_config):

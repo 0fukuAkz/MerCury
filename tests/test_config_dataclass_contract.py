@@ -60,8 +60,13 @@ SMTP_SERVER_CONFIG_FIELDS = frozenset({
     # Circuit breaker tuning (added in earlier hardening pass)
     'cb_failure_threshold', 'cb_success_threshold',
     'cb_timeout_seconds', 'cb_monitor_window_seconds',
-    # Mutable runtime state — a future refactor should split these out into
-    # SMTPServerStats. Pinned here so we notice when that happens.
+    # Mutable runtime state was split into SMTPServerRuntime — only the
+    # companion handle remains on Config. Old fields are still readable via
+    # back-compat properties (not dataclass fields, so not in this set).
+    'runtime',
+})
+
+SMTP_SERVER_RUNTIME_FIELDS = frozenset({
     'circuit_breaker',
     'current_minute_count', 'current_hour_count',
     'total_sent', 'total_failures', 'consecutive_failures',
@@ -92,6 +97,16 @@ def test_smtp_server_config_fields_pinned():
     assert _names(SMTPServerConfig) == SMTP_SERVER_CONFIG_FIELDS, (
         "SMTPServerConfig fields drifted. Update SMTP_SERVER_CONFIG_FIELDS "
         "and verify the SMTPServer DB model + repository sync the new field."
+    )
+
+
+def test_smtp_server_runtime_fields_pinned():
+    from mercury.engine.connection_pool import SMTPServerRuntime
+    assert _names(SMTPServerRuntime) == SMTP_SERVER_RUNTIME_FIELDS, (
+        "SMTPServerRuntime fields drifted. These are per-process counters "
+        "and circuit-breaker state — they MUST NOT be persisted to the DB. "
+        "If you're tempted to add a column, rethink: each worker has its "
+        "own copy of these and persisting one is meaningless."
     )
 
 
