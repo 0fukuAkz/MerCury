@@ -1,8 +1,7 @@
 
 import pytest
 import os
-import secrets
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import patch, MagicMock
 from datetime import datetime, UTC, timedelta
 
 from mercury.security.auth import (

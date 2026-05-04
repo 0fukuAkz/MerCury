@@ -1,9 +1,6 @@
 """Tests for webhook_service.py coverage."""
 
 import pytest
-import asyncio
-import json
-import os
 from unittest.mock import MagicMock, patch, AsyncMock
 from mercury.services.webhook_service import WebhookService, WebhookEvent, WebhookConfig
 

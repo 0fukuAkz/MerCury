@@ -1,7 +1,5 @@
 
 import pytest
-from datetime import datetime, UTC
-from sqlalchemy import text
 
 from mercury.data.repositories.template import TemplateRepository
 from mercury.data.repositories.user import UserRepository

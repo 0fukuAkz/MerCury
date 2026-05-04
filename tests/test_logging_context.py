@@ -2,8 +2,7 @@
 
 import pytest
 import logging
-import json
-from unittest.mock import patch, MagicMock, Mock
+from unittest.mock import patch, Mock
 from mercury.utils.logging_context import (
     ContextLogger,
     get_context_logger,

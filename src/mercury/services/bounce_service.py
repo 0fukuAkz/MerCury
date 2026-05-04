@@ -1,8 +1,7 @@
 """Bounce handling service for managing email bounces and suppressions."""
 
-import os
 import logging
-from typing import Optional, Dict, Any, List, Set
+from typing import Optional, Dict, Any, List
 from datetime import datetime, UTC
 from dataclasses import dataclass, field
 from enum import Enum

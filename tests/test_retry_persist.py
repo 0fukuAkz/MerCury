@@ -10,7 +10,6 @@ import os
 import tempfile
 import pytest
 from datetime import datetime, UTC, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from mercury.engine.retry_queue import (
     RetryConfig,

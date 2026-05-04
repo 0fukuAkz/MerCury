@@ -2,12 +2,10 @@
 
 import pytest
 import asyncio
-from datetime import datetime, UTC
-from unittest.mock import Mock, AsyncMock, patch, MagicMock
+from unittest.mock import Mock, AsyncMock
 
 from mercury.engine.async_sender import (
     AsyncEmailSender,
-    EmailResult,
     BulkSendResult,
     categorize_smtp_error
 )
@@ -18,8 +16,7 @@ from mercury.exceptions import (
     SMTPAuthenticationError,
     SMTPRateLimitError,
     SMTPMailboxError,
-    TransientSMTPError,
-    PermanentSMTPError
+    TransientSMTPError
 )
 import aiosmtplib
 

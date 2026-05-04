@@ -8,8 +8,6 @@ Targets missing lines:
 import base64
 import hashlib
 import hmac
-import os
-import secrets
 from datetime import datetime, UTC, timedelta
 from unittest.mock import MagicMock, patch
 

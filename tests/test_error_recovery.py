@@ -1,18 +1,14 @@
 """Tests for error recovery manager."""
 
-import pytest
 
 from mercury.engine.error_recovery import (
     ErrorRecoveryManager,
-    ErrorRecoveryDecision,
     RecoveryStrategy
 )
 from mercury.exceptions import (
     SMTPConnectionError,
     SMTPAuthenticationError,
-    SMTPMailboxError,
-    TransientSMTPError,
-    PermanentSMTPError
+    TransientSMTPError
 )
 
 

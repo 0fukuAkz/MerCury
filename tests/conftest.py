@@ -2,11 +2,15 @@
 
 import logging
 import pytest
-import asyncio
 from typing import AsyncGenerator, Generator
-from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
+
+from mercury.data.database import Base
+from mercury.data.models import User
+from mercury.engine.connection_pool import SMTPServerConfig, AsyncConnectionPool
+from mercury.engine.rate_limiter import RateLimiter, RateLimiterConfig
+from mercury.engine.retry_queue import RetryQueue, RetryConfig
 
 
 @pytest.fixture(autouse=True)
@@ -28,12 +32,6 @@ def _restore_log_propagation():
             if lg.level > logging.WARNING and lg.level != logging.NOTSET:
                 lg.setLevel(logging.NOTSET)
     yield
-
-from mercury.data.database import Base
-from mercury.data.models import User, Template, SMTPServer, Recipient, Campaign
-from mercury.engine.connection_pool import SMTPServerConfig, AsyncConnectionPool
-from mercury.engine.rate_limiter import RateLimiter, RateLimiterConfig
-from mercury.engine.retry_queue import RetryQueue, RetryConfig
 
 
 # Database Fixtures

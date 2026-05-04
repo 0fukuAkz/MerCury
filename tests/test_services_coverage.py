@@ -1,7 +1,6 @@
 """Coverage tests for services - targeting specific missing lines."""
 
 import pytest
-import asyncio
 import os
 import tempfile
 from unittest.mock import MagicMock, patch, AsyncMock

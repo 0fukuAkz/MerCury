@@ -4,7 +4,6 @@ import pytest
 import asyncio
 from unittest.mock import patch, MagicMock
 from mercury.services.campaign_service import CampaignService, CampaignConfig, load_campaign_from_yaml
-from mercury.data.models import Campaign, EmailLog
 
 @pytest.fixture(autouse=True)
 def patch_session(db_engine):

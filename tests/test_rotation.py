@@ -1,6 +1,5 @@
 """Tests for rotation manager."""
 
-import pytest
 
 from mercury.features.rotation import RotationManager, RotationStrategy
 

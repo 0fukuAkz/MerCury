@@ -2,7 +2,6 @@
 
 import pytest
 from unittest.mock import patch, Mock, MagicMock
-from mercury.web.app import create_app
 
 @pytest.fixture
 def mock_auth():

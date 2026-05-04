@@ -1,14 +1,5 @@
 
-import pytest
-import json
-import os
-from unittest.mock import MagicMock, patch
-from flask import Flask
 
-from mercury.web.app import create_app
-from mercury.app_context import AppContext
-from mercury.data.models import User, Campaign, SMTPServer
-from mercury.security.auth import hash_password
 
 class TestWebIntegration:
     

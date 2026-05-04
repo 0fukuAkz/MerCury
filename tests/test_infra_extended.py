@@ -1,16 +1,14 @@
 
 import pytest
 import asyncio
-from unittest.mock import MagicMock, AsyncMock, patch, mock_open
-import aiofiles
+from unittest.mock import MagicMock, AsyncMock, patch
 
 from mercury.services.smtp_service import SMTPService
 from mercury.utils.async_io import (
     async_write_line, async_write_file, async_read_file, 
-    async_read_lines, async_iter_lines, async_file_exists, 
-    async_append_json_line, AsyncFileLogger
+    async_iter_lines, AsyncFileLogger
 )
-from mercury.engine.connection_pool import SMTPServerConfig, SMTPConnectionPool
+from mercury.engine.connection_pool import SMTPConnectionPool
 
 class TestSMTPServiceExtended:
     

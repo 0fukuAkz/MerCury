@@ -2,7 +2,6 @@ import pytest
 import threading
 import time
 import os
-import signal
 
 try:
     from playwright.sync_api import sync_playwright
@@ -12,8 +11,6 @@ except ImportError:
 
 # Only import app dependencies if playwright is available
 if HAS_PLAYWRIGHT:
-    from mercury.web.app import create_app, init_db
-    from mercury.data.database import get_session_direct
     from mercury.data.models import User
     from mercury.security.auth import hash_password
 

@@ -1,7 +1,6 @@
 
-import pytest
 from unittest.mock import Mock, patch, mock_open
-from mercury.features.template_engine import TemplateEngine, TemplateConfig
+from mercury.features.template_engine import TemplateEngine
 
 class TestTemplateEngineExtended:
     """Extended tests for TemplateEngine."""

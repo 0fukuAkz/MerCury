@@ -1,6 +1,5 @@
 """Tests for custom exceptions."""
 
-import pytest
 
 from mercury.exceptions import (
     MercuryException,
@@ -8,9 +7,7 @@ from mercury.exceptions import (
     TransientSMTPError,
     PermanentSMTPError,
     SMTPConnectionError,
-    SMTPAuthenticationError,
     ValidationException,
-    InvalidEmailError,
     ConfigurationException,
     RateLimitException,
     is_transient_error,

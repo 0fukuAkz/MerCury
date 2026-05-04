@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import patch, MagicMock, ANY
+from unittest.mock import patch, ANY
 
 @pytest.fixture
 def mock_tracking_service():

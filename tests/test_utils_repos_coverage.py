@@ -2,10 +2,9 @@
 
 import pytest
 import os
-import sys
 import logging
 import tempfile
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from datetime import datetime, UTC, timedelta
 
 
@@ -521,7 +520,6 @@ class TestRecipientRepositoryCoverage:
     def test_iterate_by_list_pending_only(self, db_session):
         """Line 70: iterate_by_list with pending_only=True."""
         from mercury.data.repositories.recipient import RecipientRepository
-        from mercury.data.models import RecipientStatus
         rl = self._create_list(db_session)
         self._create_recipient(db_session, rl.id, "pend@test.com", status="pending")
         self._create_recipient(db_session, rl.id, "sent@test.com", status="sent")

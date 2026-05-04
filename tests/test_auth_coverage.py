@@ -1,12 +1,8 @@
 """Tests for auth.py coverage."""
 
-import pytest
-import os
-from unittest.mock import patch, MagicMock
 from mercury.security.auth import (
     authenticate, require_api_key, generate_unsubscribe_token, validate_unsubscribe_token,
-    hash_password, verify_password, create_user, get_user_by_id, User,
-    init_auth, load_user
+    create_user, load_user
 )
 
 def test_require_api_key(monkeypatch):

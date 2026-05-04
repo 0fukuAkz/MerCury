@@ -12,7 +12,6 @@ Coverage tests for mercury.data.models:
   - settings.py
 """
 
-import pytest
 from datetime import datetime, UTC
 from unittest.mock import patch, MagicMock
 
@@ -24,7 +23,6 @@ from mercury.data.models import (
     Recipient,
     Campaign,
     CampaignStatus,
-    CampaignType,
     EmailLog,
     EmailStatus,
     User,

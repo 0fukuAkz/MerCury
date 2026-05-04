@@ -113,6 +113,22 @@ where = ["src"]
 line-length = 100
 target-version = "py312"
 
+# Globally ignored rules:
+# - E712: `Column == True` is the SQLAlchemy filter-expression idiom, not a
+#   Python identity-vs-equality bug. Rewriting as `is True` would break the
+#   query (it would no longer compile to SQL).
+ignore = ["E712"]
+
+[tool.ruff.per-file-ignores]
+# Tests get more ergonomic latitude:
+#   F841 — `with patch(...) as mock_X` patterns where the binding is
+#          intentional documentation even when unused.
+#   E701 — multi-statement lines like `if cond: assert ...` common in tests.
+#   E741 — single-letter names (`l`, `i`) in throwaway scopes.
+"tests/**/*.py" = ["F841", "E701", "E741"]
+# E2E suite can import availability probes that look unused.
+"tests/e2e/**/*.py" = ["F401"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

@@ -1,11 +1,10 @@
 """Tests for Service Layer (CampaignService, SMTPService)."""
 
 import pytest
-import os
-from unittest.mock import patch, Mock, MagicMock, mock_open, AsyncMock
+from unittest.mock import patch, Mock, mock_open, AsyncMock
 from mercury.services.campaign_service import CampaignService, CampaignConfig
 from mercury.services.smtp_service import SMTPService
-from mercury.data.models import Campaign, SMTPServer
+from mercury.data.models import SMTPServer
 
 @pytest.fixture
 def mock_db_session():

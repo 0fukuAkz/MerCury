@@ -9,11 +9,10 @@ import aiosmtplib
 from mercury.engine.async_sender import (
     AsyncEmailSender, EmailResult, BulkSendResult, categorize_smtp_error,
     SMTPConnectionError, SMTPAuthenticationError, SMTPRateLimitError,
-    SMTPMailboxError, TransientSMTPError, PermanentSMTPError,
+    SMTPMailboxError, PermanentSMTPError,
     send_email_async, send_bulk_emails_async
 )
 from mercury.engine.connection_pool import SMTPServerConfig, SMTPConnectionPool
-from mercury.engine.rate_limiter import RateLimiter
 
 @pytest.fixture
 def mock_pool():

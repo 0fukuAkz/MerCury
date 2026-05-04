@@ -1,11 +1,8 @@
 """Tests for dead letter service."""
 
-import pytest
-from datetime import datetime, UTC
 
 from mercury.services.dead_letter_service import DeadLetterService
 from mercury.data.repositories.dead_letter import DeadLetterRepository
-from mercury.data.models.dead_letter import DeadLetter
 
 
 class TestDeadLetterService:

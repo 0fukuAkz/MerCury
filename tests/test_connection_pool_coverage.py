@@ -2,10 +2,10 @@
 
 import pytest
 import asyncio
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from mercury.engine.connection_pool import (
     SMTPConnectionPool, AsyncConnectionPool, SMTPServerConfig,
-    AsyncSMTPConnection, _create_circuit_breaker
+    AsyncSMTPConnection
 )
 
 @pytest.fixture

@@ -1,6 +1,5 @@
 """Tests for repository layer."""
 
-import pytest
 from datetime import datetime, UTC
 
 from mercury.data.models.campaign import Campaign, CampaignStatus

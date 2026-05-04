@@ -2,9 +2,8 @@
 
 import pytest
 from unittest.mock import patch, Mock, MagicMock
-from mercury.web.app import create_app, socketio
+from mercury.web.app import create_app
 
-from flask_socketio import SocketIO
 
 @pytest.fixture
 def socketio_instance():

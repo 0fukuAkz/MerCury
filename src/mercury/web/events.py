@@ -324,6 +324,7 @@ def register_socketio_events(sio: SocketIO):
             svc.pause()
 
             # Update DB status
+            app = current_app._get_current_object()
             with app.app_context():
                 session = get_session_direct()
                 try:
@@ -353,6 +354,7 @@ def register_socketio_events(sio: SocketIO):
             svc.resume()
 
             # Update DB status back to sending
+            app = current_app._get_current_object()
             with app.app_context():
                 session = get_session_direct()
                 try:

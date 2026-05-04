@@ -346,7 +346,7 @@ def api_send_test_email():
         primary_link = (data.get('primary_link') or '').strip()
         links_raw = data.get('links') or data.get('links_list') or []
         if isinstance(links_raw, str):
-            links_raw = [l.strip() for l in links_raw.splitlines() if l.strip()]
+            links_raw = [line.strip() for line in links_raw.splitlines() if line.strip()]
         link_to_use = primary_link or (links_raw[0] if links_raw else None)
 
         # Respect campaign tracking/feature toggles (checkboxes send "on" or are absent)

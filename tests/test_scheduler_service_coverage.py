@@ -3,7 +3,7 @@
 import pytest
 import asyncio
 from datetime import datetime, timedelta, UTC
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from mercury.services.scheduler_service import SchedulerService, ScheduleType, ScheduledJob
 
 @pytest.fixture

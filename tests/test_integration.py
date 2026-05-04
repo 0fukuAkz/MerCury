@@ -1,14 +1,10 @@
 """Integration tests for end-to-end workflows."""
 
 import pytest
-import asyncio
-from unittest.mock import AsyncMock, Mock, patch
 from datetime import datetime, UTC
 
 from mercury.services.email_service import EmailService, EmailConfig
 from mercury.services.smtp_service import SMTPService
-from mercury.engine.connection_pool import SMTPServerConfig
-from mercury.data.models.smtp import SMTPServer
 
 
 @pytest.mark.asyncio

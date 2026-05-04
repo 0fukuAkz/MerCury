@@ -1,6 +1,5 @@
 """Tests for template engine."""
 
-import pytest
 from mercury.features.template_engine import TemplateEngine
 
 

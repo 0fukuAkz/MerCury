@@ -1,7 +1,6 @@
 """Tests for rotation.py coverage."""
 
-import pytest
-from mercury.features.rotation import RotationManager, RotationStrategy, RotationSet
+from mercury.features.rotation import RotationManager, RotationStrategy
 
 def test_rotation_basic_strategies():
     mgr = RotationManager()

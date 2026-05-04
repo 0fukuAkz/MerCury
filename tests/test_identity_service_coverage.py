@@ -1,7 +1,7 @@
 """Tests for identity_service.py coverage."""
 
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from mercury.services.identity_service import IdentityService
 from mercury.data.models.identity import FromEmail, SenderName
 

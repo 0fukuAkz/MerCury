@@ -1,9 +1,8 @@
 """Tests for API routes coverage."""
 
-import pytest
 import json
 from unittest.mock import patch, MagicMock
-from mercury.data.models import Campaign, SMTPServer, Template, EmailLog, EmailStatus
+from mercury.data.models import SMTPServer, Template, EmailLog, EmailStatus
 
 def test_api_status(client):
     response = client.get('/api/status')

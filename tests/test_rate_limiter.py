@@ -5,7 +5,6 @@ import asyncio
 from datetime import datetime, UTC
 
 from mercury.engine.rate_limiter import RateLimiter, RateLimiterConfig
-from mercury.exceptions import RateLimitException
 
 
 @pytest.mark.asyncio

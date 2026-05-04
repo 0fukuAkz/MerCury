@@ -6,10 +6,9 @@ Comprehensive coverage tests for:
   345, 349-353, 372, 389, 446-447, 458-459, 480, 488-495, 502-510, 517-525, 576)
 """
 
-import io
 import os
 import pytest
-from unittest.mock import patch, Mock, MagicMock, mock_open
+from unittest.mock import patch, Mock, MagicMock
 from click.testing import CliRunner
 
 from mercury.features.generators import (
@@ -32,8 +31,6 @@ class TestQRCodeGeneratorCoverage:
 
     def test_generate_with_overrides(self):
         """Lines 142 / 144-148: custom box_size, border, fill_color, back_color."""
-        import qrcode
-        from qrcode.image.pil import PilImage
 
         gen = QRCodeGenerator()
         result = gen.generate(
@@ -112,8 +109,6 @@ class TestPDFGeneratorCoverage:
         config = GeneratorConfig(use_weasyprint=True)
         gen = PDFGenerator(config)
 
-        import importlib
-        import sys
 
         # Simulate weasyprint importable but raising OSError on usage
         mock_wp = MagicMock()

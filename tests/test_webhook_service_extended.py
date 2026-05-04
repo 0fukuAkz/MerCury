@@ -1,10 +1,8 @@
 
 import pytest
 import os
-import json
-import logging
 from unittest.mock import AsyncMock, MagicMock, patch
-from mercury.services.webhook_service import WebhookService, WebhookEvent, WebhookConfig
+from mercury.services.webhook_service import WebhookService, WebhookEvent
 
 @pytest.fixture
 def webhook_service():

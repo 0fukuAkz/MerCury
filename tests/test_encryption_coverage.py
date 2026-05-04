@@ -1,7 +1,6 @@
 """Tests for encryption.py coverage."""
 
 import pytest
-import os
 from unittest.mock import patch
 from mercury.security.encryption import EncryptionService, get_encryption_service
 

@@ -1,15 +1,12 @@
 """Tests for circuit breaker."""
 
-import pytest
-import asyncio
-from datetime import datetime, UTC, timedelta
 
 from mercury.engine.circuit_breaker import (
     CircuitBreaker,
     CircuitBreakerConfig,
     CircuitState
 )
-from mercury.exceptions import SMTPConnectionError, SMTPAuthenticationError
+from mercury.exceptions import SMTPConnectionError
 
 
 class TestCircuitBreaker:

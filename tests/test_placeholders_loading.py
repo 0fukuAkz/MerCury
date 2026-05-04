@@ -1,8 +1,6 @@
 
-import os
-import pytest
 import yaml
-from mercury.features.template_engine import TemplateEngine, TemplateConfig
+from mercury.features.template_engine import TemplateEngine
 
 def test_load_placeholders_from_yaml(tmp_path):
     """Test that TemplateEngine loads placeholders from a YAML file."""

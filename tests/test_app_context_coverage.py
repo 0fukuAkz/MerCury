@@ -3,7 +3,6 @@
 Targets missing lines: 46-62, 67-68, 72-73, 77-78, 82, 86, 102-104, 115, 121.
 """
 
-import pytest
 from unittest.mock import MagicMock, patch
 
 from mercury.app_context import (
@@ -35,25 +34,8 @@ class TestInitialize:
         ctx = _fresh_context()
         assert ctx.is_initialized is False
 
-        mock_limiter = MagicMock()
-        mock_socketio = MagicMock()
-
-        with patch("mercury.app_context.AppContext.initialize") as mock_init:
-            # Just call the real method bypassing the actual extension import
-            pass
-
-        # Use the real method but mock the extension imports
-        with patch("mercury.web.extensions.limiter") as ml, \
-             patch("mercury.web.extensions.socketio") as ms:
-            # Patch the imports inside initialize
-            with patch.dict("sys.modules", {}):
-                with patch(
-                    "mercury.app_context.AppContext.initialize",
-                    wraps=lambda self, app: _patched_initialize(self, app, ml, ms),
-                ):
-                    pass
-
-        # Simpler: directly patch the extensions module referenced inside initialize
+        # Patch the method itself to verify it's invoked with the right arg.
+        # (Exercising the full init body lives in the integration tests.)
         fake_app = MagicMock()
         with patch("mercury.app_context.AppContext.initialize") as mock_method:
             ctx.initialize(fake_app)
@@ -72,7 +54,6 @@ class TestInitialize:
                    wraps=AppContext.initialize):
             # Since extensions import would fail in unit-test environment,
             # mark already initialized so the early-return path (lines 46-48) is hit.
-            import logging
             with patch.object(
                 __import__("mercury.app_context", fromlist=["logger"]).logger,
                 "warning",

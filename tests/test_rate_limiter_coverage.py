@@ -1,8 +1,7 @@
 """Tests for rate_limiter.py coverage."""
 
 import pytest
-import asyncio
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from mercury.engine.rate_limiter import (
     RateLimiterConfig, TokenBucket, RateLimiter, AdaptiveRateLimiter
 )

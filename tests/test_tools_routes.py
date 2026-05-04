@@ -1,7 +1,6 @@
 """Tests for tools routes."""
 
 import pytest
-import io
 
 @pytest.fixture
 def logged_in_client(client, admin_user):

@@ -1,11 +1,8 @@
 """Tests for Configuration Overhaul features."""
 
-import pytest
 from mercury.services.identity_service import IdentityService
 from mercury.services.settings_service import SettingsService
 from mercury.services.campaign_service import CampaignService, CampaignConfig
-from mercury.data.models.identity import FromEmail, SenderName
-from mercury.data.models.settings import GlobalSetting
 
 def test_identity_service_emails(app):
     """Test identity service email operations."""

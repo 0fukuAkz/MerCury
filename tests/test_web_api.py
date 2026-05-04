@@ -3,7 +3,6 @@
 import pytest
 from unittest.mock import patch, Mock, MagicMock
 from flask import json
-from mercury.web.app import create_app
 
 @pytest.fixture(autouse=True)
 def mock_auth_api():

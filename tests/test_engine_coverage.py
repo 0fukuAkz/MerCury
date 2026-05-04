@@ -14,10 +14,9 @@ Targets missing lines in:
 """
 
 import asyncio
-import logging
 import pytest
 from datetime import datetime, UTC, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from mercury.engine.error_aggregator import ErrorAggregator, ErrorGroup, ErrorSummary
 from mercury.engine.connection_pool import (
@@ -28,7 +27,6 @@ from mercury.engine.connection_pool import (
 )
 from mercury.engine.circuit_breaker import CircuitBreaker, CircuitBreakerConfig, CircuitState
 from mercury.engine.rate_limiter import (
-    RateLimiter,
     RateLimiterConfig,
     TokenBucket,
     AdaptiveRateLimiter,
@@ -38,11 +36,10 @@ from mercury.engine.error_recovery import (
     ErrorRecoveryDecision,
     RecoveryStrategy,
 )
-from mercury.engine.retry_queue import RetryConfig, RetryItem, RetryQueue, RetryStatus
+from mercury.engine.retry_queue import RetryConfig, RetryQueue, RetryStatus
 from mercury.exceptions import (
     SMTPConnectionError,
     SMTPAuthenticationError,
-    SMTPMailboxError,
     TransientSMTPError,
     PermanentSMTPError,
 )

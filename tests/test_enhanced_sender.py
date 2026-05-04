@@ -1,21 +1,18 @@
 """Tests for EnhancedAsyncEmailSender."""
 
 import pytest
-import asyncio
-from unittest.mock import AsyncMock, Mock, patch, ANY
+from unittest.mock import AsyncMock, Mock, patch
 from datetime import datetime, UTC
 
 from mercury.engine.enhanced_sender import (
     EnhancedAsyncEmailSender,
-    EmailResult,
-    BulkSendResult
+    EmailResult
 )
 from mercury.engine.error_recovery import (
     ErrorRecoveryManager,
     ErrorRecoveryDecision,
     RecoveryStrategy
 )
-from mercury.engine.error_aggregator import ErrorAggregator
 from mercury.services.dead_letter_service import DeadLetterService
 from mercury.engine.connection_pool import SMTPConnectionPool
 

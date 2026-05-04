@@ -1,9 +1,7 @@
 """Tests for error aggregator."""
 
-import pytest
-from datetime import datetime, UTC
 
-from mercury.engine.error_aggregator import ErrorAggregator, ErrorGroup
+from mercury.engine.error_aggregator import ErrorAggregator
 from mercury.exceptions import (
     SMTPConnectionError,
     SMTPAuthenticationError,

@@ -19,7 +19,7 @@ def api_success_logs():
     with session_scope() as session:
         repo = LogRepository(session)
         logs = repo.get_recent_success(limit=100)
-        return jsonify({'emails': [l.recipient_email for l in logs]})
+        return jsonify({'emails': [log.recipient_email for log in logs]})
 
 
 @api_bp.route('/logs/failed')
@@ -31,8 +31,8 @@ def api_failed_logs():
         repo = LogRepository(session)
         logs = repo.get_recent_failed(limit=100)
         failures = [
-            f"{l.recipient_email}: {l.error_message} ({l.failed_at.isoformat()})"
-            for l in logs
+            f"{log.recipient_email}: {log.error_message} ({log.failed_at.isoformat()})"
+            for log in logs
         ]
         return jsonify({'failures': failures})
 

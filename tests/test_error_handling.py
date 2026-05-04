@@ -2,13 +2,12 @@
 Tests for error handling edge cases in CampaignService.
 """
 import pytest
-import os
 import asyncio
 from unittest.mock import MagicMock, patch, mock_open
-from sqlalchemy.exc import SQLAlchemyError, IntegrityError
+from sqlalchemy.exc import SQLAlchemyError
 
 from mercury.services.campaign_service import CampaignService, CampaignConfig
-from mercury.data.models import Campaign, CampaignStatus
+from mercury.data.models import Campaign
 
 @pytest.fixture
 def service():

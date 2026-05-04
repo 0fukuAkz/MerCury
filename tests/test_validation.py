@@ -1,15 +1,13 @@
 """Tests for validation utilities."""
 
 import pytest
-from pathlib import Path
 
 from mercury.utils.validation import (
     validate_email,
     validate_emails_batch,
     is_valid_email,
     normalize_email,
-    extract_domain,
-    EmailValidationResult
+    extract_domain
 )
 from mercury.utils.validators import (
     validate_file_path,

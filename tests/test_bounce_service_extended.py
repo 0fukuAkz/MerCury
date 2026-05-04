@@ -1,7 +1,5 @@
 
 import pytest
-from unittest.mock import Mock, patch, mock_open
-from datetime import datetime
 from mercury.services.bounce_service import BounceService, BounceType, BounceCategory
 
 @pytest.fixture

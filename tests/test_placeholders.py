@@ -1,6 +1,5 @@
 """Tests for placeholder processor."""
 
-import pytest
 from mercury.features.placeholders import PlaceholderProcessor, generate_identity
 
 

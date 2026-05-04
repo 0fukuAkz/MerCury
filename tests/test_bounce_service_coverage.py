@@ -1,9 +1,7 @@
 """Tests for bounce_service.py coverage."""
 
 import pytest
-from unittest.mock import patch
 from mercury.services.bounce_service import BounceService, BounceType, BounceCategory
-from mercury.data.models.email_log import EmailLog
 
 @pytest.fixture
 def bounce_service():

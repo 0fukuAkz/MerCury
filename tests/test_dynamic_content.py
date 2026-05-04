@@ -1,7 +1,7 @@
 """Tests for dynamic content: From Email rotation and Dynamic Attachment paths."""
 
 import pytest
-from unittest.mock import Mock, AsyncMock, patch
+from unittest.mock import Mock, AsyncMock
 from datetime import datetime, UTC
 
 from mercury.services.email_service import EmailService, EmailConfig

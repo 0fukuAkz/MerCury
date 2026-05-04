@@ -1,8 +1,6 @@
 
 import pytest
-import asyncio
 from unittest.mock import MagicMock, AsyncMock, patch
-from datetime import datetime, UTC
 from mercury.engine.connection_pool import (
     SMTPServerConfig, AsyncSMTPConnection, AsyncConnectionPool, SMTPConnectionPool
 )

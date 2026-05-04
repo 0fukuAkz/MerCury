@@ -143,7 +143,8 @@ class EmailService:
             static_ph = {}
             if config.placeholders_path:
                 try:
-                    import json, yaml as _yaml
+                    import json
+                    import yaml as _yaml
                     with open(config.placeholders_path, 'r', encoding='utf-8') as f:
                         content = f.read()
                     if config.placeholders_path.endswith(('.yaml', '.yml')):

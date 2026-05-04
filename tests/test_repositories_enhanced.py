@@ -3,7 +3,6 @@
 import pytest
 from unittest.mock import Mock, MagicMock
 from sqlalchemy.orm import Session
-from datetime import datetime
 from mercury.data.repositories.recipient import RecipientRepository, RecipientListRepository
 from mercury.data.repositories.campaign import CampaignRepository
 from mercury.data.repositories.smtp import SMTPRepository

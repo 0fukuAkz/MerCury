@@ -14,7 +14,6 @@ CSRF *enabled* to assert:
 from unittest.mock import MagicMock, patch
 
 import pytest
-from flask import Flask
 
 from mercury.app_context import AppContext
 

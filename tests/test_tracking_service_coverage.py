@@ -1,7 +1,6 @@
 """Tests for tracking_service.py coverage."""
 
 import pytest
-from unittest.mock import MagicMock, patch
 from mercury.services.tracking_service import TrackingService
 
 @pytest.fixture

@@ -5,10 +5,6 @@ Coverage tests for mercury.features modules:
   - rotation.py
 """
 
-import os
-import pytest
-import tempfile
-import yaml
 
 from mercury.features.template_engine import (
     TemplateEngine,
