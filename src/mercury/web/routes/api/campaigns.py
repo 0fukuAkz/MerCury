@@ -1,4 +1,10 @@
-"""Campaign-related API routes: CRUD, clone, bulk-delete, test-email, start."""
+"""Campaign CRUD + bulk + clone API routes.
+
+Lifecycle (start/stop/pause/resume) lives in ``campaigns_lifecycle``.
+Test-email lives in ``campaigns_testing``. Tests patch this module's
+``CampaignRepository`` / ``CampaignService`` bindings, so those names
+must remain re-exported into this module's namespace via ``from .``.
+"""
 
 from flask import jsonify, request
 from sqlalchemy.orm.attributes import flag_modified
@@ -7,14 +13,10 @@ from . import (
     api_bp,
     api_key_or_login_required,
     limiter,
-    run_async,
     session_scope,
     CampaignRepository,
-    SMTPRepository,
-    TemplateRepository,
     CampaignService,
     CampaignConfig,
-    SMTPService,
 )
 
 
@@ -297,130 +299,3 @@ def api_clone_campaign(campaign_id):
         )
         clone = repo.create(clone)
         return jsonify({'success': True, 'campaign': clone.to_dict()})
-
-
-@api_bp.route('/campaigns/test-email', methods=['POST'])
-@api_key_or_login_required
-@limiter.limit("10/minute")
-def api_send_test_email():
-    """Send a single test email using the provided campaign settings."""
-    from ....services.email_service import EmailService, EmailConfig
-
-    data = request.get_json(silent=True) or {}
-    recipient = (data.get('test_recipient') or '').strip().lower()
-    if not recipient or '@' not in recipient:
-        return jsonify({'success': False, 'error': 'Valid test_recipient is required'}), 400
-
-    # Build a minimal EmailConfig from the form values
-    subject = data.get('subject') or '(Test) No subject'
-    from_email = data.get('from_email') or ''
-    if not from_email:
-        return jsonify({'success': False, 'error': 'From Email is required'}), 400
-
-    try:
-        # Load SMTP servers
-        with session_scope() as session:
-            smtp_repo = SMTPRepository(session)
-            smtp_servers = smtp_repo.get_all()
-            smtp_configs = [s.get_connection_config() for s in smtp_servers if s.is_enabled]
-            if not smtp_configs:
-                return jsonify({'success': False, 'error': 'No active SMTP servers configured'}), 400
-
-        # Optionally load the template
-        template_id = data.get('template_id')
-        template_path = data.get('template_path')
-        html_body = None
-        if template_id:
-            with session_scope() as session:
-                trepo = TemplateRepository(session)
-                tpl = trepo.get(int(template_id))
-                if tpl:
-                    html_body = tpl.html_content
-        elif template_path:
-            import os
-            if os.path.isfile(template_path):
-                with open(template_path, 'r', encoding='utf-8') as f:
-                    html_body = f.read()
-
-        # Extract link(s) from form data
-        primary_link = (data.get('primary_link') or '').strip()
-        links_raw = data.get('links') or data.get('links_list') or []
-        if isinstance(links_raw, str):
-            links_raw = [line.strip() for line in links_raw.splitlines() if line.strip()]
-        link_to_use = primary_link or (links_raw[0] if links_raw else None)
-
-        # Respect campaign tracking/feature toggles (checkboxes send "on" or are absent)
-        enable_tracking = data.get('enable_tracking') in (True, 'on', '1', 'true')
-        track_opens = data.get('track_opens') in (True, 'on', '1', 'true')
-        track_clicks = data.get('track_clicks') in (True, 'on', '1', 'true')
-
-        config = EmailConfig(
-            subject=subject,
-            from_email=from_email,
-            from_name=data.get('from_name', ''),
-            reply_to=data.get('reply_to') or None,
-            placeholders_path=data.get('placeholders_path') or None,
-            enable_tracking=enable_tracking,
-            track_opens=track_opens,
-            track_clicks=track_clicks,
-        )
-
-        smtp_service = SMTPService()
-        smtp_service.load_from_config(smtp_configs)
-
-        service = EmailService(smtp_service)
-        service.configure(config)
-        result = run_async(service.send_single(
-            recipient=recipient,
-            subject=subject,
-            html_body=html_body,
-            from_email=from_email,
-            from_name=data.get('from_name', ''),
-            reply_to=data.get('reply_to') or None,
-            link=link_to_use,
-        ))
-
-        if result.success:
-            return jsonify({'success': True, 'correlation_id': result.correlation_id})
-        else:
-            return jsonify({'success': False, 'error': result.error or 'Send failed'})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@api_bp.route('/campaigns/<int:campaign_id>/start', methods=['POST'])
-@api_key_or_login_required
-@limiter.limit("5/minute")
-def api_start_campaign(campaign_id):
-    """Start a campaign via REST API (alternative to WebSocket)."""
-    import threading
-    from ...events import _run_campaign_thread, _active_services
-
-    if campaign_id in _active_services:
-        return jsonify({'error': 'Campaign already running'}), 409
-
-    with session_scope() as session:
-        repo = CampaignRepository(session)
-        campaign = repo.get(campaign_id)
-        if not campaign:
-            return jsonify({'error': 'Campaign not found'}), 404
-        if campaign.status not in ('draft', 'scheduled'):
-            return jsonify({'error': f'Cannot start campaign with status: {campaign.status}'}), 400
-
-    from flask import current_app
-    from ...extensions import socketio
-
-    app = current_app._get_current_object()
-    t = threading.Thread(
-        target=_run_campaign_thread,
-        args=(campaign_id, socketio, app),
-        daemon=True,
-        name=f"campaign-{campaign_id}",
-    )
-    t.start()
-
-    return jsonify({
-        'success': True,
-        'campaign_id': campaign_id,
-        'status': 'starting',
-    })

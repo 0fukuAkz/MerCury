@@ -13,9 +13,11 @@ rather than from absolute paths, so any test that does
 working — the patch reaches the canonical binding the routes actually use.
 
 Sub-modules (one per resource):
-    - status         /api/status
-    - campaigns      /api/campaigns/*
-    - smtp           /api/smtp/*
+    - status               /api/status
+    - campaigns            /api/campaigns/* (CRUD, bulk-delete, clone)
+    - campaigns_lifecycle  /api/campaigns/<id>/start (and future stop/pause/resume)
+    - campaigns_testing    /api/campaigns/test-email
+    - smtp                 /api/smtp/*
     - templates      /api/templates*
     - logs_stats     /api/logs/* and /api/stats
     - webhooks       /api/webhooks/*
@@ -52,6 +54,8 @@ api_bp = Blueprint('api', __name__, url_prefix='/api')
 from . import (  # noqa: E402, F401
     status,
     campaigns,
+    campaigns_lifecycle,
+    campaigns_testing,
     smtp,
     templates,
     logs_stats,
