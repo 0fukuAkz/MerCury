@@ -47,14 +47,23 @@ def api_add_smtp():
     return jsonify({'success': True, 'server': server.to_dict()})
 
 
-@api_bp.route('/smtp/test/<int:server_id>', methods=['POST'])
+@api_bp.route('/smtp/test/<name>', methods=['POST'])
+@api_bp.route('/smtp/test/<int:server_id>', methods=['POST'], endpoint='api_test_smtp_by_id')
 @api_key_or_login_required
 @limiter.limit("5/minute")
-def api_test_smtp(server_id: int):
-    """Test connection to a specific SMTP server by id."""
+def api_test_smtp(name: str | None = None, server_id: int | None = None):
+    """Test connection to a specific SMTP server.
+
+    Accepts either the server name (preferred — matches PUT/DELETE
+    `/api/smtp/<name>`) or a numeric id (kept for back-compat with any
+    older client). The frontend (smtp.html) sends the name.
+    """
     with session_scope() as session:
         repo = SMTPRepository(session)
-        server = repo.get(server_id)
+        if server_id is not None:
+            server = repo.get(server_id)
+        else:
+            server = repo.get_by_name(name)
         if not server:
             return jsonify({'success': False, 'error': 'Server not found'}), 404
 

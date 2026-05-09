@@ -50,12 +50,21 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
     app.config['ENV'] = os.environ.get('FLASK_ENV', 'development')
     app.config['DEBUG'] = os.environ.get('FLASK_DEBUG', '0').lower() in ('true', '1')
     _secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-prod')
-    _is_production = os.environ.get('FLASK_ENV', 'development') == 'production'
+    _flask_env = os.environ.get('FLASK_ENV', 'development').lower()
+    _is_production = _flask_env == 'production'
     _default_keys = {'dev-secret-key-change-in-prod', 'prod-secret-key-change-this'}
-    if _is_production and _secret_key in _default_keys:
+    # Fail closed on the default SECRET_KEY: only an explicit dev/test env or
+    # MERCURY_DEV=1 may run with the dev key. Previously this only fired when
+    # FLASK_ENV was *literally* "production" — a typo or unset FLASK_ENV
+    # silently shipped the dev key.
+    _dev_envs = {'development', 'dev', 'test', 'testing', 'local'}
+    _explicit_dev = _flask_env in _dev_envs or os.environ.get('MERCURY_DEV', '').lower() in ('1', 'true', 'yes')
+    if _secret_key in _default_keys and not _explicit_dev:
         raise RuntimeError(
-            "SECRET_KEY is set to a known insecure default. "
-            "Set the SECRET_KEY environment variable to a strong random value before running in production."
+            "SECRET_KEY is set to a known insecure default and the environment is not "
+            "marked as development. Either set SECRET_KEY to a strong random value, or "
+            f"set FLASK_ENV to one of {sorted(_dev_envs)} / set MERCURY_DEV=1 to opt into "
+            "the dev key explicitly."
         )
     app.config['SECRET_KEY'] = _secret_key
 
@@ -232,10 +241,23 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
             init_db()
             
             # --- Run Alembic migrations to head ---
-            # Set MERCURY_SKIP_BOOT_MIGRATIONS=1 to disable. Required for
-            # multi-worker / multi-instance deploys, where migrations should
-            # be run once out-of-band before workers start.
-            if os.environ.get('MERCURY_SKIP_BOOT_MIGRATIONS', '').lower() not in ('1', 'true', 'yes'):
+            # Default behavior:
+            #   - production: SKIP. Run `alembic upgrade head` once out-of-band
+            #     (init container / CI / pre-deploy hook) before workers start.
+            #     Multi-worker boot races are real, and the previous always-on
+            #     default was only safe because run.py forces -w 1.
+            #   - non-production: RUN. Convenient for `make dev` and tests.
+            # Override with MERCURY_BOOT_MIGRATIONS=1 (force on) or
+            # MERCURY_SKIP_BOOT_MIGRATIONS=1 (force off).
+            _force_skip = os.environ.get('MERCURY_SKIP_BOOT_MIGRATIONS', '').lower() in ('1', 'true', 'yes')
+            _force_run = os.environ.get('MERCURY_BOOT_MIGRATIONS', '').lower() in ('1', 'true', 'yes')
+            if _force_skip:
+                _run_boot_migrations = False
+            elif _force_run:
+                _run_boot_migrations = True
+            else:
+                _run_boot_migrations = not _is_production
+            if _run_boot_migrations:
                 try:
                     _alembic_ini = os.path.join(
                         os.path.dirname(__file__), '..', '..', '..', 'alembic.ini'

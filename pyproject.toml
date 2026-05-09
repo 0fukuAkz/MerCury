@@ -119,15 +119,28 @@ target-version = "py312"
 #   query (it would no longer compile to SQL).
 ignore = ["E712"]
 
+# Extend the default (E, F) rule set with:
+# - T201: ban `print()` in src/. The codebase uses structlog; print() bypasses
+#   the configured handlers (JSON output, log file, log levels) and silently
+#   degrades observability in production. Per-file-ignores below allow it in
+#   CLI-adjacent scripts where stdout *is* the interface.
+extend-select = ["T201"]
+
 [tool.ruff.per-file-ignores]
 # Tests get more ergonomic latitude:
 #   F841 — `with patch(...) as mock_X` patterns where the binding is
 #          intentional documentation even when unused.
 #   E701 — multi-statement lines like `if cond: assert ...` common in tests.
 #   E741 — single-letter names (`l`, `i`) in throwaway scopes.
-"tests/**/*.py" = ["F841", "E701", "E741"]
+#   T201 — tests legitimately use print() for diagnostic output.
+"tests/**/*.py" = ["F841", "E701", "E741", "T201"]
 # E2E suite can import availability probes that look unused.
 "tests/e2e/**/*.py" = ["F401"]
+# scripts/ and examples/ are CLI-adjacent — stdout is the interface.
+"scripts/**/*.py" = ["T201"]
+"examples/**/*.py" = ["T201"]
+# migrations/env.py is alembic-generated; don't fight upstream.
+"migrations/**/*.py" = ["T201"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
