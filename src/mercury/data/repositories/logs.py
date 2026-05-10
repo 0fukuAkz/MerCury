@@ -1,5 +1,5 @@
 
-from typing import List, Dict
+from typing import List, Dict, Optional, Tuple
 from sqlalchemy import func, desc, select
 from sqlalchemy.orm import Session
 
@@ -49,6 +49,73 @@ class LogRepository(BaseRepository[EmailLog]):
         ).limit(limit)
         
         return list(self.session.scalars(stmt).all())
+
+    def get_last_event_for_recipient(self, email: str) -> Tuple[Optional[str], Optional[str]]:
+        """Return (ip, user_agent) from the most-recent open/click for ``email``.
+
+        Used by the campaign send path to backfill geo + UA placeholders
+        for recipients whose CSV row doesn't include them. ``(None, None)``
+        means "no engagement on file" — caller should fall back to empty
+        placeholder values, not raise.
+
+        Searches across ALL campaigns by recipient_email (not scoped to one
+        campaign) — a recipient who opened campaign A last week is the same
+        person you're sending campaign B to today.
+        """
+        stmt = select(
+            EmailLog.last_event_ip,
+            EmailLog.last_event_ua,
+        ).where(
+            EmailLog.recipient_email == email,
+            EmailLog.last_event_at.is_not(None),
+        ).order_by(
+            desc(EmailLog.last_event_at)
+        ).limit(1)
+        row = self.session.execute(stmt).first()
+        if row is None:
+            return (None, None)
+        return (row[0], row[1])
+
+    def get_last_events_bulk(self, emails: List[str]) -> Dict[str, Tuple[str, str]]:
+        """Bulk variant of get_last_event_for_recipient.
+
+        Returns ``{email: (ip, ua)}`` for every email that has any engagement
+        on file. Emails with no events are simply absent from the result —
+        the caller can iterate the input list and treat missing keys as
+        "no enrichment available".
+
+        Implemented as one query rather than N: a window function would be
+        ideal but isn't portable across SQLite/PostgreSQL old enough to be
+        in the wild. Two-pass groupby is good enough for the recipient
+        sizes we see (10k-100k per campaign) and avoids the N+1 trap.
+        """
+        if not emails:
+            return {}
+
+        # Most recent timestamp per recipient
+        sub = select(
+            EmailLog.recipient_email,
+            func.max(EmailLog.last_event_at).label('max_ts'),
+        ).where(
+            EmailLog.recipient_email.in_(emails),
+            EmailLog.last_event_at.is_not(None),
+        ).group_by(EmailLog.recipient_email).subquery()
+
+        # Join back to grab the IP/UA at that timestamp
+        stmt = select(
+            EmailLog.recipient_email,
+            EmailLog.last_event_ip,
+            EmailLog.last_event_ua,
+        ).join(
+            sub,
+            (EmailLog.recipient_email == sub.c.recipient_email)
+            & (EmailLog.last_event_at == sub.c.max_ts),
+        )
+        out: Dict[str, Tuple[str, str]] = {}
+        for email, ip, ua in self.session.execute(stmt).all():
+            # Guard against duplicate timestamps (rare; pick first seen).
+            out.setdefault(email, (ip or '', ua or ''))
+        return out
 
     def get_global_stats(self) -> Dict[str, int]:
         """Get global sending statistics efficiently."""

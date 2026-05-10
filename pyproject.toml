@@ -95,8 +95,15 @@ pdf = [
     # Better PDF generation (requires system dependencies)
     "weasyprint>=60.0",
 ]
+geo = [
+    # Offline IP→geolocation via MaxMind GeoLite2. Operators must download
+    # the GeoLite2-City.mmdb file (free with a license key, redistribution
+    # restricted) and point MERCURY_GEOIP_DB at it. With no DB configured,
+    # {{location.*}} placeholders resolve to empty strings.
+    "geoip2>=4.7",
+]
 all = [
-    "mercury[dev,pdf]",
+    "mercury[dev,pdf,geo]",
 ]
 
 [project.scripts]

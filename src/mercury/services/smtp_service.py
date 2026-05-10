@@ -18,12 +18,24 @@ class SMTPService:
         self._connection_pool: Optional[SMTPConnectionPool] = None
         self._configs: List[SMTPServerConfig] = []
     
-    def load_from_database(self) -> List[SMTPServerConfig]:
-        """Load SMTP configs from database."""
+    def load_from_database(self, server_id: Optional[int] = None) -> List[SMTPServerConfig]:
+        """Load SMTP configs from database.
+
+        If ``server_id`` is provided, only that one server is loaded (used by
+        campaigns that pin a specific SMTP server via the campaign-form
+        dropdown). The server must still be enabled — a disabled pinned
+        server falls through to an empty list, which initialize() treats as
+        "no servers" and surfaces as a campaign error rather than silently
+        rotating across other servers the operator didn't pick.
+        """
         session = get_session_direct()
         try:
             repo = SMTPRepository(session)
-            servers = repo.get_active()
+            if server_id is not None:
+                _one = repo.get(server_id)
+                servers = [_one] if (_one and _one.is_enabled) else []
+            else:
+                servers = repo.get_active()
             
             self._configs = [
                 SMTPServerConfig(

@@ -433,6 +433,55 @@ class EmailService:
         
         return result
     
+    def _enrich_recipients_with_last_event(
+        self, recipients: List[Dict[str, Any]]
+    ) -> None:
+        """Mutate ``recipients`` in place to fill missing ip/user_agent.
+
+        For each recipient WITHOUT ``ip``/``ip_address`` or
+        ``user_agent``/``ua`` already set, look up the most-recent open or
+        click for that email address and inject the IP+UA so the placeholder
+        engine can resolve {{location.*}} and {{ua.*}}.
+
+        Recipients that already carry those columns (CSV-supplied) are left
+        alone — caller-provided data wins over historical inference.
+        """
+        from ..data.database import session_scope
+        from ..data.repositories.logs import LogRepository
+
+        # Collect recipients that actually need enrichment — avoid the DB
+        # roundtrip if every row already has ip/ua from CSV.
+        needs: List[str] = []
+        for r in recipients:
+            email = (r or {}).get('email')
+            if not email:
+                continue
+            has_ip = bool(r.get('ip') or r.get('ip_address'))
+            has_ua = bool(r.get('user_agent') or r.get('ua'))
+            if not (has_ip and has_ua):
+                needs.append(email)
+
+        if not needs:
+            return
+
+        with session_scope() as session:
+            repo = LogRepository(session)
+            last_events = repo.get_last_events_bulk(needs)
+
+        if not last_events:
+            return
+
+        for r in recipients:
+            email = r.get('email')
+            ev = last_events.get(email) if email else None
+            if not ev:
+                continue
+            ip, ua = ev
+            if ip and not (r.get('ip') or r.get('ip_address')):
+                r['ip'] = ip
+            if ua and not (r.get('user_agent') or r.get('ua')):
+                r['user_agent'] = ua
+
     async def send_bulk(
         self,
         recipients: List[Dict[str, Any]],
@@ -454,7 +503,17 @@ class EmailService:
         """
         start_time = datetime.now(UTC)
         total = len(recipients)
-        
+
+        # Backfill ip/user_agent from prior tracking events. Cheap when the
+        # recipient already has those columns (we don't overwrite); useful
+        # when they don't, so {{location.*}} / {{ua.*}} can resolve. One
+        # bulk query rather than N — see LogRepository.get_last_events_bulk.
+        try:
+            self._enrich_recipients_with_last_event(recipients)
+        except Exception as e:
+            # Enrichment is best-effort; never block a send on it.
+            logger.warning(f"Recipient geo/UA enrichment failed: {e}")
+
         # Use semaphore for concurrency
         semaphore = asyncio.Semaphore(self.config.concurrency)
         

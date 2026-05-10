@@ -8,6 +8,9 @@ from datetime import datetime, UTC
 from typing import Dict, Any, Optional, List, Callable
 import logging
 
+from .geolocation import get_resolver as _get_geo_resolver
+from .user_agent import parse as _parse_user_agent
+
 logger = logging.getLogger(__name__)
 
 # Try to import Faker for realistic data
@@ -18,6 +21,46 @@ try:
 except ImportError:
     HAS_FAKER = False
     fake = None
+
+
+def _compose_location(p: Dict[str, str]) -> str:
+    """Build the {{location}} default string from the resolved location.* keys.
+
+    Fallback ladder, picking the first non-empty form:
+      "City, Region, Country"  → if all three present
+      "City, Country"          → if region missing
+      "City"                   → if only city
+      "Region, Country"        → if no city
+      "Country"                → last resort
+      ""                       → nothing resolved
+    """
+    city = p.get('location.city', '') or ''
+    region = p.get('location.region', '') or ''
+    country = p.get('location.country', '') or ''
+    parts: List[str] = []
+    if city:
+        parts.append(city)
+        if region and region.lower() != city.lower():
+            parts.append(region)
+    elif region:
+        parts.append(region)
+    if country and country not in parts:
+        parts.append(country)
+    return ', '.join(parts)
+
+
+def _compose_ua(p: Dict[str, str]) -> str:
+    """Build the {{ua}} default string from the parsed ua.* keys.
+
+    "Browser on OS" reads naturally in templates (e.g. "Chrome on Windows").
+    If only one half is known we still want a useful render, so we degrade
+    to whichever is present.
+    """
+    browser = p.get('ua.browser', '') or ''
+    os_name = p.get('ua.os', '') or ''
+    if browser and os_name:
+        return f"{browser} on {os_name}"
+    return browser or os_name or ''
 
 
 class PlaceholderProcessor:
@@ -203,7 +246,38 @@ class PlaceholderProcessor:
         for key, value in recipient_data.items():
             if key not in placeholders:
                 placeholders[key] = str(value) if value is not None else ''
-        
+
+        # Geolocation + User-Agent enrichment.
+        # Source: recipient_data['ip'] / recipient_data['user_agent'] — these
+        # come from CSV columns or (later) last-known tracking events backfilled
+        # before send. Both are optional; if absent, all derived placeholders
+        # resolve to empty strings rather than KeyErroring at substitution.
+        # Exposed as flat dotted keys (e.g. ``location.country``) — the
+        # ``{{...}}`` regex already accepts dots, so no engine changes needed.
+        ip_value = recipient_data.get('ip') or recipient_data.get('ip_address') or ''
+        try:
+            geo = _get_geo_resolver().resolve(ip_value) if ip_value else {}
+        except Exception as e:  # paranoid — resolver should never raise
+            logger.warning("Geolocation lookup failed for %r: %s", ip_value, e)
+            geo = {}
+        for k in ('country', 'country_code', 'city', 'region', 'region_code',
+                  'timezone', 'continent', 'postal'):
+            placeholders[f'location.{k}'] = geo.get(k, '') or ''
+
+        ua_value = recipient_data.get('user_agent') or recipient_data.get('ua') or ''
+        ua_parsed = _parse_user_agent(ua_value) if ua_value else {}
+        for k in ('browser', 'browser_version', 'os', 'os_version', 'device'):
+            placeholders[f'ua.{k}'] = ua_parsed.get(k, '') or ''
+
+        # Top-level convenience aliases. ``{{location}}`` and ``{{ua}}`` give
+        # template authors a one-liner default without forcing them to learn
+        # the dotted-key namespace or worry about which sub-fields are
+        # populated for a given recipient. Compose with graceful fallback so
+        # half-resolved geo (country known, city not) still produces a
+        # sensible, non-empty string.
+        placeholders['location'] = _compose_location(placeholders)
+        placeholders['ua'] = _compose_ua(placeholders)
+
         return placeholders
     
     def process(

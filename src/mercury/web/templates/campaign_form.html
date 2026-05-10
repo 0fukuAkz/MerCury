@@ -470,12 +470,15 @@
         <div class="tab-pane" id="tab-delivery">
             <div class="form-section" style="margin-bottom:1rem">
                 <div class="section-title">SMTP Servers</div>
-                <div style="display:flex;align-items:center;gap:0.6rem;padding:0.65rem 0.9rem;background:rgba(0,255,255,0.05);border:1px solid rgba(0,255,255,0.2);border-radius:var(--radius);font-size:0.78rem;color:var(--text-secondary)">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--neon-cyan)" stroke-width="2" style="flex-shrink:0">
-                        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-                    </svg>
-                    SMTP servers and rotation strategy are managed in
-                    <a href="/smtp" style="color:var(--neon-cyan);text-decoration:none;font-weight:600">SMTP Settings</a>.
+                <div class="form-group">
+                    <label class="form-label" for="smtpServerSelect">Send via</label>
+                    <select class="form-select form-input" id="smtpServerSelect" name="smtp_server_id">
+                        <option value="">— All enabled servers (rotation) —</option>
+                    </select>
+                    <div class="form-hint">
+                        Pin this campaign to one SMTP server, or leave on rotation to use all enabled servers from
+                        <a href="/smtp" style="color:var(--neon-cyan);text-decoration:none;font-weight:600">SMTP Settings</a>.
+                    </div>
                 </div>
             </div>
 
@@ -1068,9 +1071,39 @@
         }
     }
 
+    /* ── SMTP server picker ──────────────────────────────────────────────── */
+    // Pending pin id captured during prefill — applied once the dropdown
+    // finishes loading (loadSmtpServers is async; prefill runs synchronously).
+    var _pendingSmtpPin = null;
+    async function loadSmtpServers() {
+        var sel = document.getElementById('smtpServerSelect');
+        if (!sel) return;
+        try {
+            var res = await fetch('/api/smtp');
+            var json = await res.json();
+            (json.servers || []).forEach(function(s) {
+                var opt = document.createElement('option');
+                opt.value = s.id;
+                var label = s.name + (s.host ? '  —  ' + s.host : '');
+                if (s.is_enabled === false) label += '  (disabled)';
+                opt.textContent = label;
+                sel.appendChild(opt);
+            });
+        } catch (e) {
+            // Leave just the rotation option in place; failing to load the
+            // list shouldn't block creating a campaign.
+        }
+        if (_pendingSmtpPin !== null) {
+            var pv = String(_pendingSmtpPin);
+            _pendingSmtpPin = null;
+            if (sel.querySelector('option[value="' + pv + '"]')) sel.value = pv;
+        }
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
         loadTemplates();
         loadRecipientLists();
+        loadSmtpServers();
         if (EDIT_MODE) {
             prefillForm(EDIT_CAMPAIGN);
         } else {
@@ -1183,6 +1216,17 @@
         check('[name="track_opens"]',         st.track_opens !== undefined ? st.track_opens : true);
         check('[name="track_clicks"]',        st.track_clicks !== undefined ? st.track_clicks : true);
         if (st.tracking_base_url) set('[name="tracking_base_url"]', st.tracking_base_url);
+
+        // Pinned SMTP server. loadSmtpServers() is async, so stash the id
+        // and let the loader apply it once options exist.
+        if (c.smtp_server_id !== null && c.smtp_server_id !== undefined) {
+            _pendingSmtpPin = c.smtp_server_id;
+            var smtpSel = document.getElementById('smtpServerSelect');
+            if (smtpSel && smtpSel.querySelector('option[value="' + c.smtp_server_id + '"]')) {
+                smtpSel.value = c.smtp_server_id;
+                _pendingSmtpPin = null;
+            }
+        }
 
         // Rate & concurrency
         if (c.concurrency)          set('[name="concurrency"]',           c.concurrency);

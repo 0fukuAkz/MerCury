@@ -57,6 +57,9 @@ class CampaignConfig:
     # SMTP
     smtp_configs: Optional[List[Dict[str, Any]]] = None
     smtp_rotation: str = "weighted"
+    # Pin the campaign to one specific SMTP server by id (set from the
+    # campaign-form dropdown). None = use all enabled servers (rotation).
+    smtp_server_id: Optional[int] = None
     
     # Sending
     dry_run: bool = False
@@ -181,11 +184,13 @@ class CampaignService:
 
         self.config = config
         
-        # Load SMTP servers
+        # Load SMTP servers. Per-campaign pin (config.smtp_server_id) wins
+        # over the global pool; explicit smtp_configs (CLI/YAML path) wins
+        # over both.
         if config.smtp_configs:
             self.smtp_service.load_from_config(config.smtp_configs)
         else:
-            self.smtp_service.load_from_database()
+            self.smtp_service.load_from_database(server_id=config.smtp_server_id)
         
         # Initialize email service
         self.email_service = EmailService(self.smtp_service)
@@ -222,6 +227,8 @@ class CampaignService:
                 extra_settings['template_path'] = config.template_path
             if config.templates:
                 extra_settings['templates'] = config.templates
+            if config.smtp_server_id is not None:
+                extra_settings['smtp_server_id'] = int(config.smtp_server_id)
 
             campaign = Campaign(
                 name=config.name,

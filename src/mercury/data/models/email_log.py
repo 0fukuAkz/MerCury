@@ -64,6 +64,14 @@ class EmailLog(Base, BaseModel):
     # Tracking
     open_count = Column(Integer, default=0)
     click_count = Column(Integer, default=0)
+
+    # Last-observed engagement metadata (most recent open or click).
+    # Populated by the tracking endpoints (web/routes/tracking.py); read by
+    # the campaign send path to backfill {{location.*}} / {{ua.*}}
+    # placeholders for recipients whose CSV row doesn't include them.
+    last_event_ip = Column(String(45))   # IPv6 max length = 45
+    last_event_ua = Column(String(500))
+    last_event_at = Column(DateTime)
     
     # Extra data (renamed from 'metadata' which is reserved in SQLAlchemy)
     extra_data = Column('metadata', JSON, default=dict)

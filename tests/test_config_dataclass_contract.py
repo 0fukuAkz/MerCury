@@ -31,7 +31,7 @@ CAMPAIGN_CONFIG_FIELDS = frozenset({
     'template_id', 'template_path', 'html_content', 'templates',
     'recipients_path', 'manual_recipients', 'email_column',
     'validate_emails', 'deduplicate',
-    'smtp_configs', 'smtp_rotation',
+    'smtp_configs', 'smtp_rotation', 'smtp_server_id',
     'dry_run', 'concurrency', 'chunk_size', 'pause_between_chunks',
     'rate_per_minute', 'rate_per_hour',
     'enable_qr_code', 'send_as_image', 'convert_attachment',

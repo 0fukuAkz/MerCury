@@ -50,6 +50,17 @@ def api_create_campaign():
     links = data.get('links') if isinstance(data.get('links'), list) else None
     manual_recipients = data.get('manual_recipients') if isinstance(data.get('manual_recipients'), list) else None
 
+    # Optional pinned SMTP server (dropdown in campaign form). Empty string
+    # / 0 / 'null' / None all collapse to "no pin" (use all enabled servers).
+    _smtp_pin_raw = data.get('smtp_server_id')
+    if _smtp_pin_raw in (None, '', 0, '0', 'null'):
+        smtp_server_id = None
+    else:
+        try:
+            smtp_server_id = int(_smtp_pin_raw)
+        except (TypeError, ValueError):
+            smtp_server_id = None
+
     config = CampaignConfig(
         name=data.get('name'),
         description=data.get('description', ''),
@@ -100,6 +111,9 @@ def api_create_campaign():
         track_opens=data.get('track_opens', True),
         track_clicks=data.get('track_clicks', True),
         tracking_base_url=data.get('tracking_base_url', ''),
+
+        # Pinned SMTP server
+        smtp_server_id=smtp_server_id,
     )
 
     service = CampaignService()
@@ -196,6 +210,15 @@ def api_update_campaign(campaign_id):
                 extra[_tracking_field] = bool(data[_tracking_field])
         if 'tracking_base_url' in data:
             extra['tracking_base_url'] = data.get('tracking_base_url', '')
+        if 'smtp_server_id' in data:
+            _v = data.get('smtp_server_id')
+            if _v in (None, '', 0, '0', 'null'):
+                extra['smtp_server_id'] = None
+            else:
+                try:
+                    extra['smtp_server_id'] = int(_v)
+                except (TypeError, ValueError):
+                    extra['smtp_server_id'] = None
         # Always merge into settings so rotation fields are persisted every save
         merged = dict(campaign.settings or {})
         merged.update(extra)

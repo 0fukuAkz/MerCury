@@ -1,5 +1,6 @@
 """Tracking routes."""
 
+from datetime import datetime, UTC
 from urllib.parse import urlparse
 from flask import Blueprint, request, abort, make_response, redirect
 from ...services.tracking_service import TrackingService, TRACKING_PIXEL_GIF, _email_id_registry
@@ -24,8 +25,13 @@ def _lookup_recipient(email_id: str) -> str:
     return _email_id_registry.get(email_id, '')
 
 
-def _update_email_log(email_id: str, event_type: str):
-    """Update EmailLog open/click counts in the database."""
+def _update_email_log(email_id: str, event_type: str, ip: str = '', ua: str = ''):
+    """Update EmailLog open/click counts + last-event metadata.
+
+    Also stores the most recent IP+UA for the recipient. The campaign send
+    path reads these to backfill {{location.*}} / {{ua.*}} placeholders for
+    recipients whose CSV doesn't carry IP/UA columns.
+    """
     try:
         with session_scope() as session:
             log = session.query(EmailLog).filter(
@@ -36,6 +42,16 @@ def _update_email_log(email_id: str, event_type: str):
                     log.open_count = (log.open_count or 0) + 1
                 elif event_type == 'click':
                     log.click_count = (log.click_count or 0) + 1
+                # Persist the freshest IP/UA so future campaigns can
+                # personalize for this recipient. UA truncated to fit the
+                # column; defensive against pathological 4 KB user-agent
+                # strings (real ones top out around 250 chars).
+                if ip:
+                    log.last_event_ip = ip[:45]
+                if ua:
+                    log.last_event_ua = ua[:500]
+                if ip or ua:
+                    log.last_event_at = datetime.now(UTC)
                 session.commit()
     except Exception:
         pass  # Best-effort; don't break tracking response
@@ -46,14 +62,20 @@ def track_open(email_id):
     """Track email open via 1x1 transparent pixel."""
     recipient = _lookup_recipient(email_id)
     service = TrackingService()
+    # request.user_agent.string can be empty under some werkzeug/test-client
+    # combinations even when the header is set; reading the header directly
+    # is the source of truth and matches what the persistence layer needs.
+    _ua = request.headers.get('User-Agent', '') or (
+        request.user_agent.string if request.user_agent else ''
+    )
     service.record_event(
         email_id=email_id,
         event_type='open',
         recipient=recipient,
         ip_address=request.remote_addr,
-        user_agent=request.user_agent.string if request.user_agent else ''
+        user_agent=_ua,
     )
-    _update_email_log(email_id, 'open')
+    _update_email_log(email_id, 'open', ip=request.remote_addr or '', ua=_ua)
     
     response = make_response(TRACKING_PIXEL_GIF)
     response.headers['Content-Type'] = 'image/gif'
@@ -70,15 +92,18 @@ def track_click(email_id):
     
     recipient = _lookup_recipient(email_id)
     service = TrackingService()
+    _ua = request.headers.get('User-Agent', '') or (
+        request.user_agent.string if request.user_agent else ''
+    )
     service.record_event(
         email_id=email_id,
         event_type='click',
         recipient=recipient,
         ip_address=request.remote_addr,
-        user_agent=request.user_agent.string if request.user_agent else '',
+        user_agent=_ua,
         metadata={'url': url, 'link_id': link_id}
     )
-    _update_email_log(email_id, 'click')    
+    _update_email_log(email_id, 'click', ip=request.remote_addr or '', ua=_ua)
     return redirect(url)
 
 @tracking_bp.route('/unsubscribe/<email_id>/<token>')

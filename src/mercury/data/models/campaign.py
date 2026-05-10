@@ -129,6 +129,9 @@ class Campaign(Base, BaseModel):
         result['links']         = s.get('links') or []
         result['template_path'] = s.get('template_path', '')
         result['templates']     = s.get('templates') or []
+        # Pinned SMTP server (None / absent = use all enabled servers)
+        _smtp_id = s.get('smtp_server_id')
+        result['smtp_server_id'] = int(_smtp_id) if _smtp_id is not None else None
         if self.started_at and self.completed_at:
             result['duration_seconds'] = int((self.completed_at - self.started_at).total_seconds())
         else:

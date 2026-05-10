@@ -66,6 +66,7 @@ def _build_config_from_campaign(campaign) -> CampaignConfig:
         enable_qr_code=campaign.enable_qr_code or False,
         send_as_image=campaign.convert_to_image or False,
         smtp_rotation=campaign.smtp_rotation_strategy or "weighted",
+        smtp_server_id=settings.get("smtp_server_id"),
         dry_run=bool(settings.get("dry_run", False)),
         enable_tracking=bool(settings.get("enable_tracking", True)),
         track_opens=bool(settings.get("track_opens", True)),
