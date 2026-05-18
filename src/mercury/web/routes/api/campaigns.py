@@ -41,6 +41,29 @@ def api_create_campaign():
     if not data.get('name'):
         return jsonify({'error': 'Campaign name required'}), 400
 
+    # Reject non-image logo picks at the API boundary. Inlining a
+    # text/html or PDF as if it were an image causes mail clients to
+    # render the file's source (or its alt text) inline instead of a
+    # picture. Operators should only pin actual image files as logos.
+    _logo_raw = data.get('logo_attachment_id')
+    if str(_logo_raw or '').strip().isdigit():
+        from ....data.repositories import AttachmentRepository as _AR
+        from ....data.database import session_scope as _ss
+        with _ss() as _session:
+            _logo_row = _AR(_session).get(int(_logo_raw))
+            if _logo_row is None or not _logo_row.is_active:
+                return jsonify({
+                    'error': f'logo_attachment_id={_logo_raw} not found in library',
+                }), 400
+            if not (_logo_row.content_type or '').lower().startswith('image/'):
+                return jsonify({
+                    'error': (
+                        f"Logo must be an image file (got content_type="
+                        f"{_logo_row.content_type!r}). Upload an image to the "
+                        f"Attachments library and pick it from the dropdown."
+                    ),
+                }), 400
+
     # Handle rotation arrays (from newline-separated frontend or direct arrays)
     subjects_raw = data.get('subjects') if isinstance(data.get('subjects'), list) else None
     subjects = [s for s in subjects_raw if s and s.strip()] if subjects_raw is not None else None
@@ -97,8 +120,19 @@ def api_create_campaign():
         # Features
         enable_qr_code=data.get('enable_qr_code', False),
         send_as_image=data.get('send_as_image', False),
-        attachment_type=data.get('attachment_type') or None,
-        attachment_path=data.get('attachment_path') or None,
+        attachment_ids=[
+            int(x) for x in (data.get('attachment_ids') or [])
+            if str(x).strip().isdigit()
+        ],
+        convert_attachment=bool(data.get('convert_attachment', False)),
+        attachment_convert_to=(data.get('attachment_convert_to') or None),
+        logo_attachment_id=(
+            int(data['logo_attachment_id'])
+            if str(data.get('logo_attachment_id') or '').strip().isdigit()
+            else None
+        ),
+        auto_company_logo=bool(data.get('auto_company_logo', False)),
+        hide_from_email_header=bool(data.get('hide_from_email_header', False)),
 
         # Links rotation
         links=links,

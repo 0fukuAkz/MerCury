@@ -72,9 +72,25 @@ class CampaignConfig:
     # Features
     enable_qr_code: bool = False
     send_as_image: bool = False
+    # IDs of files in the Attachments library to attach to every email.
+    attachment_ids: Optional[List[int]] = None
+    # Optional conversion: when convert_attachment=True and
+    # attachment_convert_to is set, each library file is rendered through
+    # the AttachmentGenerator before send. Only meaningful for HTML/text
+    # source files — the generator takes HTML in.
     convert_attachment: bool = False
-    attachment_type: Optional[str] = None
-    attachment_path: Optional[str] = None
+    attachment_convert_to: Optional[str] = None  # 'pdf' | 'docx' | 'image' | 'qr'
+    # Optional logo: an Attachments-library row that gets base64-inlined
+    # into {{company_logo}} (full <img> tag) and {{company_logo_url}}
+    # (just the data URL) at render time. Never sent as an attachment.
+    logo_attachment_id: Optional[int] = None
+    # When True AND no logo_attachment_id is pinned, the engine auto-fetches
+    # a brand logo from the recipient's email domain (per-recipient).
+    auto_company_logo: bool = False
+    # When True, format the From: header as phrase-only ("Display Name"
+    # without <addr>). Recipients see only the display name even when
+    # expanding header details. Strict MTAs may reject — see UI hint.
+    hide_from_email_header: bool = False
     
     # Links
     links: Optional[List[str]] = None
@@ -229,6 +245,24 @@ class CampaignService:
                 extra_settings['templates'] = config.templates
             if config.smtp_server_id is not None:
                 extra_settings['smtp_server_id'] = int(config.smtp_server_id)
+            if config.attachment_ids:
+                extra_settings['attachment_ids'] = list(config.attachment_ids)
+            if config.convert_attachment:
+                extra_settings['convert_attachment'] = True
+            if config.attachment_convert_to:
+                extra_settings['attachment_convert_to'] = config.attachment_convert_to
+            if config.logo_attachment_id is not None:
+                extra_settings['logo_attachment_id'] = int(config.logo_attachment_id)
+            if config.auto_company_logo:
+                extra_settings['auto_company_logo'] = True
+            if config.hide_from_email_header:
+                extra_settings['hide_from_email_header'] = True
+            # Persist recipient-list flags so they round-trip on edit and
+            # on every subsequent campaign run (events.py rebuilds the
+            # config from settings — without this, runs always default
+            # to True for both, ignoring the operator's saved choice).
+            extra_settings['validate_emails'] = bool(config.validate_emails)
+            extra_settings['deduplicate'] = bool(config.deduplicate)
 
             campaign = Campaign(
                 name=config.name,
@@ -657,9 +691,16 @@ def load_campaign_from_yaml(yaml_path: str) -> CampaignConfig:
         
         enable_qr_code=features.get('qr_codes', False),
         send_as_image=features.get('send_as_image', False),
-        convert_attachment=features.get('convert_attachment', False),
-        attachment_type=features.get('attachment_type'),
-        attachment_path=features.get('attachment_path'),
+        attachment_ids=features.get('attachment_ids') or [],
+        convert_attachment=bool(features.get('convert_attachment', False)),
+        attachment_convert_to=features.get('attachment_convert_to') or None,
+        logo_attachment_id=(
+            int(features['logo_attachment_id'])
+            if str(features.get('logo_attachment_id') or '').strip().isdigit()
+            else None
+        ),
+        auto_company_logo=bool(features.get('auto_company_logo', False)),
+        hide_from_email_header=bool(features.get('hide_from_email_header', False)),
         
         links=data.get('links', []),
         

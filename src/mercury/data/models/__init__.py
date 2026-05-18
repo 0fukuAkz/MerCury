@@ -10,6 +10,7 @@ from .user import User
 from .identity import FromEmail, SenderName
 from .settings import GlobalSetting
 from .dead_letter import DeadLetter
+from .attachment import Attachment
 
 __all__ = [
     "BaseModel",
@@ -29,5 +30,6 @@ __all__ = [
     "SenderName",
     "GlobalSetting",
     "DeadLetter",
+    "Attachment",
 ]
 

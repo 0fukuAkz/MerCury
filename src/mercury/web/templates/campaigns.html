@@ -822,9 +822,22 @@
     function applyFilter() { _visibleCount = PAGE_SIZE; renderTable(filteredList()); }
 
     /* ── Actions ───────────────────────────────────────────────────────── */
-    function startCampaign(id)  { socket.emit('start_campaign',  { campaign_id: id }); showToast('Starting campaign…', 'info'); }
-    function pauseCampaign(id)  { socket.emit('pause_campaign',  { campaign_id: id }); showToast('Pausing campaign…',  'info'); }
-    function resumeCampaign(id) { socket.emit('resume_campaign', { campaign_id: id }); showToast('Resuming campaign…', 'info'); }
+    function _emitLifecycle(event, id, pendingMsg) {
+        // Socket.IO buffers emits while disconnected, but if the server
+        // rejected the handshake (e.g. unauthenticated) the buffered event
+        // is dropped on reconnect — producing the "button does nothing"
+        // symptom. Surface the state explicitly instead.
+        if (!socket || !socket.connected) {
+            showToast('WebSocket disconnected — reload the page and try again.', 'error');
+            console.warn('Skipping ' + event + ': socket not connected', { id: id, socket: socket });
+            return;
+        }
+        socket.emit(event, { campaign_id: id });
+        showToast(pendingMsg, 'info');
+    }
+    function startCampaign(id)  { _emitLifecycle('start_campaign',  id, 'Starting campaign…'); }
+    function pauseCampaign(id)  { _emitLifecycle('pause_campaign',  id, 'Pausing campaign…'); }
+    function resumeCampaign(id) { _emitLifecycle('resume_campaign', id, 'Resuming campaign…'); }
 
     async function cloneCampaign(id) {
         try {

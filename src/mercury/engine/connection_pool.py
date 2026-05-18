@@ -77,6 +77,10 @@ class SMTPServerConfig:
     port: int = 587
     username: str = ""
     password: str = ""
+    # 'none' | 'starttls' | 'ssl' — authoritative TLS mode.
+    # use_tls / use_ssl below are derived for back-compat with callers
+    # that still read them; do not write to them independently.
+    tls_mode: str = 'starttls'
     use_tls: bool = True
     use_ssl: bool = False
     use_auth: bool = True
@@ -147,14 +151,27 @@ class SMTPServerConfig:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'SMTPServerConfig':
         """Create config from dictionary."""
+        # Resolve tls_mode: explicit value wins, then derive from legacy
+        # use_tls/use_ssl booleans for back-compat with config sources
+        # that haven't been migrated yet.
+        explicit_mode = (data.get('tls_mode') or '').strip().lower()
+        if explicit_mode in ('none', 'starttls', 'ssl'):
+            tls_mode = explicit_mode
+        elif data.get('use_ssl'):
+            tls_mode = 'ssl'
+        elif data.get('use_tls', True):
+            tls_mode = 'starttls'
+        else:
+            tls_mode = 'none'
         return cls(
             name=data.get('name', data.get('host', 'default')),
             host=data['host'],
             port=data.get('port', 587),
             username=data.get('username', ''),
             password=data.get('password', ''),
-            use_tls=data.get('use_tls', True),
-            use_ssl=data.get('use_ssl', False),
+            tls_mode=tls_mode,
+            use_tls=(tls_mode == 'starttls'),
+            use_ssl=(tls_mode == 'ssl'),
             use_auth=data.get('use_auth', True),
             timeout=data.get('timeout', 30),
             from_email=data.get('from_email', ''),
@@ -231,27 +248,39 @@ class AsyncSMTPConnection:
         self.messages_sent = 0
     
     async def connect(self) -> None:
-        """Establish async SMTP connection."""
-        use_tls_param = self.config.use_ssl or self.config.port == 465
-        
+        """Establish async SMTP connection.
+
+        TLS mode dispatch is unambiguous (single ``tls_mode`` field).
+        Previous logic OR'd use_ssl/use_tls and inferred from port 465,
+        which silently overrode operator intent if both were True.
+        """
+        mode = getattr(self.config, 'tls_mode', None) or (
+            'ssl' if self.config.use_ssl else
+            ('starttls' if self.config.use_tls else 'none')
+        )
+
+        implicit_tls = (mode == 'ssl')
+
         self.client = aiosmtplib.SMTP(
             hostname=self.config.host,
             port=self.config.port,
-            use_tls=use_tls_param,
+            use_tls=implicit_tls,
             timeout=self.config.timeout
         )
-        
+
         await self.client.connect()
-        
-        # STARTTLS for port 587
-        if self.config.use_tls and not use_tls_param:
+
+        if mode == 'starttls':
             await self.client.starttls()
-        
+
         if self.config.use_auth and self.config.username:
             await self.client.login(self.config.username, self.config.password)
-        
+
         self.is_connected = True
-        logger.debug(f"Connected to {self.config.name} ({self.config.host}:{self.config.port})")
+        logger.debug(
+            f"Connected to {self.config.name} "
+            f"({self.config.host}:{self.config.port}, tls_mode={mode})"
+        )
     
     async def send_message(self, msg) -> Dict[str, Any]:
         """Send email message."""
@@ -436,9 +465,23 @@ class AsyncConnectionPool:
             self._initialized = False
 
 
+# Process-wide registry of live SMTPConnectionPool instances. Used to
+# propagate SMTP config edits (credential rotations, TLS-mode changes)
+# into running campaigns — without this, a PUT /api/smtp/<name> only
+# updates the DB row while in-flight pools keep authenticating with the
+# old password. Registered in __init__; unregistered in close_all.
+_ACTIVE_POOLS: "list[SMTPConnectionPool]" = []
+
+
+def iter_active_pools() -> "list[SMTPConnectionPool]":
+    """Snapshot the active-pool registry for callers that want to iterate
+    safely while pools may register/unregister concurrently."""
+    return list(_ACTIVE_POOLS)
+
+
 class SMTPConnectionPool:
     """Multi-server SMTP connection pool with load balancing."""
-    
+
     def __init__(
         self,
         configs: List[SMTPServerConfig],
@@ -453,13 +496,52 @@ class SMTPConnectionPool:
         self.selection_strategy = selection_strategy or 'round_robin'
         self.lock = asyncio.Lock()
         self._round_robin_index = 0
-        
+        self._pool_size_per_server = pool_size_per_server
+
         # Create pools for each server
         for config in configs:
             self.pools[config.name] = AsyncConnectionPool(
-                config, 
+                config,
                 pool_size=pool_size_per_server
             )
+
+        _ACTIVE_POOLS.append(self)
+
+    async def invalidate_server(self, name: str, new_config: Optional[SMTPServerConfig] = None) -> bool:
+        """Refresh a single server's connections after a config update.
+
+        Closes the existing pool (which forces all subsequent acquires to
+        open new connections that pick up the latest credentials / TLS
+        mode / host / port), and replaces the SMTPServerConfig entry if
+        ``new_config`` is supplied. Returns True if the named server was
+        found in this pool, False otherwise.
+
+        Safe to call while sends are in flight: ongoing aiosmtplib calls
+        on already-acquired connections complete on the original auth
+        session; only newly-acquired connections see the updated config.
+        """
+        if name not in self.pools:
+            return False
+
+        # Replace config first so any concurrent acquire() that hits the
+        # newly-created pool reads the fresh credentials.
+        if new_config is not None:
+            self.configs = [
+                (new_config if c.name == name else c) for c in self.configs
+            ]
+            self.pools[name] = AsyncConnectionPool(
+                new_config,
+                pool_size=self._pool_size_per_server,
+            )
+
+        # Close out the old pool (or the just-replaced one if no
+        # new_config was passed — operator wanted a force-reset).
+        try:
+            await self.pools[name].close_all() if new_config is None else None
+        except Exception as e:
+            logger.warning(f"close_all error for {name} during invalidate: {e}")
+        logger.info(f"Invalidated pool for SMTP server '{name}'")
+        return True
     
     def _select_server_weighted(self) -> Optional[SMTPServerConfig]:
         """Select server using weighted random selection."""
@@ -526,24 +608,42 @@ class SMTPConnectionPool:
             return self._select_server_weighted()
     
     async def acquire(
-        self, 
+        self,
         preferred_server: str = None,
         timeout: float = 10.0
     ) -> Tuple[AsyncSMTPConnection, SMTPServerConfig]:
-        """Acquire connection from pool."""
-        # Try preferred server first
-        if preferred_server and preferred_server in self.pools:
+        """Acquire connection from pool.
+
+        A non-None ``preferred_server`` is authoritative: it supersedes the
+        configured selection strategy. If the named server is unknown or
+        currently unable to execute (rate-limited / circuit open), this
+        raises rather than silently falling back to rotation — falling back
+        would let the caller's mail leave on a server it didn't pin, which
+        breaks SMTP-auth-bound From-address policies on relays that enforce
+        ``smtpd_sender_login_maps``-style rules.
+        """
+        if preferred_server:
+            if preferred_server not in self.pools:
+                raise RuntimeError(
+                    f"Preferred SMTP server '{preferred_server}' is not configured"
+                )
             config = next((c for c in self.configs if c.name == preferred_server), None)
-            if config and config.can_execute():
-                pool = self.pools[preferred_server]
-                conn = await pool.get_connection(timeout)
-                return conn, config
-        
-        # Select server using strategy
+            if not config:
+                raise RuntimeError(
+                    f"Preferred SMTP server '{preferred_server}' has no config"
+                )
+            if not config.can_execute():
+                raise RuntimeError(
+                    f"Preferred SMTP server '{preferred_server}' is unavailable "
+                    f"(rate-limited or circuit open)"
+                )
+            conn = await self.pools[preferred_server].get_connection(timeout)
+            return conn, config
+
         config = self.select_server()
         if not config:
             raise RuntimeError("No SMTP servers available")
-        
+
         pool = self.pools[config.name]
         conn = await pool.get_connection(timeout)
         return conn, config
@@ -576,7 +676,11 @@ class SMTPConnectionPool:
         """Close all pools."""
         for pool in self.pools.values():
             await pool.close_all()
-    
+        try:
+            _ACTIVE_POOLS.remove(self)
+        except ValueError:
+            pass
+
     def get_status(self) -> Dict[str, Any]:
         """Get pool status keyed by server name."""
         status = {}

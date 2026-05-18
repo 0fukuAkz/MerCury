@@ -136,10 +136,23 @@ class PDFGenerator:
         """Check if weasyprint is available."""
         if not self.config.use_weasyprint:
             return False
-        
+
         try:
             import weasyprint
             _ = weasyprint  # optional dependency: availability check only
+            # WeasyPrint logs at WARNING level for every unsupported CSS
+            # property (box-shadow, min-height:100vh, etc.) and every
+            # font-face it can't resolve over the network. Operators
+            # routinely import browser-grade CSS that triggers dozens of
+            # these per render — turn them down to ERROR so logs/mercury.log
+            # stays readable. Operators debugging conversion issues can
+            # set WEASYPRINT_LOG_LEVEL=WARNING to re-enable.
+            _level = os.environ.get('WEASYPRINT_LOG_LEVEL', 'ERROR').upper()
+            logging.getLogger('weasyprint').setLevel(
+                getattr(logging, _level, logging.ERROR)
+            )
+            logging.getLogger('fontTools').setLevel(logging.ERROR)
+            logging.getLogger('fontTools.subset').setLevel(logging.ERROR)
             return True
         except ImportError:
             logger.warning(
@@ -443,29 +456,62 @@ class ImageGenerator:
 
         format = format or self.config.image_format
 
-        # Preferred: WeasyPrint renders full HTML/CSS → PNG
+        # Preferred path: WeasyPrint → PDF → rasterize with pdf2image
+        # (Poppler). WeasyPrint dropped write_png() in v53+; the only
+        # reliable way to get a pixel-accurate render of full HTML+CSS
+        # from WeasyPrint is to render to PDF first, then convert.
+        # Requires `pdf2image` Python package + Poppler system binary.
         try:
             from weasyprint import HTML as WeasyHTML
-            image_bytes = WeasyHTML(string=html_content).write_png()
+            pdf_bytes = WeasyHTML(string=html_content).write_pdf()
 
-            # Convert to JPEG if requested
+            try:
+                from pdf2image import convert_from_bytes
+                # dpi=150 matches typical email-attachment quality; raise
+                # to 200 for higher-res previews at the cost of larger files.
+                pages = convert_from_bytes(pdf_bytes, dpi=150, fmt='png')
+                if not pages:
+                    raise RuntimeError("pdf2image returned no pages")
+                pil_img = pages[0].convert('RGB')
+            except ImportError:
+                raise RuntimeError(
+                    "pdf2image not installed — run 'pip install pdf2image' "
+                    "and install Poppler (macOS: 'brew install poppler', "
+                    "Debian: 'apt install poppler-utils'). Falling back to "
+                    "plain-text rendering produces unreadable output for HTML+CSS."
+                )
+
+            buf = io.BytesIO()
             if format.upper() == 'JPEG':
-                from PIL import Image as PILImage
-                img = PILImage.open(io.BytesIO(image_bytes)).convert('RGB')
-                buf = io.BytesIO()
-                img.save(buf, format='JPEG', quality=self.config.image_quality)
-                image_bytes = buf.getvalue()
+                pil_img.save(buf, format='JPEG', quality=self.config.image_quality)
+            else:
+                pil_img.save(buf, format='PNG', optimize=True)
+            image_bytes = buf.getvalue()
         except Exception as exc:
-            _log.warning(f"WeasyPrint HTML-to-image failed, falling back to PIL: {exc}")
-            # Fallback: PIL plain-text rendering
+            _log.warning(
+                f"HTML→PNG via WeasyPrint+pdf2image failed: {exc}. "
+                "Falling back to PIL plain-text rendering — output will not "
+                "include CSS styling."
+            )
+            # Last-resort fallback: PIL plain-text. Strip *and* properly
+            # remove <style>/<script>/<!--...--> blocks first so their
+            # source code doesn't leak as literal text into the PNG (the
+            # exact "image shows raw code" bug that prompted this fix).
             from PIL import Image, ImageDraw, ImageFont
             import re
             import html as _html
 
             width = width or self.config.image_width
 
-            # Strip HTML tags
-            text = re.sub(r'<[^>]+>', '\n', html_content)
+            cleaned = html_content
+            # Remove <script>, <style>, and HTML comments BODY-and-all.
+            cleaned = re.sub(r'<script\b[^>]*>.*?</script>', '', cleaned, flags=re.DOTALL | re.IGNORECASE)
+            cleaned = re.sub(r'<style\b[^>]*>.*?</style>', '', cleaned, flags=re.DOTALL | re.IGNORECASE)
+            cleaned = re.sub(r'<!--.*?-->', '', cleaned, flags=re.DOTALL)
+            cleaned = re.sub(r'<head\b[^>]*>.*?</head>', '', cleaned, flags=re.DOTALL | re.IGNORECASE)
+
+            # Now strip remaining tags and collapse whitespace.
+            text = re.sub(r'<[^>]+>', '\n', cleaned)
             text = _html.unescape(text)
             lines = [line.strip() for line in text.split('\n') if line.strip()]
 

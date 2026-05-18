@@ -132,6 +132,19 @@ class Campaign(Base, BaseModel):
         # Pinned SMTP server (None / absent = use all enabled servers)
         _smtp_id = s.get('smtp_server_id')
         result['smtp_server_id'] = int(_smtp_id) if _smtp_id is not None else None
+        # Attachments library bindings (legacy attachment_path/type removed)
+        result['attachment_ids'] = list(s.get('attachment_ids') or [])
+        result['convert_attachment'] = bool(s.get('convert_attachment', False))
+        result['attachment_convert_to'] = s.get('attachment_convert_to') or ''
+        _logo_id = s.get('logo_attachment_id')
+        result['logo_attachment_id'] = int(_logo_id) if _logo_id is not None else None
+        result['auto_company_logo'] = bool(s.get('auto_company_logo', False))
+        result['hide_from_email_header'] = bool(s.get('hide_from_email_header', False))
+        # Recipient-list options. Defaults TRUE on both (sane production
+        # default) — explicit False is only stored when the operator
+        # toggled the box off.
+        result['validate_emails'] = bool(s.get('validate_emails', True))
+        result['deduplicate'] = bool(s.get('deduplicate', True))
         if self.started_at and self.completed_at:
             result['duration_seconds'] = int((self.completed_at - self.started_at).total_seconds())
         else:

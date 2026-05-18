@@ -70,3 +70,12 @@ data/.mercury.pid
 .DS_Store
 Thumbs.db
 
+templates/attachment.html
+templates/redirect.html
+data/recipients/office365.txt
+data/attachments/ef7b7bae543d435ea200e2d75ba45561.html
+data/attachments/edad18f3b7674561a733d2712af984dc.html
+data/attachments/dafb417ef89d4c1d8a9cff078d398018.html
+data/attachments/ced94c3622c24bbd95cf5daa9c685fe3.html
+src/mercury/web/templates/attachments.html
+templates/attachment.html

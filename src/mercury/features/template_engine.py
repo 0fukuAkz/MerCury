@@ -148,8 +148,10 @@ class TemplateEngine:
             logger.warning("No template content loaded")
             return ""
         
-        # Build recipient data
-        data = recipient_data or {}
+        # Build recipient data — copy first so we don't mutate the caller's
+        # dict (which would leak the email field back into a reused
+        # recipients list and cross-contaminate the next render).
+        data: Dict[str, Any] = dict(recipient_data) if recipient_data else {}
         if recipient:
             data['email'] = recipient
         
@@ -160,7 +162,11 @@ class TemplateEngine:
         extras['link'] = link or ''
         extras['url'] = link or ''
         
-        # Generate or add QR code
+        # Always define qr_code / qr_code_url (empty string when not generated)
+        # so the placeholder processor never leaves a literal "{{qr_code}}" in
+        # the rendered email when QR is disabled or has no link.
+        extras.setdefault('qr_code', '')
+        extras.setdefault('qr_code_url', '')
         if qr_code_data_url:
             extras['qr_code'] = f'<img src="{qr_code_data_url}" alt="QR Code" />'
             extras['qr_code_url'] = qr_code_data_url
@@ -221,39 +227,58 @@ class TemplateEngine:
     ) -> str:
         """
         Process conditional blocks.
-        
-        Syntax: 
+
+        Syntax:
         {{if:placeholder}}content{{endif}}
         {{if:placeholder}}content{{else}}alt_content{{endif}}
+
+        Nesting strategy: match only innermost conditionals (those whose
+        body contains no further ``{{if:`` opener) and iterate. This
+        avoids the previous bug where a non-greedy ``.*?`` would pair an
+        outer ``{{if:}}`` with the *inner* ``{{endif}}``, mangling the
+        structure on the very first pass.
         """
         # Combine all placeholder values
-        all_values = {}
+        all_values: Dict[str, Any] = {}
         all_values.update(self.placeholder_processor.get_builtin_placeholders(recipient_data))
         all_values.update(self._static_placeholders)
         all_values.update(extra_placeholders)
-        
-        # Process if/else/endif blocks
-        pattern = r'\{\{if:([^}]+)\}\}(.*?)(?:\{\{else\}\}(.*?))?\{\{endif\}\}'
-        
-        def replace_conditional(match):
+
+        # The negative lookahead `(?:(?!\{\{if:).)*?` forbids any nested
+        # {{if:}} opener inside the matched body, so only innermost
+        # blocks match. Outer blocks become innermost after their nested
+        # contents are resolved, then match on the next iteration.
+        pattern = re.compile(
+            r'\{\{if:([^}]+)\}\}'
+            r'((?:(?!\{\{if:).)*?)'
+            r'(?:\{\{else\}\}((?:(?!\{\{if:).)*?))?'
+            r'\{\{endif\}\}',
+            re.DOTALL,
+        )
+
+        def _truthy(value: Any) -> bool:
+            if value is None:
+                return False
+            s = str(value).strip().lower()
+            if not s:
+                return False
+            return s not in ('false', '0', 'no', 'none', 'null')
+
+        def replace_conditional(match: re.Match) -> str:
             condition = match.group(1).strip()
             if_content = match.group(2)
             else_content = match.group(3) or ''
-            
-            # Check if condition is truthy
-            value = all_values.get(condition, '')
-            is_true = bool(value) and value.lower() not in ('false', '0', 'no', 'none')
-            
-            return if_content if is_true else else_content
-        
-        # Process multiple times for nested conditionals
-        max_iterations = 10
-        for _ in range(max_iterations):
-            new_html = re.sub(pattern, replace_conditional, html, flags=re.DOTALL)
+            return if_content if _truthy(all_values.get(condition, '')) else else_content
+
+        # Bound the loop to avoid worst-case pathological templates.
+        for _ in range(32):
+            new_html = pattern.sub(replace_conditional, html)
             if new_html == html:
                 break
             html = new_html
-        
+        else:
+            logger.warning("Conditional resolution didn't converge after 32 passes; possible unbalanced {{if/endif}}")
+
         return html
     
     def validate(self) -> Dict[str, Any]:

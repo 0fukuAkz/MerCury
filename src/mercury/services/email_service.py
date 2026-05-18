@@ -33,15 +33,25 @@ class EmailConfig:
     placeholders_path: Optional[str] = None
     html_content: Optional[str] = None
     
-    # Attachments
-    attachment_path: Optional[str] = None
-    attachment_type: Optional[str] = None  # pdf, docx, qr, image
+    # Attachments — library only.
+    attachment_ids: Optional[List[int]] = None
+    # Optional per-campaign conversion of every library file through
+    # AttachmentGenerator before send (HTML source → PDF/DOCX/PNG/QR).
+    convert_attachment: bool = False
+    attachment_convert_to: Optional[str] = None
+    # Attachments-library row id to inline as {{company_logo}}.
+    logo_attachment_id: Optional[int] = None
+    # Auto-fetch brand logo from recipient domain when no pin is set.
+    auto_company_logo: bool = False
+    # Strip the addr-spec from the From: header so recipients see only
+    # the display name. Phrase-only header per RFC 5322 — strict MTAs
+    # may reject.
+    hide_from_email_header: bool = False
     
     # Features
     enable_qr_code: bool = False
     send_as_image: bool = False
-    convert_attachment: bool = False
-    
+
     # Tracking
     enable_tracking: bool = True
     track_opens: bool = True
@@ -78,9 +88,12 @@ class EmailConfig:
             rate_per_hour=config.rate_per_hour,
             enable_qr_code=config.enable_qr_code,
             send_as_image=config.send_as_image,
-            convert_attachment=config.convert_attachment,
-            attachment_type=config.attachment_type,
-            attachment_path=config.attachment_path,
+            attachment_ids=getattr(config, 'attachment_ids', None) or [],
+            convert_attachment=bool(getattr(config, 'convert_attachment', False)),
+            attachment_convert_to=getattr(config, 'attachment_convert_to', None),
+            logo_attachment_id=getattr(config, 'logo_attachment_id', None),
+            auto_company_logo=bool(getattr(config, 'auto_company_logo', False)),
+            hide_from_email_header=bool(getattr(config, 'hide_from_email_header', False)),
             subjects=config.subjects,
             from_names=config.from_names,
             from_emails=config.from_emails,
@@ -261,35 +274,154 @@ class EmailService:
             else:
                 from_email = self.config.from_email
         
-        # Render template
+        # ---- Build the substitution-extras dicts up front ---------------
+        #
+        # Two flavors of extras: body extras carry the full HTML payload for
+        # {{qr_code}} (an <img> tag); header extras carry the URL forms only.
+        # Email headers (Subject, From, Reply-To) are plaintext — embedding
+        # an <img> tag would surface the literal markup in the inbox.
+        #
+        # Both flavors share link/url so {{link}} resolves consistently in
+        # body AND subject — the prior code only gave the body access, so
+        # {{link}} in a Subject silently leaked through as literal text.
+        qr_data_url: Optional[str] = None
+        if self.config.enable_qr_code and link:
+            from ..features.generators import QRCodeGenerator
+            qr_gen = QRCodeGenerator(GeneratorConfig())
+            qr_data_url = qr_gen.generate_data_url(link)
+
+        # Load company logo (if pinned) and base64-inline as a data: URL.
+        # Reuses the Attachments library so operators don't need a separate
+        # upload surface. The logo is *never* sent as an attachment — it's
+        # only inlined into {{company_logo}} / {{company_logo_url}}.
+        logo_img_tag: str = ''
+        logo_data_url: str = ''
+        if self.config.logo_attachment_id:
+            try:
+                import base64 as _base64
+                from ..data.database import session_scope as _ss
+                from ..data.repositories import AttachmentRepository as _AR
+                from ..utils.app_dirs import get_data_dir as _gdd
+                with _ss() as _session:
+                    _row = _AR(_session).get(int(self.config.logo_attachment_id))
+                    if _row is None or not _row.is_active:
+                        logger.warning(
+                            f"[logo] id={self.config.logo_attachment_id} "
+                            "missing/inactive in DB; {{company_logo}} renders empty"
+                        )
+                    else:
+                        _disk = _gdd() / 'attachments' / _row.stored_name
+                        if not _disk.is_file():
+                            logger.error(
+                                f"[logo] id={self.config.logo_attachment_id} "
+                                f"({_row.filename}) missing on disk at {_disk}"
+                            )
+                        elif not (_row.content_type or '').lower().startswith('image/'):
+                            # Defensive: refuse to inline a non-image as if it
+                            # were one. Some clients render
+                            # data:text/html;base64,... as inline content,
+                            # which leaks the file's source into the email.
+                            logger.warning(
+                                f"[logo] id={self.config.logo_attachment_id} "
+                                f"({_row.filename}) is not an image "
+                                f"(content_type={_row.content_type!r}); "
+                                "{{company_logo}} renders empty"
+                            )
+                        else:
+                            _blob = _disk.read_bytes()
+                            _ct = _row.content_type
+                            _b64 = _base64.b64encode(_blob).decode('ascii')
+                            logo_data_url = f"data:{_ct};base64,{_b64}"
+                            logo_img_tag = (
+                                f'<img src="{logo_data_url}" alt="Logo" />'
+                            )
+            except Exception as e:
+                logger.error(f"[logo] failed to inline company_logo: {e}")
+
+        # Auto-fetch fallback: only fires if no pinned logo produced a tag
+        # and the per-campaign toggle is on. Source is the recipient's
+        # email domain — per-recipient personalization comes for free.
+        if not logo_img_tag and self.config.auto_company_logo:
+            try:
+                import base64 as _base64
+                from ..features.branding import (
+                    extract_domain as _extract_domain,
+                    fetch_logo_for_domain as _fetch_logo,
+                )
+                _dom = _extract_domain(recipient)
+                if _dom:
+                    _fetched = _fetch_logo(_dom)
+                    if _fetched is not None:
+                        _blob, _ct = _fetched
+                        _b64 = _base64.b64encode(_blob).decode('ascii')
+                        logo_data_url = f"data:{_ct};base64,{_b64}"
+                        logo_img_tag = f'<img src="{logo_data_url}" alt="Logo" />'
+                    else:
+                        logger.info(f"[logo] auto-fetch: no logo found for domain={_dom!r}")
+            except Exception as e:
+                logger.warning(f"[logo] auto-fetch failed for recipient={recipient!r}: {e}")
+
+        # Brand fallback: prefer the logo when available, otherwise drop
+        # the recipient's company name as styled text. Operators write
+        # {{brand}} once and the right thing renders whether or not a
+        # logo was found.
+        _company_text = ''
+        if recipient and '@' in recipient:
+            _dom = recipient.rsplit('@', 1)[1]
+            _dom_name = _dom.split('.', 1)[0] if _dom else ''
+            _company_text = _dom_name.capitalize() if _dom_name else ''
+        body_brand = (
+            logo_img_tag if logo_img_tag
+            else (f'<span class="company-name">{_company_text}</span>' if _company_text else '')
+        )
+
+        body_extras: Dict[str, str] = {
+            'link': link or '',
+            'url': link or '',
+            'qr_code': f'<img src="{qr_data_url}" alt="QR Code" />' if qr_data_url else '',
+            'qr_code_url': qr_data_url or '',
+            'company_logo': logo_img_tag,
+            'company_logo_url': logo_data_url,
+            'brand': body_brand,
+        }
+        header_extras: Dict[str, str] = {
+            'link': link or '',
+            'url': link or '',
+            # Empty for headers — operators should never see <img> tags in
+            # their subject lines or From names.
+            'qr_code': '',
+            'qr_code_url': '',
+            'company_logo': '',
+            'company_logo_url': '',
+            'brand': _company_text,  # plain text in headers
+        }
+
+        # ---- Render body ------------------------------------------------
         if html_body is None and self._template_engine:
             # Check for template rotation
             if self._rotation_manager and self._rotation_manager.is_registered('templates'):
                 template_path = self._rotation_manager.get_next('templates')
                 self._template_engine.load_template(template_path)
-            
+
             html_body = self._template_engine.render(
                 recipient=recipient,
                 recipient_data=placeholders,
-                link=link
+                extra_placeholders=body_extras,
+                qr_code_data_url=qr_data_url,
+                link=link,
             )
         elif html_body and self._placeholder_processor:
-            # Body was passed directly (e.g. test email, API) — still apply placeholders
-            extras = {'link': link or '', 'url': link or ''}
+            if '{{qr_code' in html_body and not qr_data_url:
+                logger.warning(
+                    "Template contains {{qr_code}} but "
+                    f"enable_qr_code={self.config.enable_qr_code}, link={link!r}; "
+                    "rendering as empty string"
+                )
+            html_body = self._placeholder_processor.process(html_body, placeholders, body_extras)
 
-            # Generate QR code for {{qr_code}} tag when enabled
-            if self.config.enable_qr_code and link:
-                from ..features.generators import QRCodeGenerator
-                qr_gen = QRCodeGenerator(GeneratorConfig())
-                qr_data_url = qr_gen.generate_data_url(link)
-                extras['qr_code'] = f'<img src="{qr_data_url}" alt="QR Code" />'
-                extras['qr_code_url'] = qr_data_url
-
-            html_body = self._placeholder_processor.process(html_body, placeholders, extras)
-        
         if not html_body:
             html_body = f"<p>Email to {recipient}</p>"
-        
+
         # Inject tracking if enabled
         tracking_email_id = None
         if self._tracking_service and self.config.enable_tracking:
@@ -301,76 +433,140 @@ class EmailService:
                 track_opens=self.config.track_opens,
                 track_clicks=self.config.track_clicks
             )
+
+        # ---- Apply placeholders to headers ------------------------------
+        # Subject, From, Reply-To — all use header_extras (link/url present;
+        # qr_code blanked so accidental references render empty, not as raw
+        # markup). reply_to was previously skipped entirely — it now goes
+        # through the same path as the other headers.
+        if self._placeholder_processor:
+            if subject:
+                subject = self._placeholder_processor.process(subject, placeholders, header_extras)
+            if from_name and '{{' in from_name:
+                from_name = self._placeholder_processor.process(from_name, placeholders, header_extras)
+            if from_email and '{{' in from_email:
+                from_email = self._placeholder_processor.process(from_email, placeholders, header_extras)
+            if reply_to and '{{' in reply_to:
+                reply_to = self._placeholder_processor.process(reply_to, placeholders, header_extras)
         
-        # Apply placeholders to subject
-        if subject and self._placeholder_processor:
-            subject = self._placeholder_processor.process(subject, placeholders)
-        
-        # Apply placeholders to from_name / from_email
-        if from_name and self._placeholder_processor and '{{' in from_name:
-            from_name = self._placeholder_processor.process(from_name, placeholders)
-        if from_email and self._placeholder_processor and '{{' in from_email:
-            from_email = self._placeholder_processor.process(from_email, placeholders)
-        
-        # Generate attachments if configured
-        if attachments is None:
-            # CHECK 1: Attachment Path is provided
-            if self.config.attachment_path:
-                current_attachment_path = self.config.attachment_path
-                # Apply placeholders to path
-                if placeholders:
-                    for key, value in placeholders.items():
-                        current_attachment_path = current_attachment_path.replace(f"{{{{{key}}}}}", str(value))
+        # Library attachment materialization. If convert_attachment is on
+        # and a target format is set, each loaded file goes through the
+        # AttachmentGenerator (HTML → PDF/DOCX/PNG/QR). Conversion only
+        # makes sense for HTML/text source files — non-text inputs are
+        # attached as-is with a warning.
+        if self.config.attachment_ids:
+            from ..data.database import session_scope
+            from ..data.repositories import AttachmentRepository
+            from ..utils.app_dirs import get_data_dir
+            lib_dir = get_data_dir() / 'attachments'
+            library_files: List[Dict[str, Any]] = []
 
-                # Option A: attachment_type set -> use generator with substituted path as template
-                if self.config.attachment_type and self._attachment_generator:
-                    attachment_data, filename, content_type = self._attachment_generator.generate_attachment(
-                        attachment_type=self.config.attachment_type,
-                        content=html_body,
-                        placeholders=placeholders,
-                        template_path=current_attachment_path,
-                        link=link
-                    )
-                    attachments = [{
-                        'data': attachment_data,
-                        'filename': filename,
-                        'content_type': content_type
-                    }]
+            convert_on = bool(self.config.convert_attachment)
+            convert_to = (self.config.attachment_convert_to or '').strip().lower() or None
+            if convert_on and not convert_to:
+                logger.warning("[attach] convert_attachment is on but no target format set; skipping conversion")
+                convert_on = False
 
-                # Option B: No attachment_type -> send the file on disk directly
-                elif os.path.exists(current_attachment_path):
-                    try:
-                        import mimetypes
-                        ctype, encoding = mimetypes.guess_type(current_attachment_path)
-                        if ctype is None or encoding is not None:
-                            ctype = 'application/octet-stream'
+            with session_scope() as session:
+                repo = AttachmentRepository(session)
+                for att_id in self.config.attachment_ids:
+                    row = repo.get(int(att_id))
+                    if row is None or not row.is_active:
+                        logger.warning(f"[attach] id={att_id} missing/inactive in DB; skipping")
+                        continue
+                    disk_path = lib_dir / row.stored_name
+                    if not disk_path.is_file():
+                        logger.error(f"[attach] id={att_id} ({row.filename}) missing on disk at {disk_path}")
+                        continue
+                    blob = disk_path.read_bytes()
+                    src_ctype = row.content_type or 'application/octet-stream'
+                    final_filename = row.filename
+                    final_ctype = src_ctype
+                    final_data: Any = blob
 
-                        with open(current_attachment_path, 'rb') as f:
-                            file_data = f.read()
+                    # Substitute placeholders inside the filename. A library
+                    # file named "Report_{{first_name}}.html" arrives as
+                    # "Report_Alice.html" — keeps per-recipient personalization
+                    # consistent across body and filename.
+                    if self._placeholder_processor and '{{' in final_filename:
+                        try:
+                            final_filename = self._placeholder_processor.process(
+                                final_filename, placeholders, header_extras
+                            )
+                        except Exception as e:
+                            logger.warning(f"[attach] id={att_id} filename placeholder substitution failed: {e}")
 
-                        attachments = [{
-                            'data': file_data,
-                            'filename': os.path.basename(current_attachment_path),
-                            'content_type': ctype
-                        }]
-                    except Exception as e:
-                        logger.error(f"Failed to read attachment {current_attachment_path}: {e}")
+                    # For text/* attachments, substitute placeholders inside
+                    # the file content too — operators expect {{first_name}} in
+                    # an attached HTML file to render the same way it does in
+                    # the email body. Binary files (PDF, PNG, DOCX) attach
+                    # as-is — substitution would corrupt them.
+                    src_maintype = src_ctype.split('/', 1)[0].lower()
+                    is_text = (src_maintype == 'text')
+                    if is_text and self._placeholder_processor:
+                        try:
+                            decoded = blob.decode('utf-8')
+                            decoded = self._placeholder_processor.process(
+                                decoded, placeholders, body_extras
+                            )
+                            final_data = decoded.encode('utf-8')
+                            blob = final_data  # so convert path below sees the
+                                               # already-substituted version
+                        except UnicodeDecodeError:
+                            logger.warning(
+                                f"[attach] id={att_id} content_type={src_ctype!r} "
+                                f"declared text/* but bytes are not valid UTF-8; "
+                                f"attaching raw without placeholder substitution"
+                            )
+                        except Exception as e:
+                            logger.warning(f"[attach] id={att_id} content placeholder substitution failed: {e}")
 
-            # CHECK 2: No path, but Attachment Type set -> Convert Body to Attachment
-            elif self.config.attachment_type and self._attachment_generator:
-                attachment_data, filename, content_type = self._attachment_generator.generate_attachment(
-                    attachment_type=self.config.attachment_type,
-                    content=html_body,
-                    placeholders=placeholders,
-                    template_path=None,
-                    link=link
-                )
-                attachments = [{
-                    'data': attachment_data,
-                    'filename': filename,
-                    'content_type': content_type
-                }]
-        
+                    if convert_on and self._attachment_generator:
+                        if not is_text:
+                            logger.warning(
+                                f"[attach] id={att_id} content_type={src_ctype!r} "
+                                f"is not text/*; convert skipped, attaching as-is"
+                            )
+                        else:
+                            try:
+                                # blob is already placeholder-substituted at
+                                # this point (text branch above). Decode to
+                                # str for the generator.
+                                html_source = blob.decode('utf-8')
+                                gen_data, gen_filename, gen_ctype = (
+                                    self._attachment_generator.generate_attachment(
+                                        attachment_type=convert_to,
+                                        content=html_source,
+                                        placeholders=placeholders,
+                                        template_path=None,
+                                        link=link,
+                                    )
+                                )
+                                final_data = gen_data
+                                final_ctype = gen_ctype
+                                # Preserve the original basename but swap the
+                                # extension so recipients see e.g. report.pdf
+                                # not report.html.pdf.
+                                import os as _os
+                                base, _ = _os.path.splitext(final_filename)
+                                _ext = (gen_filename.rsplit('.', 1)[-1]
+                                        if '.' in gen_filename else convert_to)
+                                final_filename = f"{base}.{_ext}"
+                            except Exception as e:
+                                logger.error(
+                                    f"[attach] id={att_id} convert to {convert_to!r} failed: {e}; "
+                                    f"attaching original"
+                                )
+
+                    library_files.append({
+                        'data': final_data,
+                        'filename': final_filename,
+                        'content_type': final_ctype,
+                    })
+
+            if library_files:
+                attachments = (attachments or []) + library_files
+
         # Convert to image if configured
         if self.config.send_as_image and self._attachment_generator:
             image_url = self._attachment_generator.image.generate_data_url(html_body)
@@ -399,11 +595,31 @@ class EmailService:
         # Send email
         sender = self.get_sender()
 
+        logger.info(
+            "[attach] handing off to sender: " + str([
+                {
+                    'filename': a.get('filename'),
+                    'content_type': a.get('content_type'),
+                    'data_type': type(a.get('data')).__name__,
+                    'data_len': len(a.get('data') or b''),
+                } for a in (attachments or [])
+            ])
+        )
+
+        # Phrase-only From: header — when hide_from_email_header is on,
+        # pass an empty from_email so the engine's `formataddr((name, ''))`
+        # produces just the display name. The SMTP envelope (MAIL FROM)
+        # still uses the connection's authenticated user, set by the
+        # underlying aiosmtplib send path.
+        _resolved_from_email = '' if self.config.hide_from_email_header else (
+            from_email or self.config.from_email
+        )
+
         result = await sender.send_email(
             recipient=recipient,
             subject=subject,
             html_body=html_body,
-            from_email=from_email or self.config.from_email,
+            from_email=_resolved_from_email,
             from_name=from_name,
             reply_to=reply_to or self.config.reply_to,
             attachments=attachments,

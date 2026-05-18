@@ -44,6 +44,7 @@ class SMTPService:
                     port=server.port,
                     username=server.username,
                     password=server.password,
+                    tls_mode=server.effective_tls_mode,
                     use_tls=server.use_tls,
                     use_ssl=server.use_ssl,
                     use_auth=server.use_auth,
@@ -93,43 +94,127 @@ class SMTPService:
         return self._connection_pool
     
     async def test_connection(self, server_name: str) -> Dict[str, Any]:
+        """Test connection to a specific SMTP server.
+
+        Walks the stages explicitly so the response distinguishes:
+          - tcp_failed: couldn't reach the host
+          - tls_failed: STARTTLS / implicit-SSL handshake failed
+          - auth_failed: credentials rejected
+          - protocol_failed: other SMTP-level rejection
+
+        The previous implementation returned a single generic "Connection
+        successful" even when AUTH was effectively a no-op (use_auth=True
+        with no username silently skipped login), and exposed raw
+        ``str(e)`` which can leak relay banners or internal hostnames.
         """
-        Test connection to specific SMTP server.
-        
-        Returns:
-            Dict with test results
-        """
+        import aiosmtplib
+
         config = next((c for c in self._configs if c.name == server_name), None)
         if not config:
             return {
                 'success': False,
                 'server': server_name,
-                'error': 'Server not found'
+                'error': 'Server not found',
+                'stage': 'lookup',
             }
-        
-        try:
-            from ..engine.connection_pool import AsyncSMTPConnection
-            
-            conn = AsyncSMTPConnection(config)
-            await conn.connect()
-            await conn.close()
-            
-            return {
-                'success': True,
-                'server': server_name,
-                'host': config.host,
-                'port': config.port,
-                'message': 'Connection successful'
-            }
-            
-        except Exception as e:
+
+        # Catch the use_auth=True + empty username case before opening a
+        # socket — the connect path silently skips login, which makes a
+        # successful test misleading.
+        if config.use_auth and not config.username:
             return {
                 'success': False,
                 'server': server_name,
                 'host': config.host,
                 'port': config.port,
-                'error': str(e)
+                'stage': 'config',
+                'error_type': 'misconfigured_auth',
+                'error': 'use_auth=True but no username is set',
             }
+
+        from ..engine.connection_pool import AsyncSMTPConnection  # noqa: F401
+        mode = getattr(config, 'tls_mode', None) or (
+            'ssl' if config.use_ssl else
+            ('starttls' if config.use_tls else 'none')
+        )
+        client: aiosmtplib.SMTP | None = None
+        stage = 'tcp'
+        try:
+            implicit_tls = (mode == 'ssl')
+            client = aiosmtplib.SMTP(
+                hostname=config.host,
+                port=config.port,
+                use_tls=implicit_tls,
+                timeout=config.timeout,
+            )
+            await client.connect()
+
+            if mode == 'starttls':
+                stage = 'tls'
+                await client.starttls()
+
+            stage = 'ehlo'
+            await client.ehlo()
+
+            auth_attempted = False
+            if config.use_auth and config.username:
+                stage = 'auth'
+                await client.login(config.username, config.password)
+                auth_attempted = True
+
+            return {
+                'success': True,
+                'server': server_name,
+                'host': config.host,
+                'port': config.port,
+                'tls_mode': mode,
+                'auth_verified': auth_attempted,
+                'message': 'Connection + AUTH verified' if auth_attempted else 'Connection verified (no auth attempted)',
+            }
+
+        except aiosmtplib.SMTPAuthenticationError as e:
+            return {
+                'success': False, 'server': server_name, 'host': config.host, 'port': config.port,
+                'stage': 'auth', 'error_type': 'auth_failed',
+                'error': f'Authentication rejected ({getattr(e, "code", "n/a")})',
+            }
+        except aiosmtplib.SMTPConnectError:
+            return {
+                'success': False, 'server': server_name, 'host': config.host, 'port': config.port,
+                'stage': stage, 'error_type': 'tcp_failed',
+                'error': 'Could not connect to host (TCP or DNS failure)',
+            }
+        except aiosmtplib.SMTPException as e:
+            return {
+                'success': False, 'server': server_name, 'host': config.host, 'port': config.port,
+                'stage': stage, 'error_type': 'protocol_failed',
+                'error': f'SMTP protocol error ({getattr(e, "code", "n/a")})',
+            }
+        except (OSError, TimeoutError):
+            return {
+                'success': False, 'server': server_name, 'host': config.host, 'port': config.port,
+                'stage': stage, 'error_type': 'tls_failed' if stage == 'tls' else 'tcp_failed',
+                'error': f'Network failure during {stage}',
+            }
+        except Exception as e:
+            # Log the raw text server-side for debugging; return a sanitized
+            # message client-side. Raw str(e) can include relay banners or
+            # internal addresses we don't want in REST responses.
+            logger.exception(
+                "Unexpected error testing SMTP server '%s' at stage '%s'",
+                server_name, stage,
+            )
+            return {
+                'success': False, 'server': server_name, 'host': config.host, 'port': config.port,
+                'stage': stage, 'error_type': 'unknown',
+                'error': f'{type(e).__name__} during {stage}',
+            }
+        finally:
+            if client is not None:
+                try:
+                    await client.quit()
+                except Exception:
+                    pass
     
     async def test_all_connections(self) -> List[Dict[str, Any]]:
         """Test all SMTP server connections."""
@@ -147,9 +232,23 @@ class SMTPService:
         username: str = "",
         password: str = "",
         use_tls: bool = True,
+        use_ssl: bool = False,
+        tls_mode: Optional[str] = None,
         **kwargs
     ) -> SMTPServer:
-        """Add new SMTP server to database."""
+        """Add new SMTP server to database.
+
+        Accepts both tls_mode (preferred) and the legacy use_tls/use_ssl
+        flags. Whichever is supplied, the resulting row has tls_mode +
+        use_tls + use_ssl all consistent via set_tls_mode().
+        """
+        if tls_mode not in ('none', 'starttls', 'ssl'):
+            if use_ssl:
+                tls_mode = 'ssl'
+            elif use_tls:
+                tls_mode = 'starttls'
+            else:
+                tls_mode = 'none'
         session = get_session_direct()
         try:
             server = SMTPServer(
@@ -158,13 +257,12 @@ class SMTPService:
                 port=port,
                 username=username,
                 password=password,
-                use_tls=use_tls,
                 **kwargs
             )
-            
+            server.set_tls_mode(tls_mode)
             repo = SMTPRepository(session)
             return repo.create(server)
-            
+
         finally:
             session.close()
     

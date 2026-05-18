@@ -55,6 +55,12 @@ class AppContext:
         socketio.init_app(app)
         self.socketio = socketio
 
+        # Spawn the cross-thread emit bridge greenlet. Campaign progress
+        # callbacks (in the asyncio loop's thread) enqueue events that
+        # this greenlet drains and emits from the eventlet hub.
+        from .web.extensions import start_emit_bridge
+        start_emit_bridge(socketio)
+
         # Initialize CSRF protection. Honors WTF_CSRF_ENABLED app config — the
         # test fixture sets it to False so existing tests don't need updates.
         csrf.init_app(app)
@@ -81,19 +87,23 @@ class AppContext:
     
     
     def emit_progress(self, data: Dict[str, Any]) -> None:
-        """Emit progress update to connected clients."""
-        if self.socketio:
-            self.socketio.emit('campaign_progress', data)
-    
+        """Emit progress update via the cross-thread bridge queue.
+
+        Safe from any thread (asyncio loop, campaign thread, etc.).
+        The eventlet bridge greenlet drains the queue and emits on hub.
+        """
+        from .web.extensions import queue_emit
+        queue_emit('campaign_progress', data)
+
     def emit_complete(self, data: Dict[str, Any]) -> None:
-        """Emit campaign complete event."""
-        if self.socketio:
-            self.socketio.emit('campaign_complete', data)
-    
+        """Emit campaign complete event via the bridge."""
+        from .web.extensions import queue_emit
+        queue_emit('campaign_complete', data)
+
     def emit_event(self, event: str, data: Dict[str, Any]) -> None:
-        """Emit a generic event to connected clients."""
-        if self.socketio:
-            self.socketio.emit(event, data)
+        """Emit a generic event via the bridge."""
+        from .web.extensions import queue_emit
+        queue_emit(event, data)
     
     def get_limiter(self) -> Optional[Limiter]:
         """Get the rate limiter instance."""

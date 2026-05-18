@@ -1,5 +1,13 @@
 """Main application factory."""
 
+# NOTE: do NOT call eventlet.monkey_patch() here. Tried in a previous
+# debug round — it broke the asyncio background loop (asyncio.run_
+# coroutine_threadsafe deadlocks once threading.Lock is greenlet-backed),
+# and the campaign send pipeline hung before reaching the progress
+# callback. Cross-thread SocketIO emits are now bridged through a
+# thread-safe queue drained by an eventlet greenlet (see
+# web/extensions.py: emit_bridge), avoiding the conflict entirely.
+
 import os
 import logging
 from typing import Optional
@@ -30,6 +38,7 @@ from .routes.tools import tools_bp
 from .routes.settings import settings_bp
 from .routes.senders import senders_bp
 from .routes.templates import templates_bp
+from .routes.attachments import attachments_bp
 
 logger = logging.getLogger(__name__)
 
@@ -174,6 +183,7 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
     app.register_blueprint(settings_bp) # /settings
     app.register_blueprint(senders_bp) # /senders
     app.register_blueprint(templates_bp) # /templates
+    app.register_blueprint(attachments_bp) # /attachments
     
     # Register SocketIO events
     register_socketio_events(socketio)
@@ -189,8 +199,12 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
         # default-src 'self' covers scripts/styles/images/fonts. 'unsafe-inline'
         # is required because the dashboard templates embed inline <script>
         # blocks for SocketIO bootstrap; tighten later by extracting them.
+        # cdn.socket.io is whitelisted because base.html loads the socket.io
+        # client from that CDN — without it the script silently 404s under
+        # CSP and the dashboard's lifecycle buttons (Start/Pause/Resume) fail
+        # because `io` is undefined.
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline'; "
+        "script-src 'self' 'unsafe-inline' https://cdn.socket.io; "
         "style-src 'self' 'unsafe-inline'; "
         "img-src 'self' data: blob:; "
         "connect-src 'self' ws: wss:; "

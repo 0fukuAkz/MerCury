@@ -290,7 +290,7 @@ class AsyncEmailSender:
                     data = attachment['data']
                     filename = attachment['filename']
                     content_type = attachment.get('content_type')
-                    
+
                     if content_type:
                         maintype, subtype = content_type.split('/', 1)
                     else:
@@ -299,7 +299,21 @@ class AsyncEmailSender:
                             maintype, subtype = 'application', 'octet-stream'
                         else:
                             maintype, subtype = ctype.split('/', 1)
-                    
+
+                    # Always pass bytes to add_attachment. Python's content
+                    # manager dispatches on input type:
+                    #   - bytes → set_bytes_content(msg, value, maintype,
+                    #             subtype, ...) — accepts maintype kwarg.
+                    #   - str   → set_text_content(msg, value, subtype, ...)
+                    #             — does NOT accept maintype; passing it
+                    #             raises TypeError on 3.12, or silently
+                    #             drops the body on some 3.11 versions
+                    #             (the cause of the "empty attachment" bug).
+                    # Encoding str→bytes lets every content type take the
+                    # bytes path uniformly.
+                    if isinstance(data, str):
+                        data = data.encode('utf-8')
+
                     msg.add_attachment(
                         data,
                         maintype=maintype,
@@ -538,8 +552,14 @@ async def send_email_async(
             for att in attachments:
                 ctype = att.get('content_type') or 'application/octet-stream'
                 maintype, subtype = ctype.split('/', 1)
+                data = att['data']
+                # Always pass bytes — see note in send_email above. The str
+                # path doesn't accept maintype as a kwarg and silently
+                # produces empty MIME parts.
+                if isinstance(data, str):
+                    data = data.encode('utf-8')
                 msg.add_attachment(
-                    att['data'],
+                    data,
                     maintype=maintype,
                     subtype=subtype,
                     filename=att['filename']

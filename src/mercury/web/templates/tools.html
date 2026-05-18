@@ -366,6 +366,22 @@
     let _docBlob = null;
     let _docFilename = 'document.pdf';
 
+    const _CSRF_TOKEN = "{{ csrf_token() }}";
+
+    /* Extract a usable error message from a non-OK Response, even if the
+       body is HTML (Flask 500 page, login redirect, proxy 502, etc.). */
+    async function _extractError(res, fallback) {
+        const text = await res.text().catch(() => '');
+        try {
+            const parsed = JSON.parse(text);
+            if (parsed && parsed.error) return parsed.error;
+        } catch (_) { /* not JSON — fall through */ }
+        if (res.status === 401 || res.status === 403) {
+            return 'Session expired — please reload and sign in again.';
+        }
+        return `${fallback} (HTTP ${res.status} ${res.statusText || ''})`.trim();
+    }
+
     /* ── QR ── */
 
     async function generateQR() {
@@ -383,8 +399,13 @@
         try {
             const fd = new FormData();
             fd.append('data', val);
-            const res = await fetch('{{ url_for("tools.generate_qr") }}', { method: 'POST', body: fd });
-            if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Generation failed'); }
+            fd.append('csrf_token', _CSRF_TOKEN);
+            const res = await fetch('{{ url_for("tools.generate_qr") }}', {
+                method: 'POST',
+                body: fd,
+                headers: { 'X-CSRFToken': _CSRF_TOKEN },
+            });
+            if (!res.ok) throw new Error(await _extractError(res, 'Generation failed'));
 
             _qrBlob = await res.blob();
             const url = URL.createObjectURL(_qrBlob);
@@ -437,8 +458,13 @@
             const fd = new FormData();
             fd.append('content', content);
             fd.append('format', format);
-            const res = await fetch('{{ url_for("tools.render_content") }}', { method: 'POST', body: fd });
-            if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Conversion failed'); }
+            fd.append('csrf_token', _CSRF_TOKEN);
+            const res = await fetch('{{ url_for("tools.render_content") }}', {
+                method: 'POST',
+                body: fd,
+                headers: { 'X-CSRFToken': _CSRF_TOKEN },
+            });
+            if (!res.ok) throw new Error(await _extractError(res, 'Conversion failed'));
 
             _docBlob = await res.blob();
             _docFilename = format === 'pdf' ? 'document.pdf' : format === 'docx' ? 'document.docx' : 'image.png';

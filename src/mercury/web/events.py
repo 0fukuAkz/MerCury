@@ -65,6 +65,23 @@ def _build_config_from_campaign(campaign) -> CampaignConfig:
         rate_per_hour=campaign.rate_per_hour or 0,
         enable_qr_code=campaign.enable_qr_code or False,
         send_as_image=campaign.convert_to_image or False,
+        attachment_ids=[
+            int(x) for x in (settings.get("attachment_ids") or [])
+            if str(x).strip().isdigit()
+        ],
+        convert_attachment=bool(settings.get("convert_attachment", False)),
+        attachment_convert_to=settings.get("attachment_convert_to") or None,
+        logo_attachment_id=(
+            int(settings["logo_attachment_id"])
+            if str(settings.get("logo_attachment_id") or "").strip().isdigit()
+            else None
+        ),
+        auto_company_logo=bool(settings.get("auto_company_logo", False)),
+        hide_from_email_header=bool(settings.get("hide_from_email_header", False)),
+        validate_emails=bool(settings.get("validate_emails", True)),
+        deduplicate=bool(settings.get("deduplicate", True)),
+        pause_between_chunks=campaign.pause_between_chunks or 0,
+        placeholders=dict(campaign.placeholders or {}),
         smtp_rotation=campaign.smtp_rotation_strategy or "weighted",
         smtp_server_id=settings.get("smtp_server_id"),
         dry_run=bool(settings.get("dry_run", False)),
@@ -76,10 +93,18 @@ def _build_config_from_campaign(campaign) -> CampaignConfig:
 
 
 def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
-    """Execute campaign in a background thread using the shared async loop."""
+    """Execute campaign in a background thread.
+
+    Emits go through the cross-thread bridge queue (see extensions.py:
+    queue_emit / start_emit_bridge). The bridge greenlet drains the queue
+    on the SocketIO hub and emits there. This avoids the eventlet/asyncio
+    thread-affinity conflict that direct sio.emit (or start_background_task
+    from a non-eventlet thread) ran into.
+    """
+    from .extensions import queue_emit
 
     def _emit(event, data):
-        sio.emit(event, data)
+        queue_emit(event, data)
 
     try:
         with app.app_context():
@@ -179,7 +204,21 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
             'status': 'sending',
         })
 
+        # Counter so we can rate-limit log noise — log first 3, then every
+        # 25th, then the last one. Keeps the log readable while still
+        # confirming the chain is alive.
+        _progress_count = {'n': 0}
+        _progress_total = len(recipients)
+
         async def _progress_cb(progress: dict):
+            _progress_count['n'] += 1
+            n = _progress_count['n']
+            if n <= 3 or n % 25 == 0 or n == _progress_total:
+                logger.info(
+                    f"[progress] cb #{n}/{_progress_total} for campaign "
+                    f"{campaign_id}: recipient={progress.get('recipient')!r} "
+                    f"success={progress.get('success')}"
+                )
             _emit('campaign_progress', {'campaign_id': campaign_id, **progress})
 
         stats = run_async(service.run_campaign(recipients, progress_callback=_progress_cb))
@@ -258,14 +297,19 @@ def register_socketio_events(sio: SocketIO):
 
     @sio.on('connect')
     def handle_connect():
-        """Handle client connection."""
-        # Note: current_user relies on Flask-Login which might require request context
-        # Flask-SocketIO provides request context for connect event
+        """Handle client connection.
+
+        Requires Flask-SocketIO's ``manage_session=False`` so that
+        Flask-Login's ``current_user`` proxy resolves correctly here.
+        Without that, this check returns False for every connect and the
+        client falls into a connect-then-disconnect loop.
+        """
         if not current_user.is_authenticated:
+            logger.info("SocketIO connect REJECTED: current_user not authenticated")
             return False  # Reject unauthenticated connections
 
         emit('connected', {'status': 'connected'})
-        logger.debug(f"Client connected via WebSocket: {current_user.username}")
+        logger.info(f"SocketIO connect OK: user={current_user.username}")
 
     @sio.on('disconnect')
     def handle_disconnect():
@@ -283,7 +327,17 @@ def register_socketio_events(sio: SocketIO):
         ``campaign_progress`` once recipients are loaded and
         ``campaign_error`` if anything fails.
         """
+        # Always log the event reception so disconnected/unauthenticated
+        # clicks are distinguishable from "didn't even reach the server".
+        logger.info(f"start_campaign event received: data={data}")
+
         if not current_user.is_authenticated:
+            # Emit an error rather than silently returning — otherwise the
+            # client toast says "Starting…" and nothing else happens.
+            emit('campaign_error', {
+                'campaign_id': (data or {}).get('campaign_id'),
+                'error': 'Not authenticated. Please reload the page and sign in.',
+            })
             return
 
         campaign_id = data.get('campaign_id')

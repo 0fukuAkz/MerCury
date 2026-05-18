@@ -154,6 +154,7 @@ class PlaceholderProcessor:
             # Recipient info
             'email': email,
             'recipient': email,
+            'recipient_email': email,  # explicit alias for templates that prefer this name
             'local_part': local_part,
             'username': local_part,
             'domain': domain,
@@ -312,13 +313,21 @@ class PlaceholderProcessor:
                 logger.warning(f"Custom generator '{name}' failed: {e}")
                 placeholders[name] = ''
         
-        # Replace placeholders
+        # Replace placeholders. Values are coerced to str at the boundary
+        # so static placeholders or custom-generator results that return
+        # int/datetime/None don't crash re.sub (which requires a str
+        # return value).
         def replace_placeholder(match):
             key = match.group(1).strip()
-            return placeholders.get(key, match.group(0))
-        
+            if key not in placeholders:
+                return match.group(0)
+            value = placeholders[key]
+            if value is None:
+                return ''
+            return value if isinstance(value, str) else str(value)
+
         result = re.sub(r'\{\{([^}]+)\}\}', replace_placeholder, template)
-        
+
         return result
     
     def get_used_placeholders(self, template: str) -> List[str]:

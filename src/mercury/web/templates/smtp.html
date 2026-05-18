@@ -221,19 +221,13 @@
                 <input class="field-input" type="password" name="password" placeholder="••••••••" autocomplete="new-password">
             </div>
             <div>
-                <div class="field-label">&nbsp;</div>
-                <div class="tls-row" style="margin-bottom:0.15rem">
-                    <label class="toggle-sm">
-                        <input type="checkbox" name="use_tls" id="use_tls" checked>
-                        <span class="toggle-track-sm"></span>
-                        STARTTLS
-                    </label>
-                    <label class="toggle-sm">
-                        <input type="checkbox" name="use_ssl" id="use_ssl">
-                        <span class="toggle-track-sm"></span>
-                        SSL/TLS
-                    </label>
-                </div>
+                <div class="field-label" id="tls_mode_label">TLS Mode</div>
+                <select class="field-input" name="tls_mode" id="tls_mode"
+                        aria-labelledby="tls_mode_label">
+                    <option value="starttls" selected>STARTTLS (port 587/25)</option>
+                    <option value="ssl">SSL/TLS implicit (port 465)</option>
+                    <option value="none">None — plain SMTP</option>
+                </select>
             </div>
         </div>
         <div style="display:flex;gap:0.75rem;margin-top:1rem">
@@ -318,13 +312,9 @@
         }
     }
 
-    /* ── Mutual exclusion of TLS checkboxes ─────────────────────────────── */
-    document.getElementById('use_tls').addEventListener('change', function() {
-        if (this.checked) document.getElementById('use_ssl').checked = false;
-    });
-    document.getElementById('use_ssl').addEventListener('change', function() {
-        if (this.checked) document.getElementById('use_tls').checked = false;
-    });
+    /* tls_mode replaces the previous use_tls/use_ssl checkbox pair. The
+       backend keeps both legacy booleans synced from tls_mode so older
+       clients still work, but new code uses the single field. */
 
     /* ── Load servers ────────────────────────────────────────────────────── */
     async function loadServers() {
@@ -357,9 +347,12 @@
                 row.dataset.username = s.username || '';
                 row.dataset.hasPassword = s.has_password ? '1' : '';
 
-                var tlsBadge = s.use_ssl
+                var _mode = s.tls_mode || (s.use_ssl ? 'ssl' : (s.use_tls ? 'starttls' : 'none'));
+                var tlsBadge = _mode === 'ssl'
                     ? '<span class="badge badge-ok">SSL/TLS</span>'
-                    : (s.use_tls ? '<span class="badge badge-neutral">STARTTLS</span>' : '<span class="badge badge-warn">Plain</span>');
+                    : (_mode === 'starttls'
+                        ? '<span class="badge badge-neutral">STARTTLS</span>'
+                        : '<span class="badge badge-warn">Plain</span>');
 
                 var statusBadge = s.is_enabled
                     ? '<span class="badge badge-ok"><span class="dot dot-green"></span>' + esc(s.status || 'active') + '</span>'
@@ -448,8 +441,7 @@
             port:     parseInt(form.elements['port'].value) || 587,
             username: form.elements['username'].value.trim(),
             password: form.elements['password'].value,
-            use_tls:  form.elements['use_tls'].checked,
-            use_ssl:  form.elements['use_ssl'].checked,
+            tls_mode: form.elements['tls_mode'].value,
         };
 
         try {
@@ -463,7 +455,7 @@
             if (result.success) {
                 showToast('Server "' + name + '" added', 'success');
                 form.reset();
-                document.getElementById('use_tls').checked = true;
+                document.getElementById('tls_mode').value = 'starttls';
                 toggleAddPanel();
                 loadServers();
             } else {
@@ -558,8 +550,8 @@
         var currentHost = hostPort.slice(0, -1).join(':');
         var currentPort = hostPort[hostPort.length - 1] || '587';
         var tlsText = cells[2].textContent.trim();
-        var currentTls = tlsText === 'STARTTLS';
-        var currentSsl = tlsText === 'SSL/TLS';
+        var currentMode = tlsText === 'SSL/TLS' ? 'ssl'
+                        : (tlsText === 'STARTTLS' ? 'starttls' : 'none');
         var currentUsername = mainRow.dataset.username || '';
         var pwPlaceholder = mainRow.dataset.hasPassword ? '•••••••• (leave blank to keep)' : 'not configured';
 
@@ -591,17 +583,12 @@
             '</div>',
 
             '<div>',
-            '  <div class="field-label">&nbsp;</div>',
-            '  <div class="tls-row">',
-            '    <label class="toggle-sm">',
-            '      <input type="checkbox" name="use_tls" ' + (currentTls ? 'checked' : '') + '>',
-            '      <span class="toggle-track-sm"></span> STARTTLS',
-            '    </label>',
-            '    <label class="toggle-sm">',
-            '      <input type="checkbox" name="use_ssl" ' + (currentSsl ? 'checked' : '') + '>',
-            '      <span class="toggle-track-sm"></span> SSL/TLS',
-            '    </label>',
-            '  </div>',
+            '  <div class="field-label">TLS Mode</div>',
+            '  <select class="field-input" name="tls_mode">',
+            '    <option value="starttls"' + (currentMode === 'starttls' ? ' selected' : '') + '>STARTTLS</option>',
+            '    <option value="ssl"' + (currentMode === 'ssl' ? ' selected' : '') + '>SSL/TLS implicit</option>',
+            '    <option value="none"' + (currentMode === 'none' ? ' selected' : '') + '>None — plain SMTP</option>',
+            '  </select>',
             '</div>',
 
             '</div>',
@@ -614,13 +601,6 @@
         ].join('');
 
         mainRow.parentNode.insertBefore(editRow, mainRow.nextSibling);
-
-        // Wire mutual-exclusion for TLS checkboxes in the edit row
-        var tlsCb = editRow.querySelector('[name="use_tls"]');
-        var sslCb = editRow.querySelector('[name="use_ssl"]');
-        tlsCb.addEventListener('change', function() { if (this.checked) sslCb.checked = false; });
-        sslCb.addEventListener('change', function() { if (this.checked) tlsCb.checked = false; });
-
         editRow.querySelector('[name="host"]').focus();
     }
 
@@ -643,8 +623,7 @@
         var data = {
             host:    host,
             port:    parseInt(form.elements['port'].value) || 587,
-            use_tls: form.elements['use_tls'].checked,
-            use_ssl: form.elements['use_ssl'].checked,
+            tls_mode: form.elements['tls_mode'].value,
         };
         var username = form.elements['username'].value.trim();
         var password = form.elements['password'].value;

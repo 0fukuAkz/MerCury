@@ -49,7 +49,9 @@
       "Bash(sed -n '300,353p' tests/test_web_routes_coverage.py)",
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
-      "Bash(grep -v \":0$\")"
+      "Bash(grep -v \":0$\")",
+      "Bash(python -c \"from mercury.engine.connection_pool import SMTPConnectionPoolManager; print\\('import OK'\\)\")",
+      "Bash(python -c \"import importlib; m=importlib.import_module\\('mercury.engine.connection_pool'\\); print\\('connection_pool OK'\\); m2=importlib.import_module\\('mercury.engine.enhanced_sender'\\); print\\('enhanced_sender OK'\\)\")"
     ]
   },
   "outputStyle": "Explanatory"

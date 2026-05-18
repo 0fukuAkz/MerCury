@@ -7,6 +7,7 @@ from .template import TemplateRepository
 from .recipient import RecipientRepository, RecipientListRepository
 from .user import UserRepository
 from .logs import LogRepository
+from .attachment import AttachmentRepository
 
 __all__ = [
     "BaseRepository",
@@ -17,5 +18,6 @@ __all__ = [
     "RecipientListRepository",
     "UserRepository",
     "LogRepository",
+    "AttachmentRepository",
 ]
 

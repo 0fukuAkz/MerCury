@@ -83,6 +83,10 @@ class EnhancedAsyncEmailSender(AsyncEmailSender):
         
         attempt = 0
         current_smtp = kwargs.get('preferred_smtp')
+        # A caller-supplied preferred_smtp is a hard pin: SWITCH_SERVER
+        # recovery must not redirect the send to a different server, or the
+        # pin's whole point (matching auth identity to From: header) is lost.
+        smtp_pinned_by_caller = current_smtp is not None
         
         with EmailOperationContext(
             operation="send_email",
@@ -160,13 +164,21 @@ class EnhancedAsyncEmailSender(AsyncEmailSender):
                         return result
                     
                     elif decision.strategy == RecoveryStrategy.SWITCH_SERVER:
-                        # Try different server
-                        current_smtp = decision.alternative_smtp
-                        kwargs['preferred_smtp'] = current_smtp
-                        ctx_logger.info(
-                            "Switching to alternative SMTP",
-                            new_smtp=current_smtp
-                        )
+                        if smtp_pinned_by_caller:
+                            ctx_logger.info(
+                                "Ignoring SWITCH_SERVER: caller pinned preferred_smtp",
+                                pinned_smtp=current_smtp,
+                                rejected_alternative=decision.alternative_smtp,
+                            )
+                            if decision.retry_delay > 0:
+                                await asyncio.sleep(decision.retry_delay)
+                        else:
+                            current_smtp = decision.alternative_smtp
+                            kwargs['preferred_smtp'] = current_smtp
+                            ctx_logger.info(
+                                "Switching to alternative SMTP",
+                                new_smtp=current_smtp
+                            )
                         
                     elif decision.strategy == RecoveryStrategy.DELAY_RETRY:
                         # Wait before retry
