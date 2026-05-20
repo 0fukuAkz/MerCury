@@ -35,7 +35,12 @@ CAMPAIGN_CONFIG_FIELDS = frozenset({
     'dry_run', 'concurrency', 'chunk_size', 'pause_between_chunks',
     'rate_per_minute', 'rate_per_hour',
     'enable_qr_code', 'send_as_image', 'convert_attachment',
-    'attachment_type', 'attachment_path',
+    # Attachment-library + conversion fields (replaced legacy attachment_type/path).
+    'attachment_ids', 'attachment_convert_to',
+    # Brand-logo controls.
+    'logo_attachment_id', 'auto_company_logo',
+    # Header-stripping toggle.
+    'hide_from_email_header',
     'links',
     'placeholders', 'placeholders_path',
     'enable_tracking', 'track_opens', 'track_clicks', 'tracking_base_url',
@@ -44,7 +49,9 @@ CAMPAIGN_CONFIG_FIELDS = frozenset({
 EMAIL_CONFIG_FIELDS = frozenset({
     'subject', 'from_email', 'from_name', 'from_emails', 'reply_to',
     'template_path', 'placeholders_path', 'html_content',
-    'attachment_path', 'attachment_type',
+    'attachment_ids', 'attachment_convert_to',
+    'logo_attachment_id', 'auto_company_logo',
+    'hide_from_email_header',
     'enable_qr_code', 'send_as_image', 'convert_attachment',
     'enable_tracking', 'track_opens', 'track_clicks', 'tracking_base_url',
     'dry_run', 'concurrency', 'rate_per_minute', 'rate_per_hour',
@@ -53,7 +60,9 @@ EMAIL_CONFIG_FIELDS = frozenset({
 
 SMTP_SERVER_CONFIG_FIELDS = frozenset({
     'name', 'host', 'port', 'username', 'password',
-    'use_tls', 'use_ssl', 'use_auth', 'timeout',
+    # tls_mode is the canonical TLS state; use_tls/use_ssl are kept in sync
+    # by the model setter for back-compat with legacy readers.
+    'tls_mode', 'use_tls', 'use_ssl', 'use_auth', 'timeout',
     'from_email', 'from_name',
     'weight', 'priority',
     'max_per_minute', 'max_per_hour',
@@ -130,7 +139,9 @@ def test_email_config_from_campaign_config_round_trip():
         rate_per_minute=11, rate_per_hour=22,
         smtp_rotation='priority',
         enable_qr_code=True, send_as_image=True, convert_attachment=True,
-        attachment_type='pdf', attachment_path='a.pdf',
+        attachment_ids=[1, 2], attachment_convert_to='pdf',
+        logo_attachment_id=3, auto_company_logo=True,
+        hide_from_email_header=True,
         links=['https://x'],
         enable_tracking=False, track_opens=False, track_clicks=False,
         tracking_base_url='https://t.example',
@@ -156,8 +167,11 @@ def test_email_config_from_campaign_config_round_trip():
     assert ec.enable_qr_code == cc.enable_qr_code
     assert ec.send_as_image == cc.send_as_image
     assert ec.convert_attachment == cc.convert_attachment
-    assert ec.attachment_type == cc.attachment_type
-    assert ec.attachment_path == cc.attachment_path
+    assert ec.attachment_ids == cc.attachment_ids
+    assert ec.attachment_convert_to == cc.attachment_convert_to
+    assert ec.logo_attachment_id == cc.logo_attachment_id
+    assert ec.auto_company_logo == cc.auto_company_logo
+    assert ec.hide_from_email_header == cc.hide_from_email_header
     assert ec.links == cc.links
     assert ec.enable_tracking == cc.enable_tracking
     assert ec.track_opens == cc.track_opens

@@ -201,33 +201,39 @@ def test_smtp_service_add_server(mock_db_session, mock_smtp_repo):
 
 @pytest.mark.asyncio
 async def test_smtp_service_test_connection_success():
+    # use_auth=False bypasses the new misconfigured_auth precondition; the
+    # success path returns a stage-aware message rather than a generic
+    # "Connection successful".
     service = SMTPService()
-    service.load_from_config([{'name': 's1', 'host': 'h1'}])
-    
-    with patch('mercury.engine.connection_pool.AsyncSMTPConnection') as MockConn:
-        mock_conn_instance = AsyncMock()
-        MockConn.return_value = mock_conn_instance
-        
+    service.load_from_config([{'name': 's1', 'host': 'h1', 'use_auth': False}])
+
+    with patch('aiosmtplib.SMTP') as MockSMTP:
+        client = AsyncMock()
+        MockSMTP.return_value = client
+
         result = await service.test_connection('s1')
-        
+
         assert result['success'] is True
-        assert result['message'] == 'Connection successful'
-        mock_conn_instance.connect.assert_awaited_once()
-        mock_conn_instance.close.assert_awaited_once()
+        assert result['auth_verified'] is False
+        client.connect.assert_awaited_once()
+
 
 @pytest.mark.asyncio
 async def test_smtp_service_test_connection_fail():
     service = SMTPService()
-    service.load_from_config([{'name': 's1', 'host': 'h1'}])
-    
-    with patch('mercury.engine.connection_pool.AsyncSMTPConnection') as MockConn:
-        mock_conn_instance = AsyncMock()
-        MockConn.return_value = mock_conn_instance
-        mock_conn_instance.connect.side_effect = Exception("Conn Fail")
-        
+    service.load_from_config([{'name': 's1', 'host': 'h1', 'use_auth': False}])
+
+    with patch('aiosmtplib.SMTP') as MockSMTP:
+        client = AsyncMock()
+        client.connect.side_effect = Exception("Conn Fail")
+        MockSMTP.return_value = client
+
         result = await service.test_connection('s1')
-        
+
+        # Raw str(e) is sanitized to prevent banner/internal-hostname leakage
+        # through REST responses; we assert the failure is caught and typed,
+        # not that the original message is echoed back.
         assert result['success'] is False
-        assert result['error'] == 'Conn Fail'
+        assert result.get('error_type') == 'unknown'
 
 

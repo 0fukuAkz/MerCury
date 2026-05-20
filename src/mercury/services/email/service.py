@@ -1,0 +1,514 @@
+"""Email service — composing and sending emails with all features.
+
+This module owns the ``EmailService`` orchestration class. The per-step
+helpers it delegates to live alongside in this package:
+``branding``, ``extras``, ``attachments``, ``obfuscation``.
+"""
+
+import asyncio
+import logging
+from datetime import datetime, UTC
+from typing import Any, Awaitable, Callable, Dict, List, Optional
+
+from ...engine.async_sender import AsyncEmailSender, BulkSendResult, EmailResult
+from ...engine.rate_limiter import RateLimiter, RateLimiterConfig
+from ...engine.retry_queue import RetryQueue
+from ...features.generators import AttachmentGenerator, GeneratorConfig
+from ...features.placeholders import PlaceholderProcessor
+from ...features.rotation import RotationManager, RotationStrategy
+from ...features.template_engine import TemplateEngine
+from ..dead_letter_service import DeadLetterService
+from ..smtp_service import SMTPService
+from ..tracking_service import TrackingService
+from .attachments import materialize_library_attachments
+from .branding import resolve_branding
+from .config import EmailConfig
+from .context import SendContext
+from .extras import build_extras, generate_qr_data_url
+from .obfuscation import apply_obfuscation
+
+logger = logging.getLogger(__name__)
+
+
+class EmailService:
+    """Service for composing and sending emails."""
+
+    def __init__(self, smtp_service: SMTPService):
+        """
+        Initialize email service.
+
+        Args:
+            smtp_service: SMTP service instance
+        """
+        self.smtp_service = smtp_service
+        self._sender: Optional[AsyncEmailSender] = None
+        self._rate_limiter: Optional[RateLimiter] = None
+        self._retry_queue: Optional[RetryQueue] = None
+        self._template_engine: Optional[TemplateEngine] = None
+        self._rotation_manager: Optional[RotationManager] = None
+        self._attachment_generator: Optional[AttachmentGenerator] = None
+        self._tracking_service: Optional[TrackingService] = None
+        self._dead_letter_service: Optional[DeadLetterService] = None
+        self._placeholder_processor: Optional[PlaceholderProcessor] = None
+
+        # Default configuration
+        self.config = EmailConfig()
+
+    def configure(self, config: EmailConfig):
+        """Configure email service."""
+        self.config = config
+
+        # Setup rate limiter
+        if config.rate_per_minute > 0 or config.rate_per_hour > 0:
+            self._rate_limiter = RateLimiter(RateLimiterConfig(
+                per_minute=config.rate_per_minute,
+                per_hour=config.rate_per_hour
+            ))
+
+        # Setup template engine
+        if config.template_path or config.html_content:
+            self._template_engine = TemplateEngine(
+                template_path=config.template_path,
+                html_content=config.html_content,
+                placeholders_path=config.placeholders_path
+            )
+            self._template_engine.config.enable_qr_code = config.enable_qr_code
+            self._placeholder_processor = self._template_engine.placeholder_processor
+        else:
+            # Standalone processor when no template engine is configured
+            static_ph = {}
+            if config.placeholders_path:
+                try:
+                    import json
+                    import yaml as _yaml
+                    with open(config.placeholders_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    if config.placeholders_path.endswith(('.yaml', '.yml')):
+                        static_ph = _yaml.safe_load(content) or {}
+                    else:
+                        static_ph = json.loads(content)
+                except Exception:
+                    pass
+            self._placeholder_processor = PlaceholderProcessor(static_ph)
+
+        # Setup rotation
+        self._rotation_manager = RotationManager()
+        strategy = (
+            RotationStrategy(config.rotation_strategy)
+            if config.rotation_strategy else RotationStrategy.ROUND_ROBIN
+        )
+
+        if config.subjects and len(config.subjects) > 1:
+            self._rotation_manager.register('subjects', config.subjects, strategy)
+
+        if config.from_names and len(config.from_names) >= 1:
+            self._rotation_manager.register('from_names', config.from_names, strategy)
+
+        if config.from_emails and len(config.from_emails) >= 1:
+            self._rotation_manager.register('from_emails', config.from_emails, strategy)
+
+        if config.templates and len(config.templates) > 1:
+            self._rotation_manager.register('templates', config.templates, strategy)
+
+        if config.links and len(config.links) > 0:
+            self._rotation_manager.register('links', config.links, strategy)
+
+        # Setup attachment generator
+        self._attachment_generator = AttachmentGenerator(GeneratorConfig())
+
+        # Setup tracking service
+        if config.enable_tracking:
+            self._tracking_service = TrackingService(base_url=config.tracking_base_url)
+
+        # Setup dead letter service
+        try:
+            from ...data.database import get_session_direct
+            from ...data.repositories.dead_letter import DeadLetterRepository
+            session = get_session_direct()
+            self._dead_letter_service = DeadLetterService(DeadLetterRepository(session))
+        except Exception as e:
+            logger.warning(f"Dead letter service not available: {e}")
+
+    def get_sender(self) -> AsyncEmailSender:
+        """Get or create async email sender."""
+        if self._sender is None:
+            connection_pool = self.smtp_service.get_connection_pool(
+                pool_size_per_server=max(5, self.config.concurrency // 10)
+            )
+            self._sender = AsyncEmailSender(
+                connection_pool=connection_pool,
+                rate_limiter=self._rate_limiter,
+                retry_queue=self._retry_queue,
+                default_from_email=self.config.from_email,
+                default_from_name=self.config.from_name,
+                dry_run=self.config.dry_run
+            )
+
+        return self._sender
+
+    async def send_single(
+        self,
+        recipient: str,
+        subject: Optional[str] = None,
+        html_body: Optional[str] = None,
+        from_email: Optional[str] = None,
+        from_name: Optional[str] = None,
+        reply_to: Optional[str] = None,
+        placeholders: Optional[Dict[str, Any]] = None,
+        link: Optional[str] = None,
+        attachments: Optional[List[Dict[str, Any]]] = None
+    ) -> EmailResult:
+        """
+        Send single email with all features.
+
+        Args:
+            recipient: Recipient email address
+            subject: Email subject (uses rotation if not provided)
+            html_body: HTML content (uses template if not provided)
+            from_email: Sender email
+            from_name: Sender name (uses rotation if not provided)
+            reply_to: Reply-to address
+            placeholders: Custom placeholder values
+            link: Link for QR code and {{link}} placeholder
+            attachments: Pre-prepared attachments
+
+        Returns:
+            EmailResult with send status
+        """
+        placeholders = placeholders or {}
+        placeholders['email'] = recipient
+
+        # Resolve rotating header values (caller wins if explicit).
+        subject = self._resolve_rotated('subjects', subject, self.config.subject)
+        from_name = self._resolve_rotated('from_names', from_name, self.config.from_name)
+        from_email = self._resolve_rotated('from_emails', from_email, self.config.from_email)
+
+        ctx = SendContext(
+            recipient=recipient,
+            placeholders=placeholders,
+            link=link,
+            config=self.config,
+        )
+
+        # Build the substitution-extras dicts up front (qr + branding + link/url).
+        qr_data_url = generate_qr_data_url(ctx)
+        branding = resolve_branding(ctx)
+        body_extras, header_extras = build_extras(ctx, qr_data_url, branding)
+
+        # Render body
+        if html_body is None and self._template_engine:
+            # Check for template rotation
+            if self._rotation_manager and self._rotation_manager.is_registered('templates'):
+                template_path = self._rotation_manager.get_next('templates')
+                self._template_engine.load_template(template_path)
+
+            html_body = self._template_engine.render(
+                recipient=recipient,
+                recipient_data=placeholders,
+                extra_placeholders=body_extras,
+                qr_code_data_url=qr_data_url,
+                link=link,
+            )
+        elif html_body and self._placeholder_processor:
+            if '{{qr_code' in html_body and not qr_data_url:
+                logger.warning(
+                    "Template contains {{qr_code}} but "
+                    f"enable_qr_code={self.config.enable_qr_code}, link={link!r}; "
+                    "rendering as empty string"
+                )
+            html_body = self._placeholder_processor.process(html_body, placeholders, body_extras)
+
+        if not html_body:
+            html_body = f"<p>Email to {recipient}</p>"
+
+        # Inject tracking if enabled
+        tracking_email_id = None
+        if self._tracking_service and self.config.enable_tracking:
+            tracking_email_id = self._tracking_service.generate_email_id(recipient)
+            html_body = self._tracking_service.inject_tracking(
+                html_body,
+                email_id=tracking_email_id,
+                recipient=recipient,
+                track_opens=self.config.track_opens,
+                track_clicks=self.config.track_clicks
+            )
+
+        # Apply placeholders to headers. Subject, From, Reply-To all use
+        # header_extras (link/url present; qr_code blanked so accidental
+        # references render empty, not as raw markup). reply_to goes
+        # through the same path as the other headers — earlier code
+        # skipped it entirely and {{var}} silently leaked into the inbox.
+        if self._placeholder_processor:
+            if subject:
+                subject = self._placeholder_processor.process(subject, placeholders, header_extras)
+            if from_name and '{{' in from_name:
+                from_name = self._placeholder_processor.process(from_name, placeholders, header_extras)
+            if from_email and '{{' in from_email:
+                from_email = self._placeholder_processor.process(from_email, placeholders, header_extras)
+            if reply_to and '{{' in reply_to:
+                reply_to = self._placeholder_processor.process(reply_to, placeholders, header_extras)
+
+        # Library attachment materialization
+        library_files = materialize_library_attachments(
+            ctx, body_extras, header_extras,
+            self._placeholder_processor, self._attachment_generator,
+        )
+        if library_files:
+            attachments = (attachments or []) + library_files
+
+        # Convert whole body to image (after placeholders + tracking)
+        if self.config.send_as_image and self._attachment_generator:
+            image_url = self._attachment_generator.image.generate_data_url(html_body)
+            html_body = f'<img src="{image_url}" alt="Email" style="max-width:100%;" />'
+
+        # Apply encoding/obfuscation from global settings
+        html_body, force_base64 = apply_obfuscation(html_body, attachments)
+
+        # Send email
+        sender = self.get_sender()
+
+        logger.info(
+            "[attach] handing off to sender: " + str([
+                {
+                    'filename': a.get('filename'),
+                    'content_type': a.get('content_type'),
+                    'data_type': type(a.get('data')).__name__,
+                    'data_len': len(a.get('data') or b''),
+                } for a in (attachments or [])
+            ])
+        )
+
+        # Phrase-only From: header — when hide_from_email_header is on,
+        # pass an empty from_email so the engine's `formataddr((name, ''))`
+        # produces just the display name. The SMTP envelope (MAIL FROM)
+        # still uses the connection's authenticated user, set by the
+        # underlying aiosmtplib send path.
+        resolved_from_email = '' if self.config.hide_from_email_header else (
+            from_email or self.config.from_email
+        )
+
+        result = await sender.send_email(
+            recipient=recipient,
+            subject=subject,
+            html_body=html_body,
+            from_email=resolved_from_email,
+            from_name=from_name,
+            reply_to=reply_to or self.config.reply_to,
+            attachments=attachments,
+            correlation_id=tracking_email_id,
+            force_base64_body=force_base64
+        )
+
+        # On failure: add to dead letter queue. Skip for server-side errors
+        # (auth / connection) — these are infrastructure problems, not
+        # recipient-level rejections.
+        _SERVER_ERROR_TYPES = {'authentication_error', 'connection_error'}
+        if not result.success and result.error:
+            if self._dead_letter_service and result.error_type not in _SERVER_ERROR_TYPES:
+                try:
+                    self._dead_letter_service.add_dead_letter(
+                        recipient=recipient,
+                        subject=subject or '',
+                        html_body=html_body or '',
+                        from_email=from_email or self.config.from_email,
+                        error_type=result.error_type or 'send_failure',
+                        error_message=result.error or 'Unknown error',
+                        from_name=from_name,
+                        smtp_server=result.smtp_server
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to add dead letter: {e}")
+
+        return result
+
+    def _resolve_rotated(
+        self, key: str, explicit: Optional[str], fallback: str
+    ) -> str:
+        """Pick a rotated value when caller didn't supply one.
+
+        Caller-provided value always wins; otherwise the rotation manager
+        rotates if registered for ``key``; otherwise we fall back to the
+        configured static value.
+        """
+        if explicit is not None:
+            return explicit
+        if self._rotation_manager and self._rotation_manager.is_registered(key):
+            return self._rotation_manager.get_next(key, fallback)
+        return fallback
+
+    def _enrich_recipients_with_last_event(
+        self, recipients: List[Dict[str, Any]]
+    ) -> None:
+        """Mutate ``recipients`` in place to fill missing ip/user_agent.
+
+        For each recipient WITHOUT ``ip``/``ip_address`` or
+        ``user_agent``/``ua`` already set, look up the most-recent open or
+        click for that email address and inject the IP+UA so the placeholder
+        engine can resolve {{location.*}} and {{ua.*}}.
+
+        Recipients that already carry those columns (CSV-supplied) are left
+        alone — caller-provided data wins over historical inference.
+        """
+        from ...data.database import session_scope
+        from ...data.repositories.logs import LogRepository
+
+        # Collect recipients that actually need enrichment — avoid the DB
+        # roundtrip if every row already has ip/ua from CSV.
+        needs: List[str] = []
+        for r in recipients:
+            email = (r or {}).get('email')
+            if not email:
+                continue
+            has_ip = bool(r.get('ip') or r.get('ip_address'))
+            has_ua = bool(r.get('user_agent') or r.get('ua'))
+            if not (has_ip and has_ua):
+                needs.append(email)
+
+        if not needs:
+            return
+
+        with session_scope() as session:
+            repo = LogRepository(session)
+            last_events = repo.get_last_events_bulk(needs)
+
+        if not last_events:
+            return
+
+        for r in recipients:
+            email = r.get('email')
+            ev = last_events.get(email) if email else None
+            if not ev:
+                continue
+            ip, ua = ev
+            if ip and not (r.get('ip') or r.get('ip_address')):
+                r['ip'] = ip
+            if ua and not (r.get('user_agent') or r.get('ua')):
+                r['user_agent'] = ua
+
+    async def send_bulk(
+        self,
+        recipients: List[Dict[str, Any]],
+        subject: Optional[str] = None,
+        html_template: Optional[str] = None,
+        progress_callback: Optional[Callable[[Dict[str, Any]], Awaitable[None]]] = None
+    ) -> BulkSendResult:
+        """
+        Send bulk emails to multiple recipients.
+
+        Args:
+            recipients: List of recipient dicts with 'email' and placeholders
+            subject: Subject template (uses rotation subjects if not provided)
+            html_template: HTML template (uses configured template if not provided)
+            progress_callback: Async callback for progress updates
+
+        Returns:
+            BulkSendResult with statistics
+        """
+        start_time = datetime.now(UTC)
+        total = len(recipients)
+
+        # Backfill ip/user_agent from prior tracking events. Cheap when the
+        # recipient already has those columns (we don't overwrite); useful
+        # when they don't, so {{location.*}} / {{ua.*}} can resolve. One
+        # bulk query rather than N — see LogRepository.get_last_events_bulk.
+        try:
+            self._enrich_recipients_with_last_event(recipients)
+        except Exception as e:
+            # Enrichment is best-effort; never block a send on it.
+            logger.warning(f"Recipient geo/UA enrichment failed: {e}")
+
+        # Use semaphore for concurrency
+        semaphore = asyncio.Semaphore(self.config.concurrency)
+
+        async def send_wrapper(index: int, recipient_data: Dict[str, Any]) -> EmailResult:
+            async with semaphore:
+                # Get link rotation if available
+                link_to_use = None
+                if self._rotation_manager and self._rotation_manager.is_registered('links'):
+                    link_to_use = self._rotation_manager.get_next('links')
+
+                # Use send_single to ensure full feature support (rotation, tracking, etc.)
+                result = await self.send_single(
+                    recipient=recipient_data['email'],
+                    subject=subject,  # Passes None implies use config/rotation
+                    html_body=None,   # Force template rendering
+                    placeholders=recipient_data,
+                    link=link_to_use
+                )
+
+                if progress_callback:
+                    await progress_callback({
+                        'index': index,
+                        'total': total,
+                        'recipient': recipient_data['email'],
+                        'success': result.success,
+                        'percent': round((index + 1) / total * 100, 1)
+                    })
+
+                return result
+
+        # Create tasks
+        tasks = [send_wrapper(i, r) for i, r in enumerate(recipients)]
+
+        # Execute
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Process results
+        processed_results = []
+        success_count = 0
+
+        for r in results:
+            if isinstance(r, Exception):
+                processed_results.append(EmailResult(
+                    success=False,
+                    recipient="unknown",
+                    correlation_id=None,
+                    timestamp=datetime.now(UTC),
+                    error=str(r),
+                    error_type="exception"
+                ))
+            else:
+                processed_results.append(r)
+                if r.success:
+                    success_count += 1
+
+        end_time = datetime.now(UTC)
+        duration = (end_time - start_time).total_seconds()
+
+        return BulkSendResult(
+            total=total,
+            success=success_count,
+            failed=total - success_count,
+            duration_seconds=duration,
+            emails_per_second=total / duration if duration > 0 else 0,
+            start_time=start_time,
+            end_time=end_time,
+            results=processed_results
+        )
+
+    def get_statistics(self) -> Dict[str, Any]:
+        """Get sending statistics."""
+        stats = {
+            'config': {
+                'from_email': self.config.from_email,
+                'from_name': self.config.from_name,
+                'dry_run': self.config.dry_run,
+                'concurrency': self.config.concurrency
+            }
+        }
+
+        if self._sender:
+            stats['sender'] = self._sender.get_stats()
+
+        if self._rotation_manager:
+            stats['rotation'] = self._rotation_manager.get_statistics()
+
+        return stats
+
+    async def close(self):
+        """Clean up resources."""
+        if self._retry_queue:
+            await self._retry_queue.stop()
+
+        await self.smtp_service.close()
+        self._sender = None

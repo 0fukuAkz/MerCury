@@ -125,51 +125,59 @@ class TestInitializeFullPath:
 # AppContext.emit_progress  (lines 67-68)
 # ---------------------------------------------------------------------------
 
+# NOTE: The emit_* methods now route through the cross-thread bridge in
+# mercury.web.extensions (queue_emit) rather than calling socketio.emit
+# directly. The eventlet bridge greenlet drains the queue and emits on
+# hub — this makes the call safe from any thread (asyncio loop, campaign
+# thread, etc.). These tests pin the contract that AppContext forwards
+# to that bridge, not the now-obsolete direct-emit path.
+
 class TestEmitProgress:
     def test_emit_progress_with_socketio(self):
-        """Line 68: socketio.emit should be called."""
-        mock_sio = MagicMock()
-        ctx = _fresh_context(socketio=mock_sio)
-        ctx.emit_progress({"percent": 50})
-        mock_sio.emit.assert_called_once_with("campaign_progress", {"percent": 50})
+        ctx = _fresh_context(socketio=MagicMock())
+        with patch("mercury.web.extensions.queue_emit") as mock_queue:
+            ctx.emit_progress({"percent": 50})
+        mock_queue.assert_called_once_with("campaign_progress", {"percent": 50})
 
     def test_emit_progress_without_socketio(self):
-        """Line 67: when socketio is None nothing should be called."""
         ctx = _fresh_context(socketio=None)
-        # Should not raise
-        ctx.emit_progress({"percent": 50})
+        # Should not raise even when no socketio is wired up.
+        with patch("mercury.web.extensions.queue_emit"):
+            ctx.emit_progress({"percent": 50})
 
 
 # ---------------------------------------------------------------------------
-# AppContext.emit_complete  (lines 72-73)
+# AppContext.emit_complete
 # ---------------------------------------------------------------------------
 
 class TestEmitComplete:
     def test_emit_complete_with_socketio(self):
-        mock_sio = MagicMock()
-        ctx = _fresh_context(socketio=mock_sio)
-        ctx.emit_complete({"status": "done"})
-        mock_sio.emit.assert_called_once_with("campaign_complete", {"status": "done"})
+        ctx = _fresh_context(socketio=MagicMock())
+        with patch("mercury.web.extensions.queue_emit") as mock_queue:
+            ctx.emit_complete({"status": "done"})
+        mock_queue.assert_called_once_with("campaign_complete", {"status": "done"})
 
     def test_emit_complete_without_socketio(self):
         ctx = _fresh_context(socketio=None)
-        ctx.emit_complete({"status": "done"})  # no error expected
+        with patch("mercury.web.extensions.queue_emit"):
+            ctx.emit_complete({"status": "done"})  # no error expected
 
 
 # ---------------------------------------------------------------------------
-# AppContext.emit_event  (lines 77-78)
+# AppContext.emit_event
 # ---------------------------------------------------------------------------
 
 class TestEmitEvent:
     def test_emit_event_with_socketio(self):
-        mock_sio = MagicMock()
-        ctx = _fresh_context(socketio=mock_sio)
-        ctx.emit_event("my_event", {"key": "val"})
-        mock_sio.emit.assert_called_once_with("my_event", {"key": "val"})
+        ctx = _fresh_context(socketio=MagicMock())
+        with patch("mercury.web.extensions.queue_emit") as mock_queue:
+            ctx.emit_event("my_event", {"key": "val"})
+        mock_queue.assert_called_once_with("my_event", {"key": "val"})
 
     def test_emit_event_without_socketio(self):
         ctx = _fresh_context(socketio=None)
-        ctx.emit_event("my_event", {"key": "val"})  # no error expected
+        with patch("mercury.web.extensions.queue_emit"):
+            ctx.emit_event("my_event", {"key": "val"})  # no error expected
 
 
 # ---------------------------------------------------------------------------

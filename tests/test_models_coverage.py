@@ -132,15 +132,25 @@ class TestSMTPServerModel:
             assert server._password == "encrypted_abc"
             mock_service.encrypt.assert_called_once_with("secret")
 
-    def test_password_setter_encryption_failure_stores_raw(self):
-        """Lines 93-95: encryption failure stores value as-is."""
+    def test_password_setter_encryption_failure_raises(self):
+        """Encryption failure must raise — never silently persist plaintext.
+
+        Older behavior fell back to storing the raw value, which silently
+        leaked secrets into the DB if the encryption service was misconfigured.
+        The setter now raises RuntimeError so the API layer can surface the
+        error to the operator instead.
+        """
+        import pytest
+
         server = SMTPServer()
         with patch(
             "mercury.security.encryption.get_encryption_service",
             side_effect=Exception("no key"),
         ):
-            server.password = "fallback_plain"
-            assert server._password == "fallback_plain"
+            with pytest.raises(RuntimeError, match="encryption failed"):
+                server.password = "fallback_plain"
+            # Ensure we did not silently persist plaintext on the failure path.
+            assert server._password in (None, "")
 
     def test_success_rate_zero_total(self):
         """Lines 100-102: 0 total → 100.0%."""

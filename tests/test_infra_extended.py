@@ -53,33 +53,38 @@ class TestSMTPServiceExtended:
 
     @pytest.mark.asyncio
     async def test_test_connection_success(self):
+        # use_auth=False so the new misconfigured_auth precondition doesn't
+        # short-circuit before we reach the mocked aiosmtplib client.
         service = SMTPService()
-        service.load_from_config([{'name': 's1', 'host': 'h1'}])
-        
-        with patch('mercury.engine.connection_pool.AsyncSMTPConnection') as MockConn:
-            conn_instance = AsyncMock()
-            MockConn.return_value = conn_instance
-            
+        service.load_from_config([{'name': 's1', 'host': 'h1', 'use_auth': False}])
+
+        with patch('aiosmtplib.SMTP') as MockSMTP:
+            client = AsyncMock()
+            MockSMTP.return_value = client
+
             result = await service.test_connection('s1')
-            
+
             assert result['success'] is True
-            conn_instance.connect.assert_awaited_once()
-            conn_instance.close.assert_awaited_once()
+            client.connect.assert_awaited_once()
+            client.ehlo.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_test_connection_failure(self):
         service = SMTPService()
-        service.load_from_config([{'name': 's1', 'host': 'h1'}])
-        
-        with patch('mercury.engine.connection_pool.AsyncSMTPConnection') as MockConn:
-            conn_instance = AsyncMock()
-            conn_instance.connect.side_effect = Exception("Connection failed")
-            MockConn.return_value = conn_instance
-            
+        service.load_from_config([{'name': 's1', 'host': 'h1', 'use_auth': False}])
+
+        with patch('aiosmtplib.SMTP') as MockSMTP:
+            client = AsyncMock()
+            client.connect.side_effect = Exception("Connection failed")
+            MockSMTP.return_value = client
+
             result = await service.test_connection('s1')
-            
+
+            # The new service sanitizes raw str(e) before returning (banners
+            # / internal hostnames must not leak through REST). We only assert
+            # the failure was caught and reported.
             assert result['success'] is False
-            assert "Connection failed" in result['error']
+            assert result.get('error_type') == 'unknown'
 
     @pytest.mark.asyncio
     async def test_test_all_connections(self):

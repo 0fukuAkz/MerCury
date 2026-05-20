@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import threading
 from typing import Optional, Dict, Any, List, Tuple
 from datetime import datetime, UTC
 from dataclasses import dataclass, field
@@ -470,13 +471,22 @@ class AsyncConnectionPool:
 # into running campaigns — without this, a PUT /api/smtp/<name> only
 # updates the DB row while in-flight pools keep authenticating with the
 # old password. Registered in __init__; unregistered in close_all.
+#
+# The lock guards every mutation/read. Necessary because pools can be
+# created on the campaign event-loop thread while close_all may run on
+# a different thread (Flask request handler invalidating a server, or
+# the shared background loop tearing things down at shutdown). list()
+# is atomic in CPython but is not a guarantee we want to rely on under
+# the eventlet + threading + asyncio mix this codebase tolerates.
 _ACTIVE_POOLS: "list[SMTPConnectionPool]" = []
+_ACTIVE_POOLS_LOCK = threading.Lock()
 
 
 def iter_active_pools() -> "list[SMTPConnectionPool]":
     """Snapshot the active-pool registry for callers that want to iterate
     safely while pools may register/unregister concurrently."""
-    return list(_ACTIVE_POOLS)
+    with _ACTIVE_POOLS_LOCK:
+        return list(_ACTIVE_POOLS)
 
 
 class SMTPConnectionPool:
@@ -505,7 +515,8 @@ class SMTPConnectionPool:
                 pool_size=pool_size_per_server
             )
 
-        _ACTIVE_POOLS.append(self)
+        with _ACTIVE_POOLS_LOCK:
+            _ACTIVE_POOLS.append(self)
 
     async def invalidate_server(self, name: str, new_config: Optional[SMTPServerConfig] = None) -> bool:
         """Refresh a single server's connections after a config update.
@@ -676,10 +687,11 @@ class SMTPConnectionPool:
         """Close all pools."""
         for pool in self.pools.values():
             await pool.close_all()
-        try:
-            _ACTIVE_POOLS.remove(self)
-        except ValueError:
-            pass
+        with _ACTIVE_POOLS_LOCK:
+            try:
+                _ACTIVE_POOLS.remove(self)
+            except ValueError:
+                pass
 
     def get_status(self) -> Dict[str, Any]:
         """Get pool status keyed by server name."""

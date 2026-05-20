@@ -135,30 +135,32 @@ def test_docx_generator_template():
 # --- ImageGenerator ---
 
 def test_image_generator():
+    # ImageGenerator prefers WeasyPrint+pdf2image and only falls back to the
+    # PIL plain-text path when that pipeline fails. We force the fallback by
+    # making WeasyPrint raise on import, so the mocks against PIL actually
+    # get exercised.
     generator = ImageGenerator()
-    
-    with patch('PIL.Image.new') as MockNew, \
+
+    with patch.dict('sys.modules', {'weasyprint': None}), \
+         patch('PIL.Image.new') as MockNew, \
          patch('PIL.ImageDraw.Draw') as MockDraw, \
-         patch('PIL.ImageFont.load_default') as MockFont:
-         
+         patch('PIL.ImageFont.load_default'):
+
         mock_img = Mock()
         MockNew.return_value = mock_img
-        
+
         mock_draw = Mock()
         MockDraw.return_value = mock_draw
-        
-        # Mock textbbox to return tuple (x0, y0, x1, y1)
-        # Assuming width 800, padding 20. 
-        # Return small box so it fits
+
+        # textbbox returns (x0, y0, x1, y1); small box so it fits the canvas.
         mock_draw.textbbox.return_value = (0, 0, 100, 20)
-        
-        # Mock save
+
         def mock_save(buffer, format, quality):
             buffer.write(b'image-bytes')
         mock_img.save.side_effect = mock_save
-        
+
         result = generator.generate_from_html("<p>Text</p>")
-        
+
         assert result == b'image-bytes'
 
 # --- AttachmentGenerator ---
