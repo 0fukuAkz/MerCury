@@ -120,6 +120,12 @@ def api_add_smtp():
             use_tls=(tls_mode == 'starttls'),
             use_ssl=(tls_mode == 'ssl'),
             tls_mode=tls_mode,
+            # Declare which address this server is authorized to send From.
+            # When set on multiple servers, the connection pool routes by
+            # From-ownership so a rotated From doesn't get routed through a
+            # server that doesn't own it (gateways reject with 5.7.0).
+            from_email=(data.get('from_email') or '').strip(),
+            from_name=(data.get('from_name') or '').strip(),
         )
     except RuntimeError as e:
         # Password encryption failure now raises (was a silent plaintext
@@ -192,6 +198,10 @@ def api_update_smtp(name):
             server.port = int(data['port'])
         if 'username' in data:
             server.username = data['username']
+        if 'from_email' in data:
+            server.from_email = (data.get('from_email') or '').strip()
+        if 'from_name' in data:
+            server.from_name = (data.get('from_name') or '').strip()
         if 'password' in data and data['password']:
             try:
                 server.password = data['password']

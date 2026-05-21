@@ -29,6 +29,10 @@ class EmailConfig:
     # the display name. Phrase-only header per RFC 5322 — strict MTAs
     # may reject.
     hide_from_email_header: bool = False
+    # Include the "<p>Email to {recipient}</p>" fallback paragraph when
+    # no template/html_content/html_body produces a body. Default True
+    # preserves historical behavior; disable for pixel-only / ping sends.
+    include_default_body: bool = True
 
     # Features
     enable_qr_code: bool = False
@@ -76,6 +80,7 @@ class EmailConfig:
             logo_attachment_id=getattr(config, 'logo_attachment_id', None),
             auto_company_logo=bool(getattr(config, 'auto_company_logo', False)),
             hide_from_email_header=bool(getattr(config, 'hide_from_email_header', False)),
+            include_default_body=bool(getattr(config, 'include_default_body', True)),
             subjects=config.subjects,
             from_names=config.from_names,
             from_emails=config.from_emails,

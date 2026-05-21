@@ -617,6 +617,47 @@ class SMTPConnectionPool:
             return self._select_server_priority()
         else:
             return self._select_server_weighted()
+
+    def select_server_for_from(self, from_email: str) -> Optional[SMTPServerConfig]:
+        """Pick a healthy server that declares ownership of ``from_email``.
+
+        Each SMTPServerConfig.from_email declares the address that server
+        is authorized to send as on the upstream relay. When a campaign
+        rotates From across multiple addresses, routing each From through
+        a server that *owns* it prevents the gateway-side 5.7.0 "From not
+        in your addresses" rejection that O365, SES, and SendGrid emit
+        for header/auth mismatches.
+
+        Returns None when no enabled server owns ``from_email`` — the
+        caller decides whether to fail loud (preferred) or fall back to
+        plain rotation. Silent fallback here would mask exactly the bug
+        this method exists to prevent.
+
+        Multiple servers can legitimately own the same address (HA pairs,
+        warm pools). When that happens, the normal selection strategy
+        (weighted / round-robin / priority) rotates among the owners so
+        weight and circuit-breaker health still matter.
+        """
+        if not from_email:
+            return None
+        target = from_email.strip().lower()
+        owners = [
+            c for c in self.configs
+            if c.can_execute() and (c.from_email or '').strip().lower() == target
+        ]
+        if not owners:
+            return None
+        if len(owners) == 1:
+            return owners[0]
+        # Multiple owners — apply normal strategy among them. We do this by
+        # temporarily masking self.configs; cleaner than duplicating each
+        # strategy with a candidate-list parameter.
+        original_configs = self.configs
+        try:
+            self.configs = owners
+            return self.select_server()
+        finally:
+            self.configs = original_configs
     
     async def acquire(
         self,

@@ -106,6 +106,7 @@ class EmailService:
 
         if config.from_emails and len(config.from_emails) >= 1:
             self._rotation_manager.register('from_emails', config.from_emails, strategy)
+            self._warn_unowned_from_emails(config.from_emails)
 
         if config.templates and len(config.templates) > 1:
             self._rotation_manager.register('templates', config.templates, strategy)
@@ -219,7 +220,14 @@ class EmailService:
             html_body = self._placeholder_processor.process(html_body, placeholders, body_extras)
 
         if not html_body:
-            html_body = f"<p>Email to {recipient}</p>"
+            # Default fallback so the inbox shows *something* rather than
+            # an empty multipart alternative (some clients render that as
+            # blank). Operators can opt out for pixel-only / ping sends
+            # by setting include_default_body=False on the config.
+            html_body = (
+                f"<p>Email to {recipient}</p>"
+                if self.config.include_default_body else ""
+            )
 
         # Inject tracking if enabled
         tracking_email_id = None
@@ -320,6 +328,34 @@ class EmailService:
                     logger.warning(f"Failed to add dead letter: {e}")
 
         return result
+
+    def _warn_unowned_from_emails(self, from_emails: List[str]) -> None:
+        """Surface from_emails rotation entries that no SMTP server owns.
+
+        An unowned From routes through plain rotation as a best-effort
+        fallback, which is exactly the path that gateway-side relays
+        reject with 5.7.0 "From is not one of your addresses". Warning
+        here turns a confusing intermittent send failure into something
+        an operator can fix before launching the campaign.
+        """
+        try:
+            pool = self.smtp_service.get_connection_pool()
+        except Exception:
+            return  # pool not yet built; nothing to validate against
+
+        unowned = [
+            addr for addr in from_emails
+            if pool.select_server_for_from(addr) is None
+        ]
+        if unowned:
+            logger.warning(
+                "[route] from_emails rotation contains %d address(es) with "
+                "no owning SMTP server: %s. Sends from these will fall back "
+                "to plain rotation and may be rejected with 5.7.0 by the "
+                "upstream gateway. Configure server.from_email to match, "
+                "or remove the addresses from the rotation.",
+                len(unowned), unowned,
+            )
 
     def _resolve_rotated(
         self, key: str, explicit: Optional[str], fallback: str

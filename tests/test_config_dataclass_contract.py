@@ -41,6 +41,8 @@ CAMPAIGN_CONFIG_FIELDS = frozenset({
     'logo_attachment_id', 'auto_company_logo',
     # Header-stripping toggle.
     'hide_from_email_header',
+    # Empty-body fallback toggle.
+    'include_default_body',
     'links',
     'placeholders', 'placeholders_path',
     'enable_tracking', 'track_opens', 'track_clicks', 'tracking_base_url',
@@ -51,7 +53,7 @@ EMAIL_CONFIG_FIELDS = frozenset({
     'template_path', 'placeholders_path', 'html_content',
     'attachment_ids', 'attachment_convert_to',
     'logo_attachment_id', 'auto_company_logo',
-    'hide_from_email_header',
+    'hide_from_email_header', 'include_default_body',
     'enable_qr_code', 'send_as_image', 'convert_attachment',
     'enable_tracking', 'track_opens', 'track_clicks', 'tracking_base_url',
     'dry_run', 'concurrency', 'rate_per_minute', 'rate_per_hour',
@@ -142,6 +144,7 @@ def test_email_config_from_campaign_config_round_trip():
         attachment_ids=[1, 2], attachment_convert_to='pdf',
         logo_attachment_id=3, auto_company_logo=True,
         hide_from_email_header=True,
+        include_default_body=False,
         links=['https://x'],
         enable_tracking=False, track_opens=False, track_clicks=False,
         tracking_base_url='https://t.example',
@@ -172,6 +175,7 @@ def test_email_config_from_campaign_config_round_trip():
     assert ec.logo_attachment_id == cc.logo_attachment_id
     assert ec.auto_company_logo == cc.auto_company_logo
     assert ec.hide_from_email_header == cc.hide_from_email_header
+    assert ec.include_default_body == cc.include_default_body
     assert ec.links == cc.links
     assert ec.enable_tracking == cc.enable_tracking
     assert ec.track_opens == cc.track_opens

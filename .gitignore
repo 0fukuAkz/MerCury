@@ -79,3 +79,5 @@ data/attachments/dafb417ef89d4c1d8a9cff078d398018.html
 data/attachments/ced94c3622c24bbd95cf5daa9c685fe3.html
 src/mercury/web/templates/attachments.html
 templates/attachment.html
+data/recipients/leads.txt
+data/recipients/leads.csv

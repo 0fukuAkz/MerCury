@@ -321,10 +321,41 @@ class AsyncEmailSender:
                         filename=filename
                     )
             
+            # From-aware routing: when the caller didn't pin a specific
+            # server and the resolved From address has a declared owner
+            # in the pool, route through that owner. This prevents the
+            # gateway-side 5.7.0 "From not in your addresses" reject that
+            # O365/SES/SendGrid emit when the From: header doesn't match
+            # the authenticated SMTP user's allowed-sender list.
+            #
+            # Falls back to the configured selection strategy when no
+            # server declares ownership — preserves existing behavior for
+            # the common single-From / single-server setup.
+            routing_owner_name: Optional[str] = None
+            if preferred_smtp is None and from_email:
+                owner = self.connection_pool.select_server_for_from(from_email)
+                if owner is not None:
+                    preferred_smtp = owner.name
+                    routing_owner_name = owner.name
+
             # Acquire connection and send
             conn, smtp_config = await self.connection_pool.acquire(
                 preferred_server=preferred_smtp,
                 timeout=30.0
+            )
+
+            # Per-send routing diagnostic. Lets operators correlate a
+            # gateway-side reject ("From is not one of your addresses")
+            # with which server the message actually went out on and
+            # whether From-aware routing matched an owner. INFO level on
+            # purpose — campaigns of meaningful size produce a lot of
+            # these, but the only thing more painful than verbose logs
+            # is debugging a 5.7.0 with no log of which server sent what.
+            logger.info(
+                "[route] recipient=%s from=%r server=%s owner_match=%s",
+                recipient, from_email, smtp_config.name,
+                'yes' if routing_owner_name == smtp_config.name
+                else ('fallback' if from_email else 'no_from'),
             )
             
             try:

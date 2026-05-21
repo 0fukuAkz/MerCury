@@ -36,6 +36,10 @@
         font-size: 0.75rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 0.3rem;
     }
     .field-label .req { color: var(--neon-pink); }
+    .field-label .field-hint {
+        font-weight: 400;
+        opacity: 0.65;
+    }
     .field-input {
         width: 100%;
         padding: 0.55rem 0.85rem;
@@ -229,6 +233,17 @@
                     <option value="none">None — plain SMTP</option>
                 </select>
             </div>
+            <div>
+                <div class="field-label">
+                    From Email
+                    <span class="field-hint">— the address this server is authorized to send as. Used for From-routing when you rotate senders.</span>
+                </div>
+                <input class="field-input" type="email" name="from_email" placeholder="alice@example.com" autocomplete="off">
+            </div>
+            <div>
+                <div class="field-label">From Name</div>
+                <input class="field-input" type="text" name="from_name" placeholder="Alice" autocomplete="off">
+            </div>
         </div>
         <div style="display:flex;gap:0.75rem;margin-top:1rem">
             <button type="submit" class="btn btn-primary" id="add-btn">
@@ -345,6 +360,8 @@
                 var row = document.createElement('tr');
                 row.dataset.name = s.name;
                 row.dataset.username = s.username || '';
+                row.dataset.fromEmail = s.from_email || '';
+                row.dataset.fromName = s.from_name || '';
                 row.dataset.hasPassword = s.has_password ? '1' : '';
 
                 var _mode = s.tls_mode || (s.use_ssl ? 'ssl' : (s.use_tls ? 'starttls' : 'none'));
@@ -436,12 +453,14 @@
         btn.textContent = 'Adding…';
 
         var data = {
-            name:     name,
-            host:     host,
-            port:     parseInt(form.elements['port'].value) || 587,
-            username: form.elements['username'].value.trim(),
-            password: form.elements['password'].value,
-            tls_mode: form.elements['tls_mode'].value,
+            name:       name,
+            host:       host,
+            port:       parseInt(form.elements['port'].value) || 587,
+            username:   form.elements['username'].value.trim(),
+            password:   form.elements['password'].value,
+            tls_mode:   form.elements['tls_mode'].value,
+            from_email: (form.elements['from_email'] && form.elements['from_email'].value.trim()) || '',
+            from_name:  (form.elements['from_name']  && form.elements['from_name'].value.trim())  || '',
         };
 
         try {
@@ -553,6 +572,8 @@
         var currentMode = tlsText === 'SSL/TLS' ? 'ssl'
                         : (tlsText === 'STARTTLS' ? 'starttls' : 'none');
         var currentUsername = mainRow.dataset.username || '';
+        var currentFromEmail = mainRow.dataset.fromEmail || '';
+        var currentFromName = mainRow.dataset.fromName || '';
         var pwPlaceholder = mainRow.dataset.hasPassword ? '•••••••• (leave blank to keep)' : 'not configured';
 
         var editRow = document.createElement('tr');
@@ -589,6 +610,16 @@
             '    <option value="ssl"' + (currentMode === 'ssl' ? ' selected' : '') + '>SSL/TLS implicit</option>',
             '    <option value="none"' + (currentMode === 'none' ? ' selected' : '') + '>None — plain SMTP</option>',
             '  </select>',
+            '</div>',
+
+            '<div>',
+            '  <div class="field-label">From Email <span class="field-hint">— used for From-routing</span></div>',
+            '  <input class="field-input" name="from_email" type="email" value="' + esc(currentFromEmail) + '" placeholder="alice@example.com" autocomplete="off">',
+            '</div>',
+
+            '<div>',
+            '  <div class="field-label">From Name</div>',
+            '  <input class="field-input" name="from_name" value="' + esc(currentFromName) + '" placeholder="Alice" autocomplete="off">',
             '</div>',
 
             '</div>',
@@ -629,6 +660,10 @@
         var password = form.elements['password'].value;
         data.username = username;  // always send so clearing the field clears the stored value
         if (password) data.password = password;
+        // Always send from_email/from_name so clearing the input clears the
+        // stored value — matches the username convention above.
+        if (form.elements['from_email']) data.from_email = form.elements['from_email'].value.trim();
+        if (form.elements['from_name'])  data.from_name  = form.elements['from_name'].value.trim();
 
         try {
             var res = await fetch('/api/smtp/' + encodeURIComponent(name), {

@@ -91,7 +91,12 @@ class CampaignConfig:
     # without <addr>). Recipients see only the display name even when
     # expanding header details. Strict MTAs may reject — see UI hint.
     hide_from_email_header: bool = False
-    
+    # When True (default) AND no template/html_content/html_body is
+    # supplied, the engine substitutes a minimal "<p>Email to
+    # {recipient}</p>" body so the message isn't blank. Disable when
+    # you intentionally want an empty body (ping / pixel-only sends).
+    include_default_body: bool = True
+
     # Links
     links: Optional[List[str]] = None
     
@@ -257,6 +262,10 @@ class CampaignService:
                 extra_settings['auto_company_logo'] = True
             if config.hide_from_email_header:
                 extra_settings['hide_from_email_header'] = True
+            # Default is True; only persist when operator explicitly
+            # opted out so the absence-of-key path stays "include".
+            if not config.include_default_body:
+                extra_settings['include_default_body'] = False
             # Persist recipient-list flags so they round-trip on edit and
             # on every subsequent campaign run (events.py rebuilds the
             # config from settings — without this, runs always default
@@ -701,7 +710,10 @@ def load_campaign_from_yaml(yaml_path: str) -> CampaignConfig:
         ),
         auto_company_logo=bool(features.get('auto_company_logo', False)),
         hide_from_email_header=bool(features.get('hide_from_email_header', False)),
-        
+        # Round-trip default True: any saved campaign without the key
+        # behaves as "include", matching the dataclass default.
+        include_default_body=bool(features.get('include_default_body', True)),
+
         links=data.get('links', []),
         
         placeholders=placeholders,

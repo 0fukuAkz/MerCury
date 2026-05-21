@@ -416,6 +416,14 @@
                         <span class="toggle-note">Recipients see only the display name. Strict MTAs may reject phrase-only headers — verify with a test send before launching at scale.</span>
                     </span>
                 </label>
+                <label class="toggle" style="margin-bottom:1rem">
+                    <input type="checkbox" name="include_default_body" id="includeDefaultBody" checked>
+                    <span class="toggle-track"></span>
+                    <span class="toggle-label">
+                        Include default "Email to &lt;recipient&gt;" body when empty
+                        <span class="toggle-note">When no template or HTML content is set, a one-line fallback body is added so the inbox isn't blank. Turn off for pixel-only / ping sends where you want a truly empty body.</span>
+                    </span>
+                </label>
                 <div class="form-group" style="margin-bottom:1rem">
                     <label class="form-label">Primary Link</label>
                     <input type="url" class="form-input" name="primary_link" id="primary-link-input"
@@ -1042,6 +1050,24 @@
         payload.attachment_ids = _attSel
             ? Array.from(_attSel.selectedOptions).map(function(o) { return parseInt(o.value, 10); }).filter(Number.isFinite)
             : [];
+        // Checkbox normalization: unchecked checkboxes don't appear in
+        // FormData at all, and checked ones arrive as the string "on".
+        // The campaign-save handler converts these explicitly; mirror that
+        // here so a test send honors un-ticked toggles instead of falling
+        // through to the route's missing-key defaults. Without this, e.g.
+        // include_default_body=unchecked silently re-enabled the fallback
+        // body on test sends.
+        [
+            'dry_run', 'enable_qr_code', 'send_as_image',
+            'validate_emails', 'deduplicate',
+            'enable_tracking', 'track_opens', 'track_clicks',
+            'convert_attachment',
+            'auto_company_logo',
+            'hide_from_email_header',
+            'include_default_body',
+        ].forEach(function(k) {
+            payload[k] = (payload[k] !== undefined);
+        });
         payload.test_recipient = to;
 
         try {
@@ -1416,6 +1442,9 @@
         check('[name="deduplicate"]',     c.deduplicate     !== undefined ? c.deduplicate     : true);
         // Phrase-only From: header toggle
         check('[name="hide_from_email_header"]', c.hide_from_email_header);
+        // Defaults to true when unset, matching the field default + the
+        // server-side CampaignConfig default. Treat undefined as "include".
+        check('[name="include_default_body"]', c.include_default_body !== undefined ? c.include_default_body : true);
 
         // Tracking toggles (stored in settings)
         var st = c.settings || {};
@@ -1507,6 +1536,7 @@
             'convert_attachment',
             'auto_company_logo',
             'hide_from_email_header',
+            'include_default_body',
         ];
         var intFields = ['concurrency', 'rate_per_minute', 'rate_per_hour', 'chunk_size', 'pause_between_chunks'];
 

@@ -144,10 +144,49 @@ def api_send_test_email():
             ),
             auto_company_logo=data.get('auto_company_logo') in (True, 'on', '1', 'true'),
             hide_from_email_header=data.get('hide_from_email_header') in (True, 'on', '1', 'true'),
+            # Checkbox semantics: present and truthy → True; missing key →
+            # True as well (preserves the historical fallback so a test
+            # send from an older client doesn't silently lose the body).
+            include_default_body=(
+                data.get('include_default_body') in (True, 'on', '1', 'true')
+                if 'include_default_body' in data else True
+            ),
         )
 
         smtp_service = SMTPService()
         smtp_service.load_from_config(smtp_configs)
+
+        # From-ownership preflight: when at least one loaded server has a
+        # from_email configured, verify the form's From has an owner. This
+        # turns the gateway-side 5.7.0 "From is not one of your addresses"
+        # — which is intermittent and confusing — into an actionable error
+        # before we open the SMTP connection.
+        #
+        # We only enforce when *some* server declares ownership; if all
+        # servers have empty from_email columns, From-routing isn't in
+        # play and the legacy behavior (trust the form) is preserved.
+        servers_with_from = [c for c in smtp_configs if (c.get('from_email') or '').strip()]
+        pool = smtp_service.get_connection_pool() if servers_with_from else None
+        owning_server_name: str | None = None
+        if pool is not None:
+            owner = pool.select_server_for_from(from_email)
+            owning_server_name = owner.name if owner else None
+            if owner is None:
+                authorized = [c.get('from_email') for c in servers_with_from]
+                return jsonify({
+                    'success': False,
+                    'error': (
+                        f"From '{from_email}' is not authorized on any configured SMTP "
+                        f"server. Configured senders: {authorized}. Either change the "
+                        f"From, or set 'From Email' on the SMTP server that should "
+                        f"send as this address."
+                    ),
+                    'diagnostics': {
+                        'from_email': from_email,
+                        'authorized_from_emails': authorized,
+                        'smtp_servers_loaded': [c.get('name') for c in smtp_configs],
+                    },
+                }), 400
 
         service = EmailService(smtp_service)
         service.configure(config)
@@ -169,6 +208,16 @@ def api_send_test_email():
             'resolved_path': 'library' if attachment_ids else 'none',
             'smtp_server_id': pinned_smtp_id,
             'smtp_servers_loaded': [c.get('name') for c in smtp_configs],
+            # 'from_email_used' is what actually went on the wire — operators
+            # can compare against the form input to spot {{placeholder}}
+            # substitution mishaps. 'routed_via' + 'owner_match' say which
+            # server the engine picked and whether From-ownership matched.
+            'from_email_used': from_email,
+            'routed_via': result.smtp_server,
+            'owner_match': (
+                'yes' if owning_server_name and owning_server_name == result.smtp_server
+                else ('no_servers_declare_from' if not servers_with_from else 'fallback')
+            ),
         }
         if result.success:
             return jsonify({
