@@ -54,6 +54,10 @@ class EmailService:
         # Default configuration
         self.config = EmailConfig()
 
+        # Populated by send_single — let callers (e.g. the test-email
+        # route) read structured diagnostics about the most recent send.
+        self.last_send_diagnostics: Dict[str, Any] = {}
+
     def configure(self, config: EmailConfig):
         """Configure email service."""
         self.config = config
@@ -113,6 +117,12 @@ class EmailService:
 
         if config.links and len(config.links) > 0:
             self._rotation_manager.register('links', config.links, strategy)
+
+        # Merge operator-defined custom placeholders into the processor.
+        # Active rows from the custom_placeholders table override any
+        # built-in of the same name (operator intent > defaults) but
+        # per-recipient CSV data still wins at process() time.
+        self._merge_custom_placeholders()
 
         # Setup attachment generator
         self._attachment_generator = AttachmentGenerator(GeneratorConfig())
@@ -196,6 +206,42 @@ class EmailService:
         branding = resolve_branding(ctx)
         body_extras, header_extras = build_extras(ctx, qr_data_url, branding)
 
+        # Pre-render: check whether {{qr_code}} is referenced *before* the
+        # template engine substitutes it away, so we can surface a
+        # diagnostic when the operator clearly intended a QR but no
+        # link/enable combination was supplied. Looked up against the
+        # raw source — either the explicit html_body the route passed,
+        # or the engine's current template content. Both render paths
+        # silently substitute empty when qr_data_url is None, which is
+        # the behavior the operator perceives as "QR not working."
+        qr_referenced = False
+        if html_body and '{{qr_code' in html_body:
+            qr_referenced = True
+        elif (
+            html_body is None
+            and self._template_engine
+            and '{{qr_code' in (getattr(self._template_engine, '_template_content', '') or '')
+        ):
+            qr_referenced = True
+
+        if qr_referenced and not qr_data_url:
+            logger.warning(
+                "Template contains {{qr_code}} but "
+                f"enable_qr_code={self.config.enable_qr_code}, link={link!r}; "
+                "rendering as empty string. Set both 'Enable QR code' AND "
+                "a primary link (or per-send link) for the placeholder to "
+                "resolve to an <img> tag."
+            )
+
+        # Track per-send diagnostics surfaced via last_send_diagnostics so
+        # the API (e.g. test-email route) can include them in the response.
+        self.last_send_diagnostics: Dict[str, Any] = {
+            'qr_code_referenced_in_body': qr_referenced,
+            'qr_code_resolved': qr_data_url is not None,
+            'enable_qr_code': bool(self.config.enable_qr_code),
+            'link_present': bool(link),
+        }
+
         # Render body
         if html_body is None and self._template_engine:
             # Check for template rotation
@@ -211,12 +257,6 @@ class EmailService:
                 link=link,
             )
         elif html_body and self._placeholder_processor:
-            if '{{qr_code' in html_body and not qr_data_url:
-                logger.warning(
-                    "Template contains {{qr_code}} but "
-                    f"enable_qr_code={self.config.enable_qr_code}, link={link!r}; "
-                    "rendering as empty string"
-                )
             html_body = self._placeholder_processor.process(html_body, placeholders, body_extras)
 
         if not html_body:
@@ -328,6 +368,35 @@ class EmailService:
                     logger.warning(f"Failed to add dead letter: {e}")
 
         return result
+
+    def _merge_custom_placeholders(self) -> None:
+        """Load active CustomPlaceholder rows into the processor.
+
+        Custom placeholders ride on the standalone PlaceholderProcessor's
+        ``static_placeholders`` dict, the same surface that
+        ``placeholders_path`` (file-based) populates. Custom rows are
+        merged *after* the file so they take precedence on collision —
+        operator-defined data wins over file-defined defaults. Per-
+        recipient CSV columns still win over both at process() time.
+
+        Best-effort: a DB error here must not break a send.
+        """
+        if self._placeholder_processor is None:
+            return
+        try:
+            from ...data.database import session_scope
+            from ...data.repositories import CustomPlaceholderRepository
+            with session_scope() as session:
+                rows = CustomPlaceholderRepository(session).list_active()
+                for row in rows:
+                    self._placeholder_processor.static_placeholders[row.name] = (
+                        row.value or ''
+                    )
+        except Exception as e:
+            logger.warning(
+                "Could not load custom placeholders (sends will skip them): %s",
+                e,
+            )
 
     def _warn_unowned_from_emails(self, from_emails: List[str]) -> None:
         """Surface from_emails rotation entries that no SMTP server owns.

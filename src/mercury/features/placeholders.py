@@ -281,6 +281,102 @@ class PlaceholderProcessor:
 
         return placeholders
     
+    @staticmethod
+    def get_builtin_placeholder_catalog() -> "list[dict]":
+        """Curated reference catalog for the admin UI.
+
+        Distinct from ``get_builtin_placeholders``: that method generates
+        *live values* for a specific recipient on a specific send. This
+        method returns a static *description* of every placeholder the
+        engine understands, so the UI can render a discoverable list.
+
+        Each item: ``{name, category, description, sample}``. Sample is a
+        representative literal value (not a live one) the operator can
+        glance at to know what to expect in their rendered email.
+
+        Adding a new built-in elsewhere? Add it here too — the contract is
+        "if the engine resolves it, the operator can see it listed."
+        """
+        return [
+            # ── Recipient ─────────────────────────────────────────────
+            {'name': 'email',           'category': 'Recipient', 'description': 'The recipient email address.',                     'sample': 'alice@acme.com'},
+            {'name': 'recipient',       'category': 'Recipient', 'description': 'Alias for {{email}}.',                              'sample': 'alice@acme.com'},
+            {'name': 'recipient_email', 'category': 'Recipient', 'description': 'Alias for {{email}} (explicit form).',              'sample': 'alice@acme.com'},
+            {'name': 'first_name',      'category': 'Recipient', 'description': 'First name from CSV, or derived from local-part.', 'sample': 'Alice'},
+            {'name': 'firstname',       'category': 'Recipient', 'description': 'Alias for {{first_name}}.',                         'sample': 'Alice'},
+            {'name': 'last_name',       'category': 'Recipient', 'description': 'Last name from CSV, or derived from local-part.',  'sample': 'Brown'},
+            {'name': 'lastname',        'category': 'Recipient', 'description': 'Alias for {{last_name}}.',                          'sample': 'Brown'},
+            {'name': 'full_name',       'category': 'Recipient', 'description': 'CSV "full_name"/"name", else first+last, else local-part.', 'sample': 'Alice Brown'},
+            {'name': 'name',            'category': 'Recipient', 'description': 'Alias for {{full_name}}.',                          'sample': 'Alice Brown'},
+            {'name': 'initials',        'category': 'Recipient', 'description': 'Uppercase initials from first/last name.',          'sample': 'AB'},
+            {'name': 'company',         'category': 'Recipient', 'description': 'CSV "company", else capitalized domain root.',     'sample': 'Acme'},
+            {'name': 'local_part',      'category': 'Recipient', 'description': 'Part of email before the @.',                       'sample': 'alice'},
+            {'name': 'username',        'category': 'Recipient', 'description': 'Alias for {{local_part}}.',                         'sample': 'alice'},
+            {'name': 'domain',          'category': 'Recipient', 'description': 'Full email domain (with TLD).',                     'sample': 'acme.com'},
+            {'name': 'domain_name',     'category': 'Recipient', 'description': 'Email domain without the TLD.',                     'sample': 'acme'},
+            {'name': 'tld',             'category': 'Recipient', 'description': 'Top-level domain of the email.',                    'sample': 'com'},
+
+            # ── Render-time extras (engine appends these per-send) ────
+            {'name': 'link',            'category': 'Engine extras', 'description': 'Campaign primary_link (or rotated link).',      'sample': 'https://example.com/u/42'},
+            {'name': 'url',             'category': 'Engine extras', 'description': 'Alias for {{link}}.',                            'sample': 'https://example.com/u/42'},
+            {'name': 'qr_code',         'category': 'Engine extras', 'description': '<img> tag for the QR code (body only).',         'sample': '<img src="data:image/png;base64,..." />'},
+            {'name': 'qr_code_url',     'category': 'Engine extras', 'description': 'Raw data: URL of the QR code (for headers).',    'sample': 'data:image/png;base64,...'},
+            {'name': 'company_logo',    'category': 'Engine extras', 'description': '<img> tag for the pinned/auto-fetched logo.',    'sample': '<img src="data:image/png;base64,..." />'},
+            {'name': 'company_logo_url','category': 'Engine extras', 'description': 'Raw data: URL of the logo (for headers).',       'sample': 'data:image/png;base64,...'},
+            {'name': 'brand',           'category': 'Engine extras', 'description': 'Logo when available, else styled company name.', 'sample': '<span class="company-name">Acme</span>'},
+
+            # ── Date / Time ──────────────────────────────────────────
+            {'name': 'date',            'category': 'Date/Time', 'description': 'Today in YYYY-MM-DD.',                              'sample': '2026-05-21'},
+            {'name': 'date_formatted',  'category': 'Date/Time', 'description': 'Today as "May 21, 2026".',                          'sample': 'May 21, 2026'},
+            {'name': 'date_short',      'category': 'Date/Time', 'description': 'Today in MM/DD/YYYY (US).',                         'sample': '05/21/2026'},
+            {'name': 'date_eu',         'category': 'Date/Time', 'description': 'Today in DD/MM/YYYY (EU).',                         'sample': '21/05/2026'},
+            {'name': 'time',            'category': 'Date/Time', 'description': 'Current time HH:MM:SS (UTC).',                      'sample': '14:30:00'},
+            {'name': 'time_short',      'category': 'Date/Time', 'description': 'Current time HH:MM (UTC).',                         'sample': '14:30'},
+            {'name': 'datetime',        'category': 'Date/Time', 'description': 'Full datetime YYYY-MM-DD HH:MM:SS (UTC).',          'sample': '2026-05-21 14:30:00'},
+            {'name': 'timestamp',       'category': 'Date/Time', 'description': 'Unix timestamp (seconds).',                          'sample': '1747837800'},
+            {'name': 'year',            'category': 'Date/Time', 'description': 'Current year (4-digit).',                            'sample': '2026'},
+            {'name': 'month',           'category': 'Date/Time', 'description': 'Current month (zero-padded).',                       'sample': '05'},
+            {'name': 'month_name',      'category': 'Date/Time', 'description': 'Full month name.',                                    'sample': 'May'},
+            {'name': 'month_short',     'category': 'Date/Time', 'description': 'Abbreviated month name.',                             'sample': 'May'},
+            {'name': 'day',             'category': 'Date/Time', 'description': 'Day of month (zero-padded).',                         'sample': '21'},
+            {'name': 'day_name',        'category': 'Date/Time', 'description': 'Full day name.',                                       'sample': 'Thursday'},
+            {'name': 'day_short',       'category': 'Date/Time', 'description': 'Abbreviated day name.',                                'sample': 'Thu'},
+            {'name': 'hour',            'category': 'Date/Time', 'description': 'Current hour (00-23).',                                'sample': '14'},
+            {'name': 'minute',          'category': 'Date/Time', 'description': 'Current minute.',                                       'sample': '30'},
+            {'name': 'second',          'category': 'Date/Time', 'description': 'Current second.',                                       'sample': '00'},
+            {'name': 'week',            'category': 'Date/Time', 'description': 'Week of year.',                                          'sample': '21'},
+            {'name': 'quarter',         'category': 'Date/Time', 'description': 'Quarter (Q1-Q4).',                                       'sample': 'Q2'},
+
+            # ── IDs / hashes ─────────────────────────────────────────
+            {'name': 'uuid',            'category': 'IDs', 'description': 'New UUID4, regenerated per send.',                          'sample': 'b3e1c7a9-d2f5-4f8b-9c1e-...'},
+            {'name': 'id',              'category': 'IDs', 'description': 'Alias for {{uuid}}.',                                        'sample': 'b3e1c7a9-...'},
+            {'name': 'short_id',        'category': 'IDs', 'description': 'First 8 chars of {{uuid}}.',                                 'sample': 'b3e1c7a9'},
+            {'name': 'correlation_id',  'category': 'IDs', 'description': 'Send correlation id (matches tracking + logs).',             'sample': 'b3e1c7a9-...'},
+            {'name': 'tracking_id',     'category': 'IDs', 'description': 'Short id used in tracking links.',                            'sample': 'b3e1c7a9'},
+            {'name': 'hash',            'category': 'IDs', 'description': 'First 16 chars of MD5(email).',                               'sample': 'a1b2c3d4e5f60718'},
+            {'name': 'email_hash',      'category': 'IDs', 'description': 'Full MD5(email) hex.',                                        'sample': 'a1b2c3d4e5f607189a8b7c6d5e4f3a2b'},
+
+            # ── Random ───────────────────────────────────────────────
+            {'name': 'random_number',   'category': 'Random', 'description': 'Random 4-digit integer.',                                 'sample': '4729'},
+            {'name': 'random_6',        'category': 'Random', 'description': 'Random 6-digit integer.',                                 'sample': '472913'},
+            {'name': 'random_8',        'category': 'Random', 'description': 'Random 8-digit integer.',                                 'sample': '47291338'},
+            {'name': 'random_name',     'category': 'Random', 'description': 'Random person name (Faker if installed).',                'sample': 'Jane Doe'},
+            {'name': 'random_company',  'category': 'Random', 'description': 'Random company name.',                                     'sample': 'Acme Industries'},
+            {'name': 'random_email',    'category': 'Random', 'description': 'Random email address.',                                    'sample': 'user1234@example.com'},
+            {'name': 'random_url',      'category': 'Random', 'description': 'Random URL (Faker only).',                                 'sample': 'https://example.com/foo'},
+
+            # ── Geo / UA (require enrichment) ────────────────────────
+            {'name': 'location',        'category': 'Geo / UA', 'description': '"City, Region, Country" composite. Needs IP enrichment.', 'sample': 'San Francisco, CA, United States'},
+            {'name': 'location.country','category': 'Geo / UA', 'description': 'Recipient country (from IP).',                            'sample': 'United States'},
+            {'name': 'location.city',   'category': 'Geo / UA', 'description': 'Recipient city.',                                          'sample': 'San Francisco'},
+            {'name': 'location.region', 'category': 'Geo / UA', 'description': 'Recipient region / state.',                                'sample': 'California'},
+            {'name': 'location.timezone','category': 'Geo / UA','description': 'Recipient IANA timezone.',                                 'sample': 'America/Los_Angeles'},
+            {'name': 'ua',              'category': 'Geo / UA', 'description': '"Browser on OS" composite. Needs UA enrichment.',         'sample': 'Chrome on macOS'},
+            {'name': 'ua.browser',      'category': 'Geo / UA', 'description': 'Parsed browser family.',                                   'sample': 'Chrome'},
+            {'name': 'ua.os',           'category': 'Geo / UA', 'description': 'Parsed OS family.',                                        'sample': 'macOS'},
+            {'name': 'ua.device',       'category': 'Geo / UA', 'description': 'Parsed device class.',                                     'sample': 'Mac'},
+        ]
+
     def process(
         self,
         template: str,

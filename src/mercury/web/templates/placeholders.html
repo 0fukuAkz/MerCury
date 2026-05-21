@@ -1,0 +1,418 @@
+{% extends "base.html" %}
+
+{% block title %}Placeholders - MerCury{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Placeholders</h1>
+    <p class="page-description">
+        Every <code>{{ '{{name}}' }}</code> token the sender understands. Built-ins below are
+        always available; the "Custom" section adds operator-defined values that apply to
+        every campaign.
+    </p>
+</div>
+
+<!-- Custom -->
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Custom Placeholders</h2>
+        <button type="button" class="btn btn-primary" id="add-custom-btn" onclick="toggleAddForm()">
+            + New Placeholder
+        </button>
+    </div>
+
+    <form id="add-custom-form" class="hidden ph-add-form" onsubmit="createCustom(event)" novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="ph-add-grid">
+            <div>
+                <div class="ph-field-label">Name <span class="req">*</span></div>
+                <input class="ph-field-input" type="text" name="name"
+                       placeholder="signature_footer"
+                       pattern="[a-z][a-z0-9_.]*" maxlength="80" required>
+                <div class="ph-field-hint">Lowercase letters, digits, '_' and '.' only. Referenced as <code>{{ '{{name}}' }}</code>.</div>
+            </div>
+            <div>
+                <div class="ph-field-label">Value</div>
+                <textarea class="ph-field-input" name="value" rows="2"
+                          placeholder="— Sent from MerCury"></textarea>
+            </div>
+            <div>
+                <div class="ph-field-label">Description</div>
+                <input class="ph-field-input" type="text" name="description"
+                       placeholder="Optional — what this placeholder is for">
+            </div>
+        </div>
+        <div class="ph-form-actions">
+            <button type="submit" class="btn btn-primary">Add</button>
+            <button type="button" class="btn btn-secondary" onclick="toggleAddForm()">Cancel</button>
+        </div>
+    </form>
+
+    <div id="custom-table-wrap">
+        <div class="ph-loading">Loading…</div>
+    </div>
+</div>
+
+<!-- Built-in reference -->
+<div class="card ph-card-stack">
+    <div class="card-header">
+        <h2 class="card-title">Built-in Reference</h2>
+        <input type="search" id="ph-search" class="ph-field-input ph-search"
+               placeholder="Filter by name or description…" aria-label="Filter placeholders">
+    </div>
+    <div id="builtins-wrap">
+        <div class="ph-loading">Loading…</div>
+    </div>
+</div>
+
+<style>
+    .ph-add-form {
+        padding: 1rem;
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius);
+        margin-bottom: 1rem;
+    }
+    .ph-form-actions {
+        display: flex;
+        gap: 0.6rem;
+        margin-top: 0.75rem;
+    }
+    .ph-card-stack { margin-top: 1.25rem; }
+    .ph-add-grid {
+        display: grid;
+        grid-template-columns: 1fr 2fr 2fr;
+        gap: 0.75rem;
+    }
+    @media (max-width: 800px) { .ph-add-grid { grid-template-columns: 1fr; } }
+    .ph-field-label {
+        font-size: 0.75rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 0.3rem;
+    }
+    .ph-field-label .req { color: var(--neon-pink); }
+    .ph-field-input {
+        width: 100%;
+        padding: 0.5rem 0.75rem;
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius);
+        color: var(--text-primary);
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.82rem;
+    }
+    .ph-field-hint {
+        font-size: 0.7rem;
+        color: var(--text-muted, var(--text-secondary));
+        margin-top: 0.25rem;
+    }
+    .ph-search { max-width: 360px; }
+    .ph-loading { padding: 1rem; color: var(--text-secondary); font-size: 0.85rem; }
+    .ph-cat-header {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        margin: 1rem 0 0.4rem;
+        padding-left: 0.4rem;
+    }
+    .ph-table { width: 100%; border-collapse: collapse; }
+    .ph-table th, .ph-table td {
+        padding: 0.5rem 0.6rem;
+        border-bottom: 1px solid var(--border-color);
+        text-align: left;
+        font-size: 0.82rem;
+        vertical-align: top;
+    }
+    .ph-table th {
+        font-size: 0.7rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+    .ph-name {
+        font-family: 'JetBrains Mono', monospace;
+        color: var(--neon-cyan, var(--text-primary));
+    }
+    .ph-sample {
+        color: var(--text-secondary);
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.78rem;
+        word-break: break-all;
+    }
+    .ph-shadow-badge {
+        display: inline-block;
+        font-size: 0.65rem;
+        background: var(--warning, #c98a00);
+        color: #000;
+        padding: 0.05rem 0.4rem;
+        border-radius: 3px;
+        margin-left: 0.4rem;
+    }
+    .ph-row-actions { white-space: nowrap; }
+    .ph-row-actions button {
+        padding: 0.2rem 0.55rem;
+        font-size: 0.72rem;
+        margin-left: 0.3rem;
+    }
+    .ph-copy-btn {
+        background: transparent;
+        border: 1px solid var(--border-color);
+        color: var(--text-secondary);
+        padding: 0.1rem 0.4rem;
+        border-radius: 3px;
+        font-size: 0.7rem;
+        cursor: pointer;
+    }
+    .ph-copy-btn:hover { color: var(--text-primary); }
+    .hidden { display: none; }
+</style>
+
+<script>
+    {% raw %}
+    /* ── State & helpers ───────────────────────────────────────────── */
+    /* All JS in this script tag is wrapped in raw so Jinja leaves
+       template-style braces in string literals alone. Without it, Jinja
+       would parse the inner expression as a Python-ish string literal
+       and render literal "+ b.name +" text into the page. The raw open
+       sits at the very top so any documentation comments below are
+       safe even if they reference the templating syntax. */
+    var STATE = { builtins: [], custom: [], filter: '' };
+
+    function esc(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    function showToast(msg, kind) {
+        // Reuse the existing app toast if available; otherwise fall back to alert.
+        if (typeof window.showToast === 'function' && window.showToast !== showToast) {
+            window.showToast(msg, kind);
+        } else {
+            // No-op visual; just log to console so a missing toast helper
+            // doesn't block development feedback.
+            console.log('[' + (kind || 'info') + '] ' + msg);
+        }
+    }
+
+    function copyToClipboard(text) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(
+                function () { showToast('Copied: ' + text, 'success'); },
+                function () { showToast('Copy failed', 'error'); }
+            );
+        } else {
+            // Pre-Clipboard-API fallback. Modern browsers all have it; keep
+            // this branch only for ancient enterprise installs.
+            var t = document.createElement('textarea');
+            t.value = text;
+            document.body.appendChild(t);
+            t.select();
+            try { document.execCommand('copy'); } catch (e) { /* ignore */ }
+            document.body.removeChild(t);
+            showToast('Copied: ' + text, 'success');
+        }
+    }
+
+    function csrfHeader() {
+        var meta = document.querySelector('meta[name="csrf-token"]');
+        return meta ? { 'X-CSRFToken': meta.getAttribute('content') } : {};
+    }
+
+    /* ── Load ──────────────────────────────────────────────────────── */
+    async function loadPlaceholders() {
+        try {
+            var res = await fetch('/api/placeholders');
+            var data = await res.json();
+            STATE.builtins = data.builtins || [];
+            STATE.custom = data.custom || [];
+            renderCustom();
+            renderBuiltins();
+        } catch (err) {
+            document.getElementById('builtins-wrap').innerHTML =
+                '<div class="ph-loading">Failed to load: ' + esc(err.message) + '</div>';
+        }
+    }
+
+    /* ── Render: custom ───────────────────────────────────────────── */
+    function renderCustom() {
+        var wrap = document.getElementById('custom-table-wrap');
+        if (STATE.custom.length === 0) {
+            wrap.innerHTML = '<div class="ph-loading">No custom placeholders yet. Click "+ New Placeholder" to add one.</div>';
+            return;
+        }
+        var rows = STATE.custom.map(function (c) {
+            return ''
+                + '<tr data-id="' + c.id + '">'
+                + '  <td>'
+                + '    <span class="ph-name">' + esc(c.name) + '</span>'
+                +      (c.shadows_builtin ? '<span class="ph-shadow-badge" title="Overrides a built-in placeholder of the same name">overrides built-in</span>' : '')
+                + '  </td>'
+                + '  <td class="ph-sample">' + esc(c.value) + '</td>'
+                + '  <td>' + esc(c.description || '') + '</td>'
+                + '  <td>'
+                +      (c.is_active
+                            ? '<span style="color:var(--success)">● active</span>'
+                            : '<span style="color:var(--text-muted)">○ disabled</span>')
+                + '  </td>'
+                + '  <td class="ph-row-actions">'
+                + '    <button class="btn btn-secondary" onclick="toggleActive(' + c.id + ', ' + (c.is_active ? 'false' : 'true') + ')">'
+                +       (c.is_active ? 'Disable' : 'Enable')
+                + '    </button>'
+                + '    <button class="btn btn-secondary" onclick="editCustom(' + c.id + ')">Edit</button>'
+                + '    <button class="btn btn-secondary" onclick="deleteCustom(' + c.id + ', \'' + esc(c.name) + '\')">Delete</button>'
+                + '  </td>'
+                + '</tr>';
+        }).join('');
+        wrap.innerHTML = ''
+            + '<table class="ph-table">'
+            + '  <thead><tr><th>Name</th><th>Value</th><th>Description</th><th>Status</th><th></th></tr></thead>'
+            + '  <tbody>' + rows + '</tbody>'
+            + '</table>';
+    }
+
+    /* ── Render: builtins (grouped by category) ────────────────────── */
+    function renderBuiltins() {
+        var wrap = document.getElementById('builtins-wrap');
+        var filter = (STATE.filter || '').toLowerCase().trim();
+        var filtered = !filter ? STATE.builtins : STATE.builtins.filter(function (b) {
+            return (b.name.toLowerCase().indexOf(filter) !== -1)
+                || (b.description || '').toLowerCase().indexOf(filter) !== -1;
+        });
+
+        if (filtered.length === 0) {
+            wrap.innerHTML = '<div class="ph-loading">No matches.</div>';
+            return;
+        }
+
+        // Group by category preserving server-side order.
+        var groups = {};
+        var order = [];
+        filtered.forEach(function (b) {
+            if (!(b.category in groups)) { groups[b.category] = []; order.push(b.category); }
+            groups[b.category].push(b);
+        });
+
+        var html = '';
+        order.forEach(function (cat) {
+            html += '<div class="ph-cat-header">' + esc(cat) + '</div>';
+            html += '<table class="ph-table"><thead><tr><th style="width:18rem">Name</th><th>Description</th><th>Example</th></tr></thead><tbody>';
+            groups[cat].forEach(function (b) {
+                var token = '{{' + b.name + '}}';
+                html += '<tr>'
+                    + '<td>'
+                    + '  <span class="ph-name">' + esc(token) + '</span>'
+                    + '  <button class="ph-copy-btn" type="button" onclick="copyToClipboard(\'' + esc(token) + '\')" title="Copy">copy</button>'
+                    + '</td>'
+                    + '<td>' + esc(b.description) + '</td>'
+                    + '<td class="ph-sample">' + esc(b.sample) + '</td>'
+                    + '</tr>';
+            });
+            html += '</tbody></table>';
+        });
+        wrap.innerHTML = html;
+    }
+
+    /* ── Actions: custom CRUD ──────────────────────────────────────── */
+    function toggleAddForm() {
+        var f = document.getElementById('add-custom-form');
+        f.classList.toggle('hidden');
+        if (!f.classList.contains('hidden')) {
+            f.querySelector('[name="name"]').focus();
+        } else {
+            f.reset();
+        }
+    }
+
+    async function createCustom(event) {
+        event.preventDefault();
+        var form = event.target;
+        var payload = {
+            name: form.elements['name'].value.trim().toLowerCase(),
+            value: form.elements['value'].value,
+            description: form.elements['description'].value.trim(),
+            is_active: true,
+        };
+        var res = await fetch('/api/placeholders/custom', {
+            method: 'POST',
+            headers: Object.assign({ 'Content-Type': 'application/json' }, csrfHeader()),
+            body: JSON.stringify(payload),
+        });
+        var data = await res.json();
+        if (!data.success) {
+            showToast(data.error || 'Create failed', 'error');
+            return;
+        }
+        showToast('Placeholder "' + payload.name + '" added', 'success');
+        form.reset();
+        toggleAddForm();
+        loadPlaceholders();
+    }
+
+    async function toggleActive(id, makeActive) {
+        var res = await fetch('/api/placeholders/custom/' + id, {
+            method: 'PUT',
+            headers: Object.assign({ 'Content-Type': 'application/json' }, csrfHeader()),
+            body: JSON.stringify({ is_active: !!makeActive }),
+        });
+        var data = await res.json();
+        if (!data.success) {
+            showToast(data.error || 'Update failed', 'error');
+            return;
+        }
+        loadPlaceholders();
+    }
+
+    async function editCustom(id) {
+        var current = STATE.custom.find(function (c) { return c.id === id; });
+        if (!current) return;
+        // Minimal inline edit via prompts. Keeps the page small; if we want
+        // a richer in-row editor later, the same PUT endpoint already
+        // supports name/value/description updates.
+        var newValue = window.prompt('Value for {{' + current.name + '}}:', current.value || '');
+        if (newValue === null) return;  // canceled
+        var newDesc = window.prompt('Description (optional):', current.description || '');
+        if (newDesc === null) return;
+        var res = await fetch('/api/placeholders/custom/' + id, {
+            method: 'PUT',
+            headers: Object.assign({ 'Content-Type': 'application/json' }, csrfHeader()),
+            body: JSON.stringify({ value: newValue, description: newDesc }),
+        });
+        var data = await res.json();
+        if (!data.success) {
+            showToast(data.error || 'Update failed', 'error');
+            return;
+        }
+        loadPlaceholders();
+    }
+
+    async function deleteCustom(id, name) {
+        if (!window.confirm('Delete placeholder "' + name + '"? Templates referencing {{' + name + '}} will fall back to the built-in (if any) or render as literal text.')) {
+            return;
+        }
+        var res = await fetch('/api/placeholders/custom/' + id, {
+            method: 'DELETE',
+            headers: csrfHeader(),
+        });
+        var data = await res.json();
+        if (!data.success) {
+            showToast(data.error || 'Delete failed', 'error');
+            return;
+        }
+        loadPlaceholders();
+    }
+
+    /* ── Search ────────────────────────────────────────────────────── */
+    document.addEventListener('DOMContentLoaded', function () {
+        var search = document.getElementById('ph-search');
+        if (search) {
+            search.addEventListener('input', function () {
+                STATE.filter = search.value;
+                renderBuiltins();
+            });
+        }
+        loadPlaceholders();
+    });
+    {% endraw %}
+</script>
+{% endblock %}

@@ -40,6 +40,7 @@ from ....data.repositories import (  # noqa: F401
     SMTPRepository,
     TemplateRepository,
     LogRepository,
+    CustomPlaceholderRepository,
 )
 from ....services.campaign_service import CampaignService, CampaignConfig  # noqa: F401
 from ....services.smtp_service import SMTPService  # noqa: F401
@@ -64,6 +65,7 @@ from . import (  # noqa: E402, F401
     bounces,
     recipients,
     dead_letter,
+    placeholders,
 )
 
 __all__ = ['api_bp']

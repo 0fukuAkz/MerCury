@@ -8,6 +8,7 @@ from .recipient import RecipientRepository, RecipientListRepository
 from .user import UserRepository
 from .logs import LogRepository
 from .attachment import AttachmentRepository
+from .placeholder import CustomPlaceholderRepository
 
 __all__ = [
     "BaseRepository",
@@ -19,5 +20,6 @@ __all__ = [
     "UserRepository",
     "LogRepository",
     "AttachmentRepository",
+    "CustomPlaceholderRepository",
 ]
 

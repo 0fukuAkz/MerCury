@@ -11,6 +11,7 @@ from .identity import FromEmail, SenderName
 from .settings import GlobalSetting
 from .dead_letter import DeadLetter
 from .attachment import Attachment
+from .placeholder import CustomPlaceholder
 
 __all__ = [
     "BaseModel",
@@ -31,5 +32,6 @@ __all__ = [
     "GlobalSetting",
     "DeadLetter",
     "Attachment",
+    "CustomPlaceholder",
 ]
 

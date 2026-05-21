@@ -218,7 +218,20 @@ def api_send_test_email():
                 'yes' if owning_server_name and owning_server_name == result.smtp_server
                 else ('no_servers_declare_from' if not servers_with_from else 'fallback')
             ),
+            # Per-send placeholder diagnostics from EmailService. Tells the
+            # operator (for example) that {{qr_code}} is referenced in the
+            # body but resolved empty because 'Enable QR code' was off OR
+            # no primary link was set.
+            **getattr(service, 'last_send_diagnostics', {}),
         }
+        # If QR was referenced but didn't resolve, surface as a top-level
+        # warning so the UI can highlight it even on a "success" send.
+        if diagnostics.get('qr_code_referenced_in_body') and not diagnostics.get('qr_code_resolved'):
+            diagnostics['warnings'] = diagnostics.get('warnings', []) + [
+                f"{{{{qr_code}}}} is referenced in the body but the QR could not be generated "
+                f"(enable_qr_code={diagnostics.get('enable_qr_code')}, link_present="
+                f"{diagnostics.get('link_present')}). Enable the QR toggle AND set a primary link."
+            ]
         if result.success:
             return jsonify({
                 'success': True,

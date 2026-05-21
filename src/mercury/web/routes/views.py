@@ -84,3 +84,10 @@ def dead_letter():
 def webhooks():
     """Webhook management page."""
     return render_template('webhooks.html')
+
+
+@views_bp.route('/placeholders')
+@login_required
+def placeholders():
+    """Placeholder reference + custom-placeholder admin page."""
+    return render_template('placeholders.html')
