@@ -124,6 +124,18 @@ class DeadLetterService:
         
         return updated
     
+    def discard_all_unresolved(self, resolution_notes: Optional[str] = None) -> int:
+        """Mark every unresolved row as resolved in one bulk UPDATE.
+
+        Returns the number of rows affected. Used by the "Discard All"
+        action in the dead-letter UI. See repository docstring for why
+        this is a single SQL statement rather than a Python loop.
+        """
+        count = self.repository.mark_all_unresolved_as_resolved(resolution_notes)
+        if count > 0:
+            logger.info("🧹 Bulk-discarded dead letters", count=count)
+        return count
+
     def retry_dead_letter(self, dead_letter_id: int) -> Optional[DeadLetter]:
         """
         Increment retry counter for dead letter.

@@ -32,6 +32,7 @@
         <h2 class="card-title">Failed Messages</h2>
         <div class="flex gap-2">
             <button class="btn btn-primary" onclick="retryAll()">Retry All</button>
+            <button class="btn btn-secondary btn-danger" onclick="discardAll()">Discard All</button>
             <button class="btn btn-secondary" onclick="loadDeadLetters()">Refresh</button>
         </div>
     </div>
@@ -124,6 +125,39 @@
             await fetch(`/api/dead-letter/${itemId}`, { method: 'DELETE' });
             loadDeadLetters();
         } catch (e) {
+            alert('Error: ' + e.message);
+        }
+    }
+
+    async function discardAll() {
+        // We *always* hit the endpoint even if the visible pending count is 0,
+        // because the count comes from a stats endpoint that lags the actual
+        // table state (computed at last loadDeadLetters() call). Trusting
+        // the displayed count would make the button "not work" right after
+        // another tab/user added a pending item. Server-side is authoritative.
+        const pendingTextContent = document.getElementById('pending-count').textContent;
+        const pending = parseInt(pendingTextContent, 10) || 0;
+
+        const msg = pending > 0
+            ? 'Discard all ' + pending + ' pending message(s)?\n\nThey will be marked resolved and removed from this view. The payloads stay in the database for later investigation.'
+            : 'Discard all pending messages?\n\n(The visible count says 0, but the server is authoritative — proceed if you want to confirm.)';
+
+        if (!confirm(msg)) return;
+
+        console.log('[discard-all] POST /api/dead-letter/discard-all');
+        try {
+            const resp = await fetch('/api/dead-letter/discard-all', { method: 'POST' });
+            console.log('[discard-all] status:', resp.status);
+            const data = await resp.json();
+            console.log('[discard-all] body:', data);
+            if (!resp.ok || !data.success) {
+                alert('Discard failed (HTTP ' + resp.status + '): ' + (data.error || 'unknown error'));
+                return;
+            }
+            alert('Discarded ' + (data.discarded || 0) + ' message(s).');
+            loadDeadLetters();
+        } catch (e) {
+            console.error('[discard-all] fetch failed:', e);
             alert('Error: ' + e.message);
         }
     }

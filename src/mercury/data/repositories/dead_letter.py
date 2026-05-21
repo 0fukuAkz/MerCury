@@ -2,7 +2,7 @@
 
 from typing import List, Optional
 from datetime import datetime, timedelta, UTC
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from .base import BaseRepository
 from ..models.dead_letter import DeadLetter
@@ -120,6 +120,38 @@ class DeadLetterRepository(BaseRepository[DeadLetter]):
             return self.update(dead_letter)
         return None
     
+    def mark_all_unresolved_as_resolved(self, resolution_notes: Optional[str] = None) -> int:
+        """Bulk-resolve every unresolved row in one statement.
+
+        Returns the number of rows affected. Implemented as a single SQL
+        UPDATE rather than a per-row loop because the alternative — load
+        each DeadLetter, set attributes, commit — fsyncs once per row on
+        SQLite and turns a 10k-row "Discard All" into a 30s blocking
+        operation. The bulk form completes in milliseconds.
+
+        Like ``mark_resolved``, this does NOT delete rows — the payload
+        is preserved so operators can investigate discarded items later.
+        Rows simply disappear from ``get_unresolved`` results.
+        """
+        now = datetime.now(UTC)
+        stmt = (
+            update(DeadLetter)
+            .where(DeadLetter.resolved.is_(False))
+            .values(
+                resolved=True,
+                resolved_at=now,
+                resolution_notes=resolution_notes,
+            )
+        )
+        result = self.session.execute(stmt)
+        # ``session_scope`` does not commit on normal exit; the other write
+        # methods on BaseRepository each commit themselves, so this bulk
+        # path must do the same or the UPDATE is rolled back at close time
+        # (which is exactly how the "discard all reports success but nothing
+        # is deleted" bug manifested).
+        self.session.commit()
+        return int(result.rowcount or 0)
+
     def increment_retry_count(self, dead_letter_id: int) -> Optional[DeadLetter]:
         """
         Increment retry count for dead letter.

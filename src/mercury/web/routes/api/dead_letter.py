@@ -51,6 +51,25 @@ def api_discard_dead_letter(item_id):
         return jsonify({'success': result is not None})
 
 
+@api_bp.route('/dead-letter/discard-all', methods=['POST'])
+@api_key_or_login_required
+@limiter.limit("5/minute")
+def api_discard_all_dead_letters():
+    """Bulk-discard every unresolved dead letter (mark all as resolved).
+
+    Reasonable rate-limit (5/min) because the operation is destructive
+    by intent — a typo on the button shouldn't be re-triggerable in a
+    tight loop. The bulk UPDATE itself completes in milliseconds even
+    at 10k+ rows; the limit guards against accidental UI thrashing,
+    not the DB.
+    """
+    with session_scope() as session:
+        repo = DeadLetterRepository(session)
+        service = DeadLetterService(repo)
+        count = service.discard_all_unresolved("Bulk-discarded via UI")
+        return jsonify({'success': True, 'discarded': count})
+
+
 @api_bp.route('/dead-letter/stats', methods=['GET'])
 @api_key_or_login_required
 @limiter.limit("30/minute")
