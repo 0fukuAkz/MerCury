@@ -32,8 +32,7 @@ class EmailLog(Base, BaseModel):
     
     # Recipient
     recipient_email = Column(String(255), nullable=False, index=True)
-    recipient_name = Column(String(255))
-    
+
     # Email content snapshot
     subject = Column(String(500))
     from_email = Column(String(255))
