@@ -50,15 +50,17 @@ Note: `mercury start server` is a real Click command in [cli/main.py](src/mercur
 
 - Models live in `src/mercury/data/models/`, repositories in `src/mercury/data/repositories/`. The session helper is `mercury.data.database`.
 - Alembic config is at the repo root (`alembic.ini`, `migrations/`). Create a new revision with:
-  ```bash
+  
+```bash
   alembic revision --autogenerate -m "describe change"
   alembic upgrade head
   ```
+
 - Boot-time migrations: `web/app.py` runs `alembic upgrade head` automatically in non-production environments (handy for `make dev` and tests). In production it skips by default — run `alembic upgrade head` out-of-band before workers start. Override either way with `MERCURY_BOOT_MIGRATIONS=1` / `MERCURY_SKIP_BOOT_MIGRATIONS=1`.
 
 ## Architecture (the parts that span files)
 
-```
+```text
 cli ─┐
      ├─► services ─► engine ─► data
 web ─┘                  │

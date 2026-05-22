@@ -24,6 +24,7 @@ X-API-Key: your-api-key-here
 ```
 
 **Configuration:** Set the `API_KEYS` environment variable with comma-separated valid keys:
+
 ```bash
 export API_KEYS="key1,key2,key3"
 ```
@@ -34,11 +35,13 @@ For browser-based access, authenticate via the login endpoint and use session co
 ### Error Response
 
 Unauthenticated requests return:
+
 ```json
 {
   "error": "Authentication required"
 }
 ```
+
 **Status Code:** 401 Unauthorized
 
 ---
@@ -69,6 +72,7 @@ Rate limit headers are included in responses:
 Get system status. **Public endpoint - no authentication required.**
 
 **Response:**
+
 ```json
 {
   "status": "ok",
@@ -87,6 +91,7 @@ List all email campaigns.
 **Rate Limit:** 30/minute
 
 **Response:**
+
 ```json
 {
   "campaigns": [
@@ -112,6 +117,7 @@ Create a new email campaign.
 **Rate Limit:** 10/minute
 
 **Request Body:**
+
 ```json
 {
   "name": "My Campaign",
@@ -137,6 +143,7 @@ Create a new email campaign.
 | dry_run | boolean | | If true, don't actually send emails |
 
 **Response (201 Created):**
+
 ```json
 {
   "success": true,
@@ -150,6 +157,7 @@ Create a new email campaign.
 ```
 
 **Error Response (400 Bad Request):**
+
 ```json
 {
   "error": "Campaign name required"
@@ -166,6 +174,7 @@ List all configured SMTP servers.
 **Rate Limit:** 30/minute
 
 **Response:**
+
 ```json
 {
   "servers": [
@@ -191,6 +200,7 @@ Add a new SMTP server.
 **Rate Limit:** 10/minute
 
 **Request Body:**
+
 ```json
 {
   "name": "secondary",
@@ -212,6 +222,7 @@ Add a new SMTP server.
 | use_tls | boolean | | true | Enable STARTTLS |
 
 **Response (201 Created):**
+
 ```json
 {
   "success": true,
@@ -233,6 +244,7 @@ Test connection to a specific SMTP server.
 - `name` (string): Name of the SMTP server to test
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -244,6 +256,7 @@ Test connection to a specific SMTP server.
 ```
 
 **Response (Failure):**
+
 ```json
 {
   "success": false,
@@ -264,6 +277,7 @@ List all email templates.
 **Rate Limit:** 30/minute
 
 **Response:**
+
 ```json
 {
   "templates": [
@@ -284,6 +298,7 @@ Preview a template with sample data.
 **Rate Limit:** 20/minute
 
 **Request Body:**
+
 ```json
 {
   "html": "<h1>Hello {{first_name}}!</h1>",
@@ -296,6 +311,7 @@ Preview a template with sample data.
 ```
 
 **Response:**
+
 ```json
 {
   "html": "<h1>Hello John!</h1>",
@@ -313,6 +329,7 @@ Get recent successful email sends.
 **Rate Limit:** 30/minute
 
 **Response:**
+
 ```json
 {
   "emails": [
@@ -328,6 +345,7 @@ Get recent failed email sends.
 **Rate Limit:** 30/minute
 
 **Response:**
+
 ```json
 {
   "failures": [
@@ -347,6 +365,7 @@ Get overall sending statistics.
 **Rate Limit:** 30/minute
 
 **Response:**
+
 ```json
 {
   "total_sent": 9500,
@@ -366,6 +385,7 @@ List registered webhooks.
 **Rate Limit:** 30/minute
 
 **Response:**
+
 ```json
 {
   "webhooks": [
@@ -385,6 +405,7 @@ Register a new webhook.
 **Rate Limit:** 10/minute
 
 **Request Body:**
+
 ```json
 {
   "url": "https://example.com/webhook",
@@ -408,6 +429,7 @@ Register a new webhook.
 - `email.unsubscribed` - User unsubscribed
 
 **Response (201 Created):**
+
 ```json
 {
   "success": true,
@@ -427,6 +449,7 @@ Register a new webhook.
 Basic health check. **Public endpoint.**
 
 **Response:**
+
 ```json
 {
   "status": "healthy",
@@ -440,6 +463,7 @@ Detailed health check with component status.
 **Requires:** Authentication
 
 **Response:**
+
 ```json
 {
   "status": "healthy",
@@ -573,6 +597,7 @@ The full OpenAPI 3.0 specification is available at:
 ## SDK Examples
 
 ### Python
+
 ```python
 import requests
 
@@ -599,6 +624,7 @@ response = requests.post(
 ```
 
 ### cURL
+
 ```bash
 # List campaigns
 curl -H "X-API-Key: your-api-key" http://localhost:5000/api/campaigns

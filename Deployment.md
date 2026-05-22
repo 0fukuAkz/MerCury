@@ -416,7 +416,7 @@ web — see `features/template_engine.py` and `features/placeholders.py`.
 
 In the web UI, enter one subject per line:
 
-```
+```text
 🚀 Exclusive Offer Inside!
 ⭐ You're Invited: Special Event
 📧 Important Update for {{first_name}}
@@ -496,7 +496,7 @@ smtp_providers:
 
 ### Web UI shorthand (textarea on `/smtp`)
 
-```
+```text
 smtp1.example.com:587:user1:pass1
 smtp2.example.com:465:user2:pass2
 smtp3.example.com:587:user3:pass3
@@ -519,7 +519,7 @@ YAML or per-server overrides in the web UI).
 
 ### Format
 
-```
+```text
 host:port
 host:port:username:password
 socks5://host:port
@@ -528,7 +528,7 @@ socks5://host:port:username:password
 
 ### Example list
 
-```
+```text
 proxy1.example.com:8080
 proxy2.example.com:8080:proxyuser:proxypass
 socks5://socks.example.com:1080
