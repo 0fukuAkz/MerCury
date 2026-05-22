@@ -102,6 +102,18 @@ mercury send  config/campaign.yaml
 
 ## Installation
 
+### Devcontainer / GitHub Codespaces (zero-friction)
+
+The repo ships a [`.devcontainer/`](../.devcontainer/) config. If you use
+VSCode with the Dev Containers extension, or open the repo in
+[Codespaces](https://github.com/0fukuAkz/MerCury/codespaces), the
+container builds with Python 3.12, WeasyPrint/Cairo runtime deps,
+`gh` CLI, the `venv/` populated, and a `.env` seeded from
+`.env.example` — all in one click. Forwards port 5000 automatically.
+
+Use this path if you just want to *try the project* or *contribute*
+without configuring your host machine.
+
 ### Linux / macOS
 
 ```bash

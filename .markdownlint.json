@@ -1,0 +1,13 @@
+{
+  "_comment": "VSCode markdownlint extension config. Mirrors .pymarkdown.json's choices so the two linters agree. See SOURCE OF TRUTH note in .pymarkdown.json for rationale on each disable.",
+
+  "default": true,
+
+  "MD013": false,
+  "MD022": false,
+  "MD032": false,
+
+  "MD024": { "siblings_only": true },
+
+  "MD060": false
+}
