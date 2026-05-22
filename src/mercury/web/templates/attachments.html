@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+
+{% block title %}Attachments - MerCury{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Attachments</h1>
+    <p class="page-description">Reusable file attachments. Max 25 MB per file.</p>
+</div>
+
+<!-- Upload -->
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Upload</h2>
+    </div>
+    <form id="upload-form" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group">
+            <label class="form-label" for="file-input">File</label>
+            <input type="file" class="form-input" id="file-input" name="file" required
+                   aria-label="Attachment file">
+        </div>
+        <div class="form-group">
+            <label class="form-label" for="description-input">Description (optional)</label>
+            <input type="text" class="form-input" id="description-input" name="description"
+                   placeholder="Q2 product brochure, signed contract template, …">
+        </div>
+        <button type="submit" class="btn btn-primary" id="upload-btn">Upload</button>
+        <span id="upload-status" style="margin-left:0.75rem;color:var(--text-muted, #888);"></span>
+    </form>
+</div>
+
+<!-- Library -->
+<div class="card" style="margin-top:1.25rem;">
+    <div class="card-header">
+        <h2 class="card-title">Library ({{ attachments|length }})</h2>
+    </div>
+
+    {% if attachments %}
+    <table class="data-table" style="width:100%;">
+        <thead>
+            <tr>
+                <th>Filename</th>
+                <th>Size</th>
+                <th>Type</th>
+                <th>Description</th>
+                <th>Uploaded</th>
+                <th style="text-align:right;">Actions</th>
+            </tr>
+        </thead>
+        <tbody id="attachments-tbody">
+            {% for a in attachments %}
+            <tr data-id="{{ a.id }}">
+                <td>{{ a.filename }}</td>
+                <td>{{ '{:,}'.format(a.size_bytes) }} B</td>
+                <td>{{ a.content_type or '—' }}</td>
+                <td>{{ a.description or '' }}</td>
+                <td>{{ a.created_at[:19].replace('T', ' ') if a.created_at else '' }}</td>
+                <td style="text-align:right;">
+                    <a class="btn btn-secondary btn-sm"
+                       href="{{ url_for('attachments.download', attachment_id=a.id) }}">Download</a>
+                    <button type="button" class="btn btn-secondary btn-sm"
+                            onclick="deleteAttachment({{ a.id }})">Delete</button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div style="text-align:center; padding:2.5rem 1rem; color:var(--text-muted, #888);">
+        No attachments yet. Upload one above to get started.
+    </div>
+    {% endif %}
+</div>
+
+<script>
+    const _CSRF = "{{ csrf_token() }}";
+
+    async function _readError(res, fallback) {
+        const text = await res.text().catch(() => '');
+        try {
+            const parsed = JSON.parse(text);
+            if (parsed && parsed.error) return parsed.error;
+        } catch (_) { /* not JSON */ }
+        return `${fallback} (HTTP ${res.status} ${res.statusText || ''})`.trim();
+    }
+
+    document.getElementById('upload-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const fileInput = document.getElementById('file-input');
+        const descInput = document.getElementById('description-input');
+        const btn = document.getElementById('upload-btn');
+        const status = document.getElementById('upload-status');
+
+        if (!fileInput.files.length) {
+            status.textContent = 'Pick a file first.';
+            return;
+        }
+
+        const fd = new FormData();
+        fd.append('file', fileInput.files[0]);
+        fd.append('description', descInput.value || '');
+        fd.append('csrf_token', _CSRF);
+
+        btn.disabled = true;
+        status.textContent = 'Uploading…';
+        try {
+            const res = await fetch("{{ url_for('attachments.upload') }}", {
+                method: 'POST',
+                body: fd,
+                headers: { 'X-CSRFToken': _CSRF },
+            });
+            if (!res.ok) throw new Error(await _readError(res, 'Upload failed'));
+            window.location.reload();
+        } catch (err) {
+            status.textContent = 'Error: ' + err.message;
+            btn.disabled = false;
+        }
+    });
+
+    async function deleteAttachment(id) {
+        if (!confirm('Delete this attachment? This cannot be undone.')) return;
+        try {
+            const res = await fetch(`/attachments/${id}`, {
+                method: 'DELETE',
+                headers: { 'X-CSRFToken': _CSRF },
+            });
+            if (!res.ok) throw new Error(await _readError(res, 'Delete failed'));
+            const row = document.querySelector(`tr[data-id="${id}"]`);
+            if (row) row.remove();
+        } catch (err) {
+            alert('Error: ' + err.message);
+        }
+    }
+</script>
+{% endblock %}

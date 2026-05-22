@@ -1,4 +1,4 @@
-# Python
+# Python build / install artifacts
 __pycache__/
 *.py[cod]
 *$py.class
@@ -21,12 +21,14 @@ wheels/
 *.egg
 
 # Virtual environments
-venv/
-ENV/
-env/
-.venv/
+# (no trailing slash so the patterns also match `.venv` when it's a symlink
+# pointing at `venv/` — see CLAUDE.md note on the canonical venv name.)
+venv
+ENV
+env
+.venv
 
-# IDE
+# IDE / editors
 .idea/
 .vscode/
 *.swp
@@ -35,52 +37,47 @@ env/
 
 # OS
 .DS_Store
+Thumbs.db
 
-# Project specific
-logs/*.log
-logs/*.txt
-logs/*.db
-logs/*.json
-data/*.csv
-data/*.txt
-!data/.gitkeep
-#config/*.yaml
-#!config/example.yaml
-#!config/placeholders.yaml
-*.db
-*.db-shm
-*.db-wal
-
-# Encryption key
-data/.encryption.key
-
-# Environment
-.env
-.env.local
-
-# Testing
+# Test / coverage / lint caches
 .coverage
 coverage.xml
 htmlcov/
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 .tox/
 
+# Environment files (.env.example IS tracked; .env / .env.local are not)
+.env
+.env.local
+
 # Runtime / process state
-data/.mercury.pid
 *.pid
+data/.mercury.pid
+data/.encryption.key
 
-# OS
-.DS_Store
-Thumbs.db
+# SQLite databases + WAL files
+*.db
+*.db-shm
+*.db-wal
 
+# Logs (the directory is kept via data/.gitkeep; contents are not)
+logs/*.log
+logs/*.txt
+logs/*.json
+
+# Operator-supplied runtime data (recipient lists, generated attachments,
+# rendered preview HTML). These belong to the deployment, not the repo.
+data/*.csv
+data/*.txt
+data/attachments/*.html
+data/recipients/*
+!data/.gitkeep
+
+# Operator-side `templates/` is a *runtime* directory the operator
+# populates with their own email templates (see Deployment.md). Distinct
+# from `src/mercury/web/templates/`, which IS the bundled web-app
+# templates package_data and MUST stay tracked.
 templates/attachment.html
 templates/redirect.html
-data/recipients/office365.txt
-data/attachments/ef7b7bae543d435ea200e2d75ba45561.html
-data/attachments/edad18f3b7674561a733d2712af984dc.html
-data/attachments/dafb417ef89d4c1d8a9cff078d398018.html
-data/attachments/ced94c3622c24bbd95cf5daa9c685fe3.html
-src/mercury/web/templates/attachments.html
-templates/attachment.html
-data/recipients/leads.txt
-data/recipients/leads.csv

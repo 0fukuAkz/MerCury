@@ -42,6 +42,8 @@ There are two distinct runners — pick the right one:
 - **`python run.py`** (production-style): bootstraps a `venv/`, then execs `gunicorn --worker-class eventlet -w 1 --bind 0.0.0.0:5000 mercury.web.app:create_app()`. Writes a PID to `data/.mercury.pid` for Windows shadow-process cleanup. Single worker is required because eventlet + SocketIO + the async sender thread assume one process.
 - **`make dev` / `python -m mercury.web.app`**: plain Flask dev server, useful for fast iteration.
 
+Note on venv name: the canonical venv for this repo is `venv/` (not `.venv/`) because that's what `run.py` bootstraps and what `make`/CI invoke. If your IDE auto-creates a `.venv/` on first open, point its Python interpreter at `./venv/bin/python` and delete the empty `.venv/` to avoid drift.
+
 Note: `mercury start server` is a real Click command in [cli/main.py](src/mercury/cli/main.py) that runs the Flask/SocketIO dev server directly on port **5000** (matches `run.py`). The **canonical production path** is `python run.py` — gunicorn + eventlet, single worker. The CLI command is for CLI-driven local iteration. README and `docs/` document the production path; do not redirect users back to the CLI runner.
 
 ## Database & migrations
