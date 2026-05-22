@@ -32,7 +32,12 @@ flask-wtf==1.2.1
 # eventlet 0.35.2 -> 0.40.3 closes CVE-2025-58068.
 gunicorn==22.0.0
 eventlet==0.40.3
-psycopg2-binary==2.9.9
+# psycopg2-binary is only needed for PostgreSQL deployments — SQLite
+# users can `pip install -r requirements.txt --no-deps` and skip it.
+# 2.9.11 was the first version to publish cp314 wheels for Windows;
+# pinning to 2.9.12 (latest 2.9.x) avoids build-from-source fallback
+# on Python 3.13/3.14 hosts that don't have pg_config installed.
+psycopg2-binary==2.9.12
 
 # Security - Encryption and authentication
 # cryptography 42.0.1 -> 46.0.7 closes CVE-2026-26007, PYSEC-2026-35,
