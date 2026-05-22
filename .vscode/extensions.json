@@ -1,0 +1,18 @@
+{
+  // Workspace-recommended extensions. VSCode/Cursor will prompt the
+  // user to install these on first repo open. None are auto-installed
+  // (that would be invasive); the prompt is the polite default.
+  //
+  // Kept in lockstep with .devcontainer/devcontainer.json so the
+  // local + containerized dev experiences match.
+  "recommendations": [
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "charliermarsh.ruff",
+    "ms-python.debugpy",
+    "tamasfe.even-better-toml",
+    "DavidAnson.vscode-markdownlint",
+    "github.vscode-github-actions",
+    "mikestead.dotenv"
+  ]
+}

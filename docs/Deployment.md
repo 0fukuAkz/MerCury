@@ -83,7 +83,7 @@ mercury send  config/campaign.yaml
 | Component | Requirement |
 |---|---|
 | **OS** | Linux (Ubuntu 20.04+), macOS 12+, Windows 10+ |
-| **Python** | **3.12 or higher** (enforced by `pyproject.toml`) |
+| **Python** | **3.12.x specifically** — `pyproject.toml` pins `>=3.12,<3.13` because Python 3.13 / 3.14 wheels are still patchy for some pinned deps |
 | **RAM** | 2 GB minimum (4 GB recommended for large campaigns) |
 | **Disk** | 1 GB free (more for SQLite + logs at scale) |
 | **Network** | Outbound SMTP (typically TCP 25 / 465 / 587) |
@@ -142,6 +142,23 @@ make test             # pytest with coverage
 make lint             # ruff
 make build-check      # build wheel + smoke-test in fresh venv
 ```
+
+### Auto-activate the venv
+
+The repo ships several layers of venv auto-activation so you don't
+have to `source venv/bin/activate` by hand every terminal. From most
+to least automatic:
+
+| Path | What you do once | Result |
+|---|---|---|
+| **VSCode / Cursor** | Open the folder | `.vscode/settings.json` + `extensions.json` are committed; the Python extension auto-activates `venv/bin/python` in every integrated terminal. |
+| **GitHub Codespaces / Devcontainers** | Click "Reopen in Container" | `.devcontainer/post-create.sh` builds the venv and `devcontainer.json` wires the terminal activation. |
+| **Direnv users (any shell)** | `direnv allow` (once per repo) | `.envrc` sources `venv/bin/activate` on every `cd` into the repo. |
+| **Bare bash/zsh/fish** | `source ./activate.sh` (per terminal) | One-line wrapper that auto-detects `venv/` vs `.venv/` and activates. |
+| **Bare PowerShell** | `. .\activate.ps1` (per terminal) | Windows equivalent. May need `Set-ExecutionPolicy -Scope Process RemoteSigned` once. |
+
+If none of those work for you, the long-form `source venv/bin/activate`
+(or `.\venv\Scripts\Activate.ps1` on Windows) always works.
 
 ---
 

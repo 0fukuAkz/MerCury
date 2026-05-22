@@ -30,10 +30,18 @@ env
 
 # IDE / editors
 .idea/
-.vscode/
 *.swp
 *.swo
 *~
+
+# VSCode/Cursor: ignore most of .vscode/ but track the shared
+# project-level config (settings.json + extensions.json) so every
+# contributor gets the same venv auto-activation and recommended
+# extensions on first clone. Per-user files (launch.json,
+# user-specific tasks, *.code-workspace state) stay ignored.
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
 
 # OS
 .DS_Store

@@ -1,0 +1,55 @@
+{
+  // ── Interpreter ─────────────────────────────────────────────────────
+  // Point at the real `venv/` path (not the `.venv` symlink). Some
+  // VSCode/Cursor Python-extension versions don't reliably persist a
+  // symlinked interpreter selection across reloads — the cached
+  // identifier doesn't match next launch and activation silently
+  // skips. The .venv symlink still works for shell users; the IDE
+  // just uses the canonical path.
+  "python.defaultInterpreterPath": "${workspaceFolder}/venv/bin/python",
+
+  // ── Terminal auto-activation (legacy mode) ──────────────────────────
+  // Sources venv/bin/activate when you open a new integrated terminal.
+  "python.terminal.activateEnvironment": true,
+
+  // ── Terminal auto-activation (new env-var mode) ─────────────────────
+  // The Python extension's newer activation path sets PATH /
+  // VIRTUAL_ENV env vars directly on the integrated terminal instead
+  // of running the activate script. More reliable: doesn't depend on
+  // shell init order, works in non-bash shells, survives reloads.
+  // Opted in here so both styles fire — whichever the extension
+  // supports on this Cursor/VSCode build will win, neither breaks the
+  // other.
+  "python.terminal.activateEnvInCurrentTerminal": true,
+  "python.experiments.optInto": [
+    "pythonTerminalEnvVarActivation"
+  ],
+
+  // ── Testing (so the Test Explorer uses venv/bin/pytest) ─────────────
+  "python.testing.pytestEnabled": true,
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestArgs": ["tests"],
+
+  // ── Linter integration (ruff is installed in the venv) ──────────────
+  "[python]": {
+    "editor.codeActionsOnSave": {
+      "source.organizeImports.ruff": "explicit"
+    }
+  },
+
+  // ── Files explorer noise reduction ──────────────────────────────────
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/.pytest_cache": true,
+    "**/.mypy_cache": true,
+    "**/.ruff_cache": true,
+    "**/*.egg-info": true
+  },
+
+  // Don't watch the venv tree — saves a ton of file-descriptor pressure
+  // on macOS without hiding the venv from the explorer.
+  "files.watcherExclude": {
+    "**/venv/**": true,
+    "**/.venv/**": true
+  }
+}
