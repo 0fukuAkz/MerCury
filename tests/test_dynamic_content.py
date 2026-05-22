@@ -54,22 +54,92 @@ class TestDynamicContent:
         call_args3 = mock_sender.send_email.call_args
         assert call_args3.kwargs['from_email'] == "sender1@test.com"
 
-    async def test_dynamic_attachment_filename(self):
+    async def test_dynamic_attachment_filename(self, db_engine, db_session, tmp_path, monkeypatch):
         """Placeholders are substituted into library attachment filenames.
 
-        The legacy attachment_path/attachment_type pair was removed in favor
-        of the attachment-library model (attachment_ids referencing
-        Attachment rows persisted on disk). A library file named
-        'invoices/{{id}}.pdf' must arrive at the recipient with the
-        placeholder resolved.
+        Replaces the previous legacy ``attachment_path`` / ``attachment_type``
+        check. The current data model stores attachments as ``Attachment``
+        rows + on-disk blobs under ``<data_dir>/attachments/<stored_name>``,
+        and the email service references them via
+        ``EmailConfig.attachment_ids``. A library file row named
+        ``'invoices/{{first_name}}.pdf'`` must arrive at the recipient
+        with the placeholder resolved, while the binary payload is left
+        untouched (substitution would corrupt PDF bytes).
         """
-        import pytest
-        pytest.skip(
-            "Rewrite pending: the legacy attachment_path/attachment_type "
-            "API was replaced by the Attachment library (attachment_ids). "
-            "This test needs to be reauthored against the new model with "
-            "an Attachment row + on-disk file fixture."
+        from sqlalchemy.orm import sessionmaker
+
+        from mercury.data.models.attachment import Attachment
+        from mercury.services.email.attachments import materialize_library_attachments
+        from mercury.services.email.config import EmailConfig
+        from mercury.services.email.context import SendContext
+        from mercury.features.placeholders import PlaceholderProcessor
+
+        # 1. Stage an on-disk attachment blob under a tmp data dir.
+        attachments_dir = tmp_path / 'attachments'
+        attachments_dir.mkdir()
+        stored_name = 'fixture123.pdf'
+        pdf_blob = b'%PDF-1.4\n%fixture binary payload'
+        (attachments_dir / stored_name).write_bytes(pdf_blob)
+
+        # 2. Point the materializer's get_data_dir() at our tmp_path so it
+        #    reads the fixture blob (rather than the real user data dir).
+        monkeypatch.setattr(
+            'mercury.services.email.attachments.get_data_dir',
+            lambda: tmp_path,
         )
+
+        # 3. The materializer opens its own DB session via session_scope() →
+        #    get_session_direct(). Route that at the test's in-memory engine
+        #    so it can see the Attachment row we're about to commit.
+        TestSession = sessionmaker(bind=db_engine)
+        monkeypatch.setattr(
+            'mercury.data.database.get_session_direct',
+            TestSession,
+        )
+
+        # 4. Insert the Attachment row with a placeholder-templated filename.
+        att = Attachment(
+            filename='invoices/{{first_name}}.pdf',
+            stored_name=stored_name,
+            size_bytes=len(pdf_blob),
+            content_type='application/pdf',  # binary → body NOT substituted
+            is_active=True,
+        )
+        db_session.add(att)
+        db_session.commit()
+
+        # 5. Build the send-time context with attachment_ids + per-recipient
+        #    placeholders.
+        config = EmailConfig(
+            from_email='sender@example.com',
+            attachment_ids=[att.id],
+        )
+        ctx = SendContext(
+            recipient='alice@example.com',
+            placeholders={'first_name': 'Alice'},
+            link=None,
+            config=config,
+        )
+
+        # 6. Run the materializer and assert the rendered filename + intact
+        #    payload + preserved content-type.
+        materialized = materialize_library_attachments(
+            ctx,
+            body_extras={},
+            header_extras={},
+            placeholder_processor=PlaceholderProcessor(),
+            attachment_generator=None,
+        )
+
+        assert len(materialized) == 1
+        out = materialized[0]
+        assert out['filename'] == 'invoices/Alice.pdf', (
+            f"placeholder substitution failed: got {out['filename']!r}"
+        )
+        assert out['content_type'] == 'application/pdf'
+        # Binary payload must be untouched — substitution on a PDF would
+        # produce a corrupt attachment.
+        assert out['data'] == pdf_blob
 
     async def test_mixed_rotation_and_substitution(self):
         """Test rotating subjects with dynamic body content together."""
