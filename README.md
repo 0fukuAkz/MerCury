@@ -1,252 +1,121 @@
 # MerCury
 
-Complete email automation. Send campaigns the easy way.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 
-**v2.0.0** - Complete rewrite with English-like commands.
+**Production-grade bulk email automation.** Async SMTP, rate limiting,
+circuit breakers, templating, tracking, scheduling, and a web dashboard —
+all in one package with a CLI and a Flask + SocketIO front-end sharing
+the same domain layer.
+
+📘 **[Full deployment & usage guide → Deployment.md](Deployment.md)**
+
+---
+
+## Why MerCury
+
+- **Async SMTP pipeline** — `aiosmtplib` connection pool, per-server
+  rate limits, per-server circuit breakers, retry queue with backoff.
+- **Multi-server load balancing** — weighted / round-robin / priority
+  failover; per-server From-ownership routing prevents 5.7.0 rejects.
+- **Two front-ends, one domain** — `mercury` CLI (YAML-driven) and the
+  Flask + SocketIO dashboard share `services/`, `engine/`, and `data/`.
+- **Templating mini-language** — `{{var}}` and `{{if:x}}…{{endif}}`
+  across CLI and web. 50+ built-in placeholders for recipient data,
+  dates, random fakes, links, and tracking.
+- **Tracking + analytics** — open pixel, click wrapping, signed
+  unsubscribe links (HMAC), bounce processing, dead-letter queue.
+- **Scheduling** — one-time, cron, and interval campaigns via APScheduler.
+- **Production-ready** — Gunicorn + eventlet single-worker runner,
+  PostgreSQL support, Redis-backed rate limits, Docker Compose stack,
+  systemd unit, Alembic migrations.
+
+---
 
 ## Quick Start
 
 ```bash
-# Install
+git clone https://github.com/0fukuAkz/MerCury.git
+cd MerCury
+
+# 1. Install (Python 3.12+)
+python3 -m venv venv && source venv/bin/activate
 pip install -e .
 
-# Create project files
-mercury new project
+# 2. Configure first-admin + secrets (no fallbacks exist)
+cp .env.example .env
+$EDITOR .env           # set SECRET_KEY, ADMIN_*, TRACKING_BASE_URL
 
-# Edit your config
-notepad config/campaign.yaml
-
-# Check configuration
-mercury check config/campaign.yaml
-
-# Test SMTP connection
-mercury test config/campaign.yaml
-
-# Preview (no actual sending)
-mercury send config/campaign.yaml --preview
-
-# Send for real
-mercury send config/campaign.yaml
+# 3. Apply migrations + launch
+alembic upgrade head
+python run.py
 ```
 
-## Commands
+Open <http://localhost:5000> and sign in with your configured
+`ADMIN_USERNAME` / `ADMIN_PASSWORD`. For the CLI path
+(`mercury new project`, `mercury send config.yaml`, …) and the full
+docker/systemd/nginx walkthroughs, see [Deployment.md](Deployment.md).
 
-| Command | Description |
-|---------|-------------|
-| `mercury new project` | Create config, template, and recipients files |
-| `mercury new config` | Create config file only |
-| `mercury new template` | Create email template |
-| `mercury check <config>` | Validate your configuration |
-| `mercury test <config>` | Test SMTP connections |
-| `mercury send <config>` | Send your campaign |
-| `mercury send <config> --preview` | Preview without sending |
-| `mercury send <config> --to 10` | Send to first 10 only |
-| `mercury show stats` | View sending statistics |
-| `mercury show logs` | View recent log entries |
-| `mercury start server` | Launch web dashboard |
+---
 
-## Configuration
+## Upgrading to v2.0.0 (breaking changes)
 
-Create `config/campaign.yaml`:
+If you're rebuilding from a pre-2.0.0 checkout, **three things will
+bite you** unless you act on them. The full list with per-item
+migration notes is in [CHANGELOG.md](CHANGELOG.md).
 
-```yaml
-campaign:
-  name: "My Campaign"
+1. **Required env vars in production.** `SECRET_KEY`, `ADMIN_USERNAME`,
+   `ADMIN_PASSWORD`, `ADMIN_EMAIL`, and `TRACKING_BASE_URL` are now
+   required with **no fallbacks**. The web app refuses to boot or
+   bootstrap the first admin without them. The `MERCURY_DEV` escape
+   hatch was removed — use `FLASK_ENV=development` for local iteration.
+   See [.env.example](.env.example).
+2. **`alembic upgrade head` is required.** Migration `c9d4e8b1a7f2`
+   drops the legacy `use_tls` / `use_ssl` columns from `smtpservers`.
+   Production deployments must run this out-of-band before workers
+   start (boot-time auto-upgrade only runs in non-production).
+3. **SMTP API surface change.** `POST /api/smtp` and
+   `PUT /api/smtp/<name>` no longer accept `use_tls` / `use_ssl`. Send
+   the single `tls_mode` field (`'none' | 'starttls' | 'ssl'`) instead.
+   YAML campaign configs and any direct `SMTPServerConfig(...)` calls
+   need the same.
 
-smtp_providers:
-  - name: primary
-    host: smtp.gmail.com
-    port: 587
-    username: your-email@gmail.com
-    password: your-app-password
-    use_tls: true
-    max_per_minute: 30
+The `mercury start server` CLI now binds port **5000** (matching
+`python run.py`) — if you scripted around the old 8080 default, update
+your client.
 
-email:
-  subject: "Hello {{first_name}}!"
-  from_email: your-email@gmail.com
-  from_name: "Your Name"
+---
 
-template:
-  html: templates/email.html
+## Documentation
 
-recipients:
-  source: data/recipients.csv
+| File | When to read it |
+| --- | --- |
+| **[Deployment.md](Deployment.md)** | Install, configure, run, deploy, troubleshoot — everything operational. |
+| [CHANGELOG.md](CHANGELOG.md) | Release notes, breaking changes, migration paths. |
+| [SECURITY.md](SECURITY.md) | Private vulnerability reporting + production hardening checklist. |
+| [CLAUDE.md](CLAUDE.md) | Contributor / agent guide — architecture map, code conventions, repo conventions. |
+| [docs/API.md](docs/API.md) + [docs/openapi.yaml](docs/openapi.yaml) | REST API reference + OpenAPI spec. |
 
-sending:
-  dry_run: true
-  concurrency: 50
+---
+
+## Project layout
+
+```text
+src/mercury/
+├── cli/          # Click CLI (`mercury` command)
+├── web/          # Flask + SocketIO app, routes, templates
+├── services/     # Orchestration: campaigns, email, SMTP, tracking, ...
+├── engine/       # Async SMTP pipeline (sender, pool, rate, circuit, retry)
+├── features/     # Templating, placeholders, generators, rotation, geo
+├── data/         # SQLAlchemy models + repositories
+├── security/     # Auth, encryption, HMAC
+└── utils/        # Cross-cutting helpers (logging, app dirs, ...)
+migrations/       # Alembic chain (head: c9d4e8b1a7f2)
+docs/             # API reference + OpenAPI
 ```
 
-## Recipients File
-
-Create `data/recipients.csv`:
-
-```csv
-email,first_name,last_name,company
-john@example.com,John,Doe,Acme Inc
-jane@example.com,Jane,Smith,Tech Corp
-```
-
-## Email Template
-
-Create `templates/email.html`:
-
-```html
-<!DOCTYPE html>
-<html>
-<body>
-    <h1>Hello {{first_name}},</h1>
-    <p>Welcome to {{company_name}}!</p>
-    <p>Best regards</p>
-</body>
-</html>
-```
-
-## Placeholders
-
-| Placeholder | Example |
-|-------------|---------|
-| `{{email}}` | john@example.com |
-| `{{first_name}}` | John |
-| `{{last_name}}` | Doe |
-| `{{domain}}` | example.com |
-| `{{date}}` | 2024-01-15 |
-| `{{date_formatted}}` | January 15, 2024 |
-| `{{year}}` | 2024 |
-| `{{unsubscribe_link}}` | https://... |
-
-### Conditional Content
-
-```html
-{{if:first_name}}
-  <p>Hello {{first_name}},</p>
-{{else}}
-  <p>Hello,</p>
-{{endif}}
-```
-
-## Web Dashboard
-
-```bash
-mercury start server
-```
-
-Open http://localhost:8080
-
-- **Login:** admin / admin
-- Change password via `ADMIN_PASSWORD` environment variable
-
-## Environment Variables (Optional)
-
-```bash
-# Web UI admin password (default: admin)
-export ADMIN_PASSWORD="secure-password"
-
-# Security key for sessions
-export SECRET_KEY="your-secret-key"
-```
-
-## Features
-
-### Sending Engine
-- Async sending with aiosmtplib (100-300 emails/sec)
-- Connection pooling with circuit breaker
-- Multi-SMTP load balancing
-- Rate limiting (per minute/hour)
-- Retry queue with exponential backoff
-
-### Tracking
-- Open tracking (1x1 pixel)
-- Click tracking (link wrapping)
-- Unsubscribe handling
-- Bounce processing
-
-### Templates
-- 50+ built-in placeholders
-- Conditional content
-- Template includes
-- A/B testing (subject/template rotation)
-
-### Document Generation
-- QR codes
-- PDF attachments
-- DOCX attachments
-- Email as image
-
-### Integrations
-- Webhook notifications
-- Scheduled sending (cron)
-- Health check endpoints
-
-## API
-
-The web dashboard includes a REST API:
-
-```bash
-# Get status
-curl http://localhost:8080/api/status
-
-# With API key
-curl -H "X-API-Key: your-key" http://localhost:8080/api/campaigns
-```
-
-Set API keys: `export API_KEYS="key1,key2,key3"`
-
-### Endpoints
-
-| Endpoint | Description |
-|----------|-------------|
-| `GET /api/status` | System status |
-| `GET /api/campaigns` | List campaigns |
-| `GET /api/smtp` | List SMTP servers |
-| `POST /api/smtp/test/{name}` | Test SMTP connection |
-| `GET /api/stats` | View statistics |
-| `GET /health` | Health check |
-
-## Troubleshooting
-
-### SMTP Connection Failed
-
-```
-Error: Connection refused
-```
-
-- Check host/port are correct
-- Try port 465 with `use_ssl: true`
-- For Gmail, use an [App Password](https://support.google.com/accounts/answer/185833)
-
-### Rate Limited
-
-```
-Error: 421 Too many connections
-```
-
-- Reduce `batch_size` in config
-- Add more SMTP servers for load balancing
-
-### Template Not Found
-
-- Use path relative to project root
-- Check file exists: `ls templates/`
-
-## Project Structure
-
-```
-your-project/
-├── config/
-│   └── campaign.yaml      # Campaign configuration
-├── templates/
-│   └── email.html         # Email template
-├── data/
-│   ├── recipients.csv     # Recipients list
-│   └── suppression_list.txt
-├── logs/
-│   ├── success-emails.txt
-│   └── failed-emails.txt
-└── .env                   # Environment variables
-```
+---
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).

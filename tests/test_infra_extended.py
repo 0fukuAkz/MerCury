@@ -108,7 +108,7 @@ class TestSMTPServiceExtended:
         # Mock circuit breaker inside config
         config = service._configs[0]
         config.runtime.circuit_breaker = MagicMock()
-        config.circuit_breaker.get_stats.return_value = {'state': 'closed'}
+        config.runtime.circuit_breaker.get_stats.return_value = {'state': 'closed'}
         
         status = service.get_server_status()
         

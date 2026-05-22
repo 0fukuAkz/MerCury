@@ -205,8 +205,7 @@ class TestSMTPServerModel:
         server.port = 587
         server.username = "user@example.com"
         server._password = None
-        server.use_tls = True
-        server.use_ssl = False
+        server.tls_mode = 'starttls'
         server.use_auth = True
         server.timeout = 30
         server.from_email = "from@example.com"
@@ -215,7 +214,7 @@ class TestSMTPServerModel:
         config = server.get_connection_config()
         assert config["host"] == "smtp.example.com"
         assert config["port"] == 587
-        assert config["use_tls"] is True
+        assert config["tls_mode"] == 'starttls'
         assert "password" in config
         assert "from_email" in config
 

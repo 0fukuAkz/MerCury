@@ -58,7 +58,3 @@ class Template(Base, BaseModel):
     
     def __repr__(self):
         return f"<Template(id={self.id}, name='{self.name}')>"
-
-
-# Backward-compatible alias expected by tests
-EmailTemplate = Template

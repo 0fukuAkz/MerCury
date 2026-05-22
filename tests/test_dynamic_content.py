@@ -4,10 +4,9 @@ import pytest
 from unittest.mock import Mock, AsyncMock
 from datetime import datetime, UTC
 
-from mercury.services.email_service import EmailService, EmailConfig
+from mercury.services.email import EmailService, EmailConfig
 from mercury.services.smtp_service import SMTPService
 from mercury.engine.async_sender import EmailResult
-from mercury.features.generators import AttachmentGenerator
 
 @pytest.mark.asyncio
 class TestDynamicContent:

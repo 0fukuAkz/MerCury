@@ -2,7 +2,7 @@
 
 import pytest
 from unittest.mock import MagicMock, patch
-from mercury.services.email_service import EmailService
+from mercury.services.email import EmailService
 from mercury.data.models.email_log import EmailLog
 
 @pytest.fixture
@@ -27,7 +27,7 @@ async def test_email_service_send_with_attachments(email_service):
     mock_smtp = MagicMock()
     mock_smtp.send_message.return_value = (True, "OK")
     
-    with patch('mercury.services.email_service.SMTPService') as MockSmtpSvc:
+    with patch('mercury.services.email.service.SMTPService') as MockSmtpSvc:
         MockSmtpSvc.return_value.get_client.return_value = mock_smtp
         
         attachments = [
@@ -53,7 +53,7 @@ async def test_email_service_retry_logic(email_service, db_session):
     db_session.add(log)
     db_session.commit()
     
-    with patch('mercury.services.email_service.SMTPService') as MockSmtpSvc:
+    with patch('mercury.services.email.service.SMTPService') as MockSmtpSvc:
         MockSmtpSvc.return_value.get_client.return_value = mock_smtp
         
         # This might be handled at a higher level (CampaignService), 
@@ -64,7 +64,7 @@ async def test_email_service_retry_logic(email_service, db_session):
 
 def test_email_service_reputation_impact(email_service):
     # Test if send failure impacts reputation via SMTP service record_failure
-    with patch('mercury.services.email_service.SMTPService') as MockSmtpSvc:
+    with patch('mercury.services.email.service.SMTPService') as MockSmtpSvc:
         email_service.smtp_service = MockSmtpSvc()
         # Mock record_failure on the instance
         email_service.smtp_service.record_failure = MagicMock()

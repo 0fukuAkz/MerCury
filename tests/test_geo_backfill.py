@@ -125,7 +125,7 @@ def test_tracking_open_persists_ip_and_ua(session):
 
 def test_enrichment_fills_missing_fields(session):
     """Recipients without ip/ua get backfilled from prior tracking events."""
-    from mercury.services.email_service import EmailService
+    from mercury.services.email import EmailService
     from mercury.services.smtp_service import SMTPService
 
     target = 'enrich-needed@test.geo'
@@ -147,7 +147,7 @@ def test_enrichment_fills_missing_fields(session):
 
 def test_enrichment_does_not_overwrite_csv_supplied_values(session):
     """Caller-provided ip/ua wins over historical inference."""
-    from mercury.services.email_service import EmailService
+    from mercury.services.email import EmailService
     from mercury.services.smtp_service import SMTPService
 
     target = 'csv-wins@test.geo'
@@ -173,7 +173,7 @@ def test_enrichment_no_op_when_recipients_already_have_both_fields(session):
     behavioral one — verifying the values stay intact is the contract
     that callers rely on.
     """
-    from mercury.services.email_service import EmailService
+    from mercury.services.email import EmailService
     from mercury.services.smtp_service import SMTPService
 
     svc = EmailService(SMTPService())
@@ -187,7 +187,7 @@ def test_enrichment_no_op_when_recipients_already_have_both_fields(session):
 
 def test_enrichment_partial_fill_ip_only(session):
     """Recipient has ip but not ua → only ua gets backfilled."""
-    from mercury.services.email_service import EmailService
+    from mercury.services.email import EmailService
     from mercury.services.smtp_service import SMTPService
 
     target = 'partial@test.geo'

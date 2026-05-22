@@ -33,6 +33,9 @@ env/
 *.swo
 *~
 
+# OS
+.DS_Store
+
 # Project specific
 logs/*.log
 logs/*.txt

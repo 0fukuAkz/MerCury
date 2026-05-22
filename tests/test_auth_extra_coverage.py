@@ -227,9 +227,9 @@ class TestInitAuth:
         mock_repo.get_admins.return_value = []  # no admins yet
 
         with patch("mercury.security.auth.login_manager"), \
-             patch("mercury.data.database.init_db"), \
-             patch("mercury.data.database.get_session_direct", return_value=mock_session), \
-             patch("mercury.data.repositories.UserRepository", return_value=mock_repo), \
+             patch("mercury.security.auth.init_db"), \
+             patch("mercury.security.auth.get_session_direct", return_value=mock_session), \
+             patch("mercury.security.auth.UserRepository", return_value=mock_repo), \
              patch("mercury.security.auth.create_user") as mock_create:
 
             init_auth(mock_app)
@@ -253,9 +253,9 @@ class TestInitAuth:
         mock_repo.get_admins.return_value = []
 
         with patch("mercury.security.auth.login_manager"), \
-             patch("mercury.data.database.init_db"), \
-             patch("mercury.data.database.get_session_direct", return_value=mock_session), \
-             patch("mercury.data.repositories.UserRepository", return_value=mock_repo):
+             patch("mercury.security.auth.init_db"), \
+             patch("mercury.security.auth.get_session_direct", return_value=mock_session), \
+             patch("mercury.security.auth.UserRepository", return_value=mock_repo):
 
             import logging
             with caplog.at_level(logging.WARNING, logger="mercury.security.auth"):
@@ -271,9 +271,9 @@ class TestInitAuth:
         mock_repo.get_admins.return_value = [MagicMock()]  # admin exists
 
         with patch("mercury.security.auth.login_manager"), \
-             patch("mercury.data.database.init_db"), \
-             patch("mercury.data.database.get_session_direct", return_value=mock_session), \
-             patch("mercury.data.repositories.UserRepository", return_value=mock_repo), \
+             patch("mercury.security.auth.init_db"), \
+             patch("mercury.security.auth.get_session_direct", return_value=mock_session), \
+             patch("mercury.security.auth.UserRepository", return_value=mock_repo), \
              patch("mercury.security.auth.create_user") as mock_create:
 
             init_auth(mock_app)

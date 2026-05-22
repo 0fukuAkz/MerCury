@@ -31,17 +31,16 @@ def _validate_smtp_payload(data: dict, *, partial: bool) -> Optional[str]:
     def _is_true(v: Any) -> bool:
         return v in (True, 'true', 'True', 1, '1', 'on')
 
-    # tls_mode is the preferred field — single enum 'none'|'starttls'|'ssl'.
+    # tls_mode is the single TLS field. The legacy use_tls / use_ssl
+    # booleans are rejected outright — clients must migrate.
     if 'tls_mode' in data:
         if data['tls_mode'] not in ('none', 'starttls', 'ssl'):
             return "tls_mode must be one of 'none', 'starttls', 'ssl'"
-
-    # Legacy bools: still accepted but the engine derives tls_mode from
-    # them at write time. Both True is a no-op contradiction the engine
-    # used to silently resolve via OR — reject explicitly.
-    if 'use_tls' in data and 'use_ssl' in data:
-        if _is_true(data['use_tls']) and _is_true(data['use_ssl']):
-            return 'use_tls and use_ssl are mutually exclusive (use tls_mode instead)'
+    if 'use_tls' in data or 'use_ssl' in data:
+        return (
+            "use_tls / use_ssl are no longer accepted. Use tls_mode "
+            "('none' | 'starttls' | 'ssl') instead."
+        )
 
     # use_auth=True with no username silently degrades to anonymous send
     # at connect time, which is almost never what the operator wanted.
@@ -98,16 +97,9 @@ def api_add_smtp():
     if err:
         return jsonify({'error': err}), 400
 
-    # Resolve tls_mode for the new row: explicit field wins, else derive
-    # from legacy booleans, else default 'starttls'.
-    tls_mode = data.get('tls_mode')
-    if tls_mode not in ('none', 'starttls', 'ssl'):
-        if data.get('use_ssl'):
-            tls_mode = 'ssl'
-        elif data.get('use_tls', True):
-            tls_mode = 'starttls'
-        else:
-            tls_mode = 'none'
+    # tls_mode is required by the validator above; default to 'starttls'
+    # when omitted entirely for a sensible greenfield-config baseline.
+    tls_mode = data.get('tls_mode') or 'starttls'
 
     try:
         service = SMTPService()
@@ -117,8 +109,6 @@ def api_add_smtp():
             port=int(data.get('port', 587)),
             username=data.get('username', ''),
             password=data.get('password', ''),
-            use_tls=(tls_mode == 'starttls'),
-            use_ssl=(tls_mode == 'ssl'),
             tls_mode=tls_mode,
             # Declare which address this server is authorized to send From.
             # When set on multiple servers, the connection pool routes by
@@ -136,22 +126,13 @@ def api_add_smtp():
 
 
 @api_bp.route('/smtp/test/<name>', methods=['POST'])
-@api_bp.route('/smtp/test/<int:server_id>', methods=['POST'], endpoint='api_test_smtp_by_id')
 @api_key_or_login_required
 @limiter.limit("5/minute")
-def api_test_smtp(name: str | None = None, server_id: int | None = None):
-    """Test connection to a specific SMTP server.
-
-    Accepts either the server name (preferred — matches PUT/DELETE
-    `/api/smtp/<name>`) or a numeric id (kept for back-compat with any
-    older client). The frontend (smtp.html) sends the name.
-    """
+def api_test_smtp(name: str):
+    """Test connection to a specific SMTP server by name."""
     with session_scope() as session:
         repo = SMTPRepository(session)
-        if server_id is not None:
-            server = repo.get(server_id)
-        else:
-            server = repo.get_by_name(name)
+        server = repo.get_by_name(name)
         if not server:
             return jsonify({'success': False, 'error': 'Server not found'}), 404
 
@@ -207,17 +188,9 @@ def api_update_smtp(name):
                 server.password = data['password']
             except RuntimeError as e:
                 return jsonify({'success': False, 'error': str(e)}), 500
-        # tls_mode is preferred; if absent, derive from legacy bools and
-        # apply via set_tls_mode so use_tls/use_ssl stay in lockstep.
-        new_mode: Optional[str] = None
+        # Only tls_mode is accepted; legacy bools are rejected by the validator.
         if 'tls_mode' in data and data['tls_mode'] in ('none', 'starttls', 'ssl'):
-            new_mode = data['tls_mode']
-        elif 'use_tls' in data or 'use_ssl' in data:
-            new_use_ssl = bool(data.get('use_ssl', server.use_ssl))
-            new_use_tls = bool(data.get('use_tls', server.use_tls))
-            new_mode = 'ssl' if new_use_ssl else ('starttls' if new_use_tls else 'none')
-        if new_mode is not None:
-            server.set_tls_mode(new_mode)
+            server.set_tls_mode(data['tls_mode'])
         if 'use_auth' in data:
             server.use_auth = bool(data['use_auth'])
         repo.update(server)

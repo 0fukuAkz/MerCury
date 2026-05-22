@@ -8,7 +8,16 @@ services:
       - FLASK_DEBUG=0
       - DATABASE_URL=postgresql://mercury:mercury@db:5432/mercury
       - SECRET_KEY=${SECRET_KEY:?SECRET_KEY must be set}
+      # First-admin bootstrap. All three are required together — the app
+      # refuses to auto-create an admin user without them and you'll be
+      # locked out of the web UI on first boot.
+      - ADMIN_USERNAME=${ADMIN_USERNAME:?ADMIN_USERNAME must be set}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:?ADMIN_EMAIL must be set}
+      # Tracking pixel/click links are built against this URL. Required
+      # whenever a campaign opts into tracking; TrackingService raises at
+      # construction time if neither this nor an explicit base_url is set.
+      - TRACKING_BASE_URL=${TRACKING_BASE_URL:?TRACKING_BASE_URL must be set (e.g. https://mail.yourdomain.com)}
       # Rate-limit storage. memory:// loses all state on restart and cannot be
       # shared across workers — Redis is the production default. Override only
       # if you genuinely intend a single-worker, ephemeral-state deploy.

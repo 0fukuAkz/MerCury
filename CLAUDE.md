@@ -42,7 +42,7 @@ There are two distinct runners — pick the right one:
 - **`python run.py`** (production-style): bootstraps a `venv/`, then execs `gunicorn --worker-class eventlet -w 1 --bind 0.0.0.0:5000 mercury.web.app:create_app()`. Writes a PID to `data/.mercury.pid` for Windows shadow-process cleanup. Single worker is required because eventlet + SocketIO + the async sender thread assume one process.
 - **`make dev` / `python -m mercury.web.app`**: plain Flask dev server, useful for fast iteration.
 
-Note the README's `mercury start server` and port 8080 are aspirational/CLI-side; the actual production runner binds **port 5000** via `run.py`.
+Note: `mercury start server` is a real Click command in [cli/main.py](src/mercury/cli/main.py) that runs the Flask/SocketIO dev server directly on port **5000** (matches `run.py`). The **canonical production path** is `python run.py` — gunicorn + eventlet, single worker. The CLI command is for CLI-driven local iteration. README and `docs/` document the production path; do not redirect users back to the CLI runner.
 
 ## Database & migrations
 
@@ -52,7 +52,7 @@ Note the README's `mercury start server` and port 8080 are aspirational/CLI-side
   alembic revision --autogenerate -m "describe change"
   alembic upgrade head
   ```
-- Note: `web/app.py` historically performs an inline `ALTER TABLE` to patch missing columns at boot — this is SQLite-only and breaks on multi-instance deployments. Prefer adding a real Alembic migration over extending that path.
+- Boot-time migrations: `web/app.py` runs `alembic upgrade head` automatically in non-production environments (handy for `make dev` and tests). In production it skips by default — run `alembic upgrade head` out-of-band before workers start. Override either way with `MERCURY_BOOT_MIGRATIONS=1` / `MERCURY_SKIP_BOOT_MIGRATIONS=1`.
 
 ## Architecture (the parts that span files)
 
@@ -68,14 +68,15 @@ web ─┘                  │
 - **`web/app.py`** exposes `create_app()` (Gunicorn entry point). Routes are split across `web/routes/{api,auth,health,senders,settings,templates,tools,tracking,views}.py`. SocketIO wiring lives in `web/events.py` and `web/extensions.py`.
 - **`app_context.py`** is a DI container holding the shared SocketIO server and Flask-Limiter instance. Inject through it rather than reaching for module-level singletons.
 - **`features/template_engine.py`** + `placeholders.py` implement the `{{var}}` / `{{if:x}}…{{endif}}` mini-language used by both the CLI and web; treat it as the single source of truth for placeholder semantics.
-- **`security/auth.py`** owns password hashing, session auth, API-key auth, and unsubscribe-link HMAC tokens. Default credentials (`admin/admin`) and `SECRET_KEY` defaults exist for dev — they must be overridden in production via `ADMIN_PASSWORD` and `SECRET_KEY` env vars.
+- **`security/auth.py`** owns password hashing, session auth, API-key auth, and unsubscribe-link HMAC tokens. There is no `admin/admin` fallback — first-admin bootstrap requires `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `ADMIN_EMAIL` all set. `SECRET_KEY` has no production default either; in dev (`FLASK_ENV` ∈ {development, dev, test, testing, local}) a clearly-named placeholder is used.
 
 ## Authentication / configuration env vars
 
 Set on the web app, not the CLI:
 
-- `ADMIN_PASSWORD` — overrides the `admin/admin` default.
-- `SECRET_KEY` — Flask session signing key. The bundled default is a dev placeholder; set this in any non-local environment.
+- `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `ADMIN_EMAIL` — all three required for first-admin bootstrap. No `admin/admin` fallback.
+- `SECRET_KEY` — Flask session signing key. Required in any non-dev environment (`FLASK_ENV` not in {development, dev, test, testing, local}); in dev a clearly-named placeholder is used.
+- `TRACKING_BASE_URL` — public URL used for tracking pixels/click links. Required for any campaign that enables tracking.
 - `API_KEYS` — comma-separated list, checked against the `X-API-Key` header for `/api/*` routes.
 - `FLASK_DEBUG=1` — enables debug mode and verbose Gunicorn access logging when launched via `run.py --debug`.
 

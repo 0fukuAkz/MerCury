@@ -11,11 +11,14 @@ from datetime import datetime, UTC, timedelta
 from flask import Flask
 from flask_login import LoginManager, UserMixin
 
+from ..data.database import get_session_direct, init_db
+from ..data.repositories import UserRepository
+
 logger = logging.getLogger(__name__)
 
 # Flask-Login manager
 login_manager = LoginManager()
-login_manager.login_view = 'login'
+login_manager.login_view = 'auth.login'
 login_manager.login_message = 'Please log in to access this page.'
 login_manager.login_message_category = 'info'
 
@@ -322,12 +325,10 @@ def load_user(user_id: str) -> Optional[User]:
 def init_auth(app: Flask) -> None:
     """
     Initialize authentication for Flask app.
-    
-    Creates default admin user if none exists in database.
+
+    Creates default admin user if ADMIN_USERNAME / ADMIN_PASSWORD / ADMIN_EMAIL
+    are all set; otherwise emits a warning and leaves the DB untouched.
     """
-    from ..data.database import get_session_direct, init_db
-    from ..data.repositories import UserRepository
-    
     login_manager.init_app(app)
     
     # Ensure database tables exist
@@ -337,27 +338,29 @@ def init_auth(app: Flask) -> None:
     try:
         repo = UserRepository(session)
         
-        # Create default admin user if none exists
-        # Create default admin user ONLY if explicitly configured
+        # Bootstrap the first admin ONLY when explicitly configured.
+        # ADMIN_EMAIL is required alongside ADMIN_USERNAME and ADMIN_PASSWORD —
+        # there is no `admin@localhost` placeholder default.
         admins = repo.get_admins()
         if not admins:
             default_username = os.environ.get('ADMIN_USERNAME')
             default_password = os.environ.get('ADMIN_PASSWORD')
-            default_email = os.environ.get('ADMIN_EMAIL', 'admin@localhost')
-            
-            if default_username and default_password:
+            default_email = os.environ.get('ADMIN_EMAIL')
+
+            if default_username and default_password and default_email:
                 create_user(
                     username=default_username,
                     password=default_password,
                     email=default_email,
                     is_admin=True,
-                    must_change_password=True
+                    must_change_password=True,
                 )
-                logger.info(f"Created initial admin user: {default_username}")
+                logger.info("Created initial admin user: %s", default_username)
             else:
                 logger.warning(
-                    "No admin user found and ADMIN_USERNAME/ADMIN_PASSWORD not set. "
-                    "Web UI will be inaccessible until an admin is created."
+                    "No admin user found and ADMIN_USERNAME / ADMIN_PASSWORD / "
+                    "ADMIN_EMAIL not all set. Web UI will be inaccessible until "
+                    "an admin is created."
                 )
     finally:
         session.close()

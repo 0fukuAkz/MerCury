@@ -625,7 +625,7 @@ class TestSMTPRepositoryCoverage:
             port=587,
             username="user",
             password="pass",
-            use_tls=True,
+            tls_mode="starttls",
             status=SMTPServerStatus.ACTIVE.value,
             is_enabled=True,
             circuit_open=False
@@ -708,7 +708,7 @@ class TestBaseRepositoryCoverage:
             port=587,
             username="user",
             password="pass",
-            use_tls=True,
+            tls_mode="starttls",
             status=SMTPServerStatus.ACTIVE.value,
             is_enabled=True,
             circuit_open=False
@@ -741,7 +741,7 @@ class TestBaseRepositoryCoverage:
             port=587,
             username="u",
             password="p",
-            use_tls=True,
+            tls_mode="starttls",
             status=SMTPServerStatus.ACTIVE.value,
             is_enabled=True,
             circuit_open=False

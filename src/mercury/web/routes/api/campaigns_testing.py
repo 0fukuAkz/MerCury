@@ -26,7 +26,7 @@ from . import (
 @limiter.limit("10/minute")
 def api_send_test_email():
     """Send a single test email using the provided campaign settings."""
-    from ....services.email_service import EmailService, EmailConfig
+    from ....services.email import EmailService, EmailConfig
 
     data = request.get_json(silent=True) or {}
     recipient = (data.get('test_recipient') or '').strip().lower()
@@ -115,9 +115,7 @@ def api_send_test_email():
         enable_qr_code = data.get('enable_qr_code') in (True, 'on', '1', 'true')
         send_as_image = data.get('send_as_image') in (True, 'on', '1', 'true')
 
-        # Pull attachment fields off the test payload so the test send honors
-        # what's set on the form (legacy single-path + library multi-select).
-        # Without this, send_single() materializes with empty attachments.
+        # Attachments arrive via the library multi-select (attachment_ids).
         attachment_ids = [
             int(x) for x in (data.get('attachment_ids') or [])
             if str(x).strip().isdigit()
@@ -144,13 +142,7 @@ def api_send_test_email():
             ),
             auto_company_logo=data.get('auto_company_logo') in (True, 'on', '1', 'true'),
             hide_from_email_header=data.get('hide_from_email_header') in (True, 'on', '1', 'true'),
-            # Checkbox semantics: present and truthy → True; missing key →
-            # True as well (preserves the historical fallback so a test
-            # send from an older client doesn't silently lose the body).
-            include_default_body=(
-                data.get('include_default_body') in (True, 'on', '1', 'true')
-                if 'include_default_body' in data else True
-            ),
+            include_default_body=data.get('include_default_body') in (True, 'on', '1', 'true'),
         )
 
         smtp_service = SMTPService()
@@ -162,9 +154,8 @@ def api_send_test_email():
         # — which is intermittent and confusing — into an actionable error
         # before we open the SMTP connection.
         #
-        # We only enforce when *some* server declares ownership; if all
-        # servers have empty from_email columns, From-routing isn't in
-        # play and the legacy behavior (trust the form) is preserved.
+        # Enforcement only kicks in when at least one server declares
+        # ownership; otherwise From-routing isn't in play.
         servers_with_from = [c for c in smtp_configs if (c.get('from_email') or '').strip()]
         pool = smtp_service.get_connection_pool() if servers_with_from else None
         owning_server_name: str | None = None
@@ -201,8 +192,8 @@ def api_send_test_email():
         ))
 
         # Surface the resolved attachment configuration in the response so
-        # the operator can confirm (in DevTools → Network) which path won —
-        # library vs legacy — without having to fish through server logs.
+        # the operator can confirm (in DevTools → Network) what got materialized
+        # without having to fish through server logs.
         diagnostics = {
             'attachment_ids': attachment_ids,
             'resolved_path': 'library' if attachment_ids else 'none',

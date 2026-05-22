@@ -127,8 +127,11 @@ class EmailService:
         # Setup attachment generator
         self._attachment_generator = AttachmentGenerator(GeneratorConfig())
 
-        # Setup tracking service
-        if config.enable_tracking:
+        # Setup tracking service: requires both opt-in AND a base URL.
+        # TrackingService no longer accepts a localhost fallback, so a campaign
+        # that enables tracking without configuring tracking_base_url is silently
+        # downgraded to "tracking off" rather than crashed.
+        if config.enable_tracking and config.tracking_base_url:
             self._tracking_service = TrackingService(base_url=config.tracking_base_url)
 
         # Setup dead letter service

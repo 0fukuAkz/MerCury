@@ -5,7 +5,7 @@ from mercury.services.tracking_service import TrackingService
 
 @pytest.fixture
 def tracking_service():
-    return TrackingService()
+    return TrackingService(base_url="http://localhost:5000")
 
 def test_tracking_generate_pixel_url(tracking_service):
     url = tracking_service.generate_tracking_pixel("log123")

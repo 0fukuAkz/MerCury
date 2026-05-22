@@ -78,12 +78,8 @@ class SMTPServerConfig:
     port: int = 587
     username: str = ""
     password: str = ""
-    # 'none' | 'starttls' | 'ssl' — authoritative TLS mode.
-    # use_tls / use_ssl below are derived for back-compat with callers
-    # that still read them; do not write to them independently.
+    # 'none' | 'starttls' | 'ssl' — single source of truth for TLS.
     tls_mode: str = 'starttls'
-    use_tls: bool = True
-    use_ssl: bool = False
     use_auth: bool = True
     timeout: int = 30
     from_email: str = ""
@@ -119,51 +115,23 @@ class SMTPServerConfig:
                 circuit_breaker=_create_circuit_breaker(self.name, **cb_kwargs),
             )
 
-    # ---- Back-compat read-through properties ---------------------------------
-    # External code (engine internals, smtp_service stats display) historically
-    # reached straight for these names on the config object. Keeping read
-    # access available avoids a wider sweep right now; writers must go through
-    # the methods below or `config.runtime.X = ...` directly.
-    @property
-    def circuit_breaker(self) -> CircuitBreaker:
-        return self.runtime.circuit_breaker
-
-    @property
-    def current_minute_count(self) -> int:
-        return self.runtime.current_minute_count
-
-    @property
-    def current_hour_count(self) -> int:
-        return self.runtime.current_hour_count
-
-    @property
-    def total_sent(self) -> int:
-        return self.runtime.total_sent
-
-    @property
-    def total_failures(self) -> int:
-        return self.runtime.total_failures
-
-    @property
-    def consecutive_failures(self) -> int:
-        return self.runtime.consecutive_failures
-    # ---------------------------------------------------------------------------
-
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'SMTPServerConfig':
         """Create config from dictionary."""
-        # Resolve tls_mode: explicit value wins, then derive from legacy
-        # use_tls/use_ssl booleans for back-compat with config sources
-        # that haven't been migrated yet.
-        explicit_mode = (data.get('tls_mode') or '').strip().lower()
-        if explicit_mode in ('none', 'starttls', 'ssl'):
-            tls_mode = explicit_mode
-        elif data.get('use_ssl'):
-            tls_mode = 'ssl'
-        elif data.get('use_tls', True):
+        # tls_mode is the single TLS field. Missing → defaults to 'starttls'
+        # (the product default for port 587). Legacy use_tls / use_ssl
+        # booleans are no longer derived from; a config that supplied them
+        # without tls_mode used to be honored and is now treated as defaulted.
+        raw = data.get('tls_mode')
+        if raw is None:
             tls_mode = 'starttls'
         else:
-            tls_mode = 'none'
+            tls_mode = str(raw).strip().lower()
+            if tls_mode not in ('none', 'starttls', 'ssl'):
+                raise ValueError(
+                    f"SMTPServerConfig.from_dict: 'tls_mode' must be one of "
+                    f"'none', 'starttls', 'ssl' (got: {raw!r})"
+                )
         return cls(
             name=data.get('name', data.get('host', 'default')),
             host=data['host'],
@@ -171,8 +139,6 @@ class SMTPServerConfig:
             username=data.get('username', ''),
             password=data.get('password', ''),
             tls_mode=tls_mode,
-            use_tls=(tls_mode == 'starttls'),
-            use_ssl=(tls_mode == 'ssl'),
             use_auth=data.get('use_auth', True),
             timeout=data.get('timeout', 30),
             from_email=data.get('from_email', ''),
@@ -194,8 +160,7 @@ class SMTPServerConfig:
             'host': self.host,
             'port': self.port,
             'username': self.username,
-            'use_tls': self.use_tls,
-            'use_ssl': self.use_ssl,
+            'tls_mode': self.tls_mode,
             'use_auth': self.use_auth,
             'timeout': self.timeout,
             'from_email': self.from_email,
@@ -249,17 +214,8 @@ class AsyncSMTPConnection:
         self.messages_sent = 0
     
     async def connect(self) -> None:
-        """Establish async SMTP connection.
-
-        TLS mode dispatch is unambiguous (single ``tls_mode`` field).
-        Previous logic OR'd use_ssl/use_tls and inferred from port 465,
-        which silently overrode operator intent if both were True.
-        """
-        mode = getattr(self.config, 'tls_mode', None) or (
-            'ssl' if self.config.use_ssl else
-            ('starttls' if self.config.use_tls else 'none')
-        )
-
+        """Establish async SMTP connection. Dispatches on ``tls_mode``."""
+        mode = self.config.tls_mode
         implicit_tls = (mode == 'ssl')
 
         self.client = aiosmtplib.SMTP(
@@ -334,8 +290,6 @@ class AsyncConnectionPool:
         self.max_idle_time = max_idle_time
         
         self.connections: List[AsyncSMTPConnection] = []
-        # Backward-compatible alias expected by tests
-        self._connections = self.connections
         self.available: asyncio.Queue = asyncio.Queue()
         self.lock = asyncio.Lock()
         self._initialized = False
@@ -453,10 +407,6 @@ class AsyncConnectionPool:
         # FIX: Proactively replenish to wake up waiters
         asyncio.create_task(self._replenish_one())
     
-    # Backward-compatible alias expected by tests
-    async def return_connection(self, conn: AsyncSMTPConnection):
-        await self.release_connection(conn)
-    
     async def close_all(self):
         """Close all connections."""
         async with self.lock:
@@ -500,8 +450,6 @@ class SMTPConnectionPool:
     ):
         self.configs = configs
         self.pools: Dict[str, AsyncConnectionPool] = {}
-        # Backward-compatible alias expected by tests
-        self._pools = self.pools
         # Default to round-robin for deterministic selection in tests
         self.selection_strategy = selection_strategy or 'round_robin'
         self.lock = asyncio.Lock()
@@ -738,16 +686,17 @@ class SMTPConnectionPool:
         """Get pool status keyed by server name."""
         status = {}
         for c in self.configs:
-            stats = c.circuit_breaker.get_stats()
+            rt = c.runtime
+            stats = rt.circuit_breaker.get_stats()
             status[c.name] = {
                 'host': c.host,
                 'circuit_state': stats['state'],
-                'minute_count': c.current_minute_count,
-                'hour_count': c.current_hour_count,
+                'minute_count': rt.current_minute_count,
+                'hour_count': rt.current_hour_count,
                 'available': c.can_execute(),
-                'total_sent': c.total_sent,
-                'consecutive_failures': c.consecutive_failures,
-                'total_failures': c.total_failures,
+                'total_sent': rt.total_sent,
+                'consecutive_failures': rt.consecutive_failures,
+                'total_failures': rt.total_failures,
             }
         return status
 

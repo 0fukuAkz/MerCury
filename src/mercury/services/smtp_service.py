@@ -44,9 +44,7 @@ class SMTPService:
                     port=server.port,
                     username=server.username,
                     password=server.password,
-                    tls_mode=server.effective_tls_mode,
-                    use_tls=server.use_tls,
-                    use_ssl=server.use_ssl,
+                    tls_mode=server.tls_mode or 'starttls',
                     use_auth=server.use_auth,
                     timeout=server.timeout,
                     from_email=server.from_email or "",
@@ -133,10 +131,7 @@ class SMTPService:
             }
 
         from ..engine.connection_pool import AsyncSMTPConnection  # noqa: F401
-        mode = getattr(config, 'tls_mode', None) or (
-            'ssl' if config.use_ssl else
-            ('starttls' if config.use_tls else 'none')
-        )
+        mode = config.tls_mode
         client: aiosmtplib.SMTP | None = None
         stage = 'tcp'
         try:
@@ -231,24 +226,16 @@ class SMTPService:
         port: int = 587,
         username: str = "",
         password: str = "",
-        use_tls: bool = True,
-        use_ssl: bool = False,
-        tls_mode: Optional[str] = None,
-        **kwargs
+        tls_mode: str = 'starttls',
+        **kwargs,
     ) -> SMTPServer:
-        """Add new SMTP server to database.
-
-        Accepts both tls_mode (preferred) and the legacy use_tls/use_ssl
-        flags. Whichever is supplied, the resulting row has tls_mode +
-        use_tls + use_ssl all consistent via set_tls_mode().
-        """
-        if tls_mode not in ('none', 'starttls', 'ssl'):
-            if use_ssl:
-                tls_mode = 'ssl'
-            elif use_tls:
-                tls_mode = 'starttls'
-            else:
-                tls_mode = 'none'
+        """Add new SMTP server to database. ``tls_mode`` must be one of
+        ``'none'`` / ``'starttls'`` / ``'ssl'``."""
+        # Strip any legacy use_tls / use_ssl that an old caller still passes —
+        # we deliberately don't honor them; if anyone hits this, they should
+        # see the warning in tests and migrate to tls_mode.
+        kwargs.pop('use_tls', None)
+        kwargs.pop('use_ssl', None)
         session = get_session_direct()
         try:
             server = SMTPServer(
@@ -257,12 +244,11 @@ class SMTPService:
                 port=port,
                 username=username,
                 password=password,
-                **kwargs
+                **kwargs,
             )
             server.set_tls_mode(tls_mode)
             repo = SMTPRepository(session)
             return repo.create(server)
-
         finally:
             session.close()
     
@@ -286,13 +272,13 @@ class SMTPService:
                 'name': config.name,
                 'host': config.host,
                 'port': config.port,
-                'circuit_state': config.circuit_breaker.get_stats()['state'],
+                'circuit_state': config.runtime.circuit_breaker.get_stats()['state'],
                 'available': config.can_execute(),
-                'minute_count': config.current_minute_count,
+                'minute_count': config.runtime.current_minute_count,
                 'max_per_minute': config.max_per_minute,
-                'hour_count': config.current_hour_count,
+                'hour_count': config.runtime.current_hour_count,
                 'max_per_hour': config.max_per_hour,
-                'circuit_breaker_stats': config.circuit_breaker.get_stats()
+                'circuit_breaker_stats': config.runtime.circuit_breaker.get_stats()
             }
             for config in self._configs
         ]

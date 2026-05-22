@@ -61,7 +61,7 @@ def _update_email_log(email_id: str, event_type: str, ip: str = '', ua: str = ''
 def track_open(email_id):
     """Track email open via 1x1 transparent pixel."""
     recipient = _lookup_recipient(email_id)
-    service = TrackingService()
+    service = TrackingService(base_url=request.host_url.rstrip('/'))
     # request.user_agent.string can be empty under some werkzeug/test-client
     # combinations even when the header is set; reading the header directly
     # is the source of truth and matches what the persistence layer needs.
@@ -91,7 +91,7 @@ def track_click(email_id):
     link_id = request.args.get('lid')
     
     recipient = _lookup_recipient(email_id)
-    service = TrackingService()
+    service = TrackingService(base_url=request.host_url.rstrip('/'))
     _ua = request.headers.get('User-Agent', '') or (
         request.user_agent.string if request.user_agent else ''
     )
@@ -115,7 +115,7 @@ def track_unsubscribe(email_id, token):
         abort(403, 'Invalid unsubscribe token')
     
     recipient = _lookup_recipient(email_id)
-    service = TrackingService()
+    service = TrackingService(base_url=request.host_url.rstrip('/'))
     service.record_event(
         email_id=email_id,
         event_type='unsubscribe',

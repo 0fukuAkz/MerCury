@@ -78,7 +78,7 @@ def test_record_failure_rate_limit(mock_config):
     
     # Should correctly parse the error string and log it.
     # No direct state assert needed besides checking errors didn't raise
-    assert mock_config.total_failures == 1
+    assert mock_config.runtime.total_failures == 1
 
 @pytest.mark.asyncio
 async def test_multi_pool_acquire_no_servers():
@@ -88,11 +88,11 @@ async def test_multi_pool_acquire_no_servers():
     pool = SMTPConnectionPool(configs)
     
     # Manually trip breaker
-    pool.configs[0].circuit_breaker.record_failure(Exception())
-    pool.configs[0].circuit_breaker.record_failure(Exception())
-    pool.configs[0].circuit_breaker.record_failure(Exception())
-    pool.configs[0].circuit_breaker.record_failure(Exception())
-    pool.configs[0].circuit_breaker.record_failure(Exception())
+    pool.configs[0].runtime.circuit_breaker.record_failure(Exception())
+    pool.configs[0].runtime.circuit_breaker.record_failure(Exception())
+    pool.configs[0].runtime.circuit_breaker.record_failure(Exception())
+    pool.configs[0].runtime.circuit_breaker.record_failure(Exception())
+    pool.configs[0].runtime.circuit_breaker.record_failure(Exception())
     
     with pytest.raises(RuntimeError, match="No SMTP servers available"):
         await pool.acquire()

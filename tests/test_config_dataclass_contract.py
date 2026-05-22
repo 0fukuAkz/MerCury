@@ -17,7 +17,7 @@ from dataclasses import fields
 
 from mercury.engine.connection_pool import SMTPServerConfig
 from mercury.services.campaign_service import CampaignConfig
-from mercury.services.email_service import EmailConfig
+from mercury.services.email import EmailConfig
 
 
 # Frozen field lists: any addition or removal in the source dataclass forces
@@ -62,9 +62,9 @@ EMAIL_CONFIG_FIELDS = frozenset({
 
 SMTP_SERVER_CONFIG_FIELDS = frozenset({
     'name', 'host', 'port', 'username', 'password',
-    # tls_mode is the canonical TLS state; use_tls/use_ssl are kept in sync
-    # by the model setter for back-compat with legacy readers.
-    'tls_mode', 'use_tls', 'use_ssl', 'use_auth', 'timeout',
+    # tls_mode is the single TLS field; the legacy use_tls / use_ssl bools
+    # were dropped (Removed (BREAKING) in CHANGELOG).
+    'tls_mode', 'use_auth', 'timeout',
     'from_email', 'from_name',
     'weight', 'priority',
     'max_per_minute', 'max_per_hour',

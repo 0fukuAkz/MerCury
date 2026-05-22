@@ -120,7 +120,7 @@ smtp_providers:
     port: 587
     username: your-email@gmail.com
     password: your-app-password
-    use_tls: true
+    tls_mode: starttls
     max_per_minute: 30
 
 email:
@@ -522,26 +522,31 @@ def generate_image(input_file, output_file):
 
 @cli.command('start')
 @click.argument('what', type=click.Choice(['server', 'web', 'dashboard']), default='server')
-@click.option('-p', '--port', default=8080, help='Port number')
+@click.option('-p', '--port', default=5000, help='Port number (default: 5000, matches `python run.py`)')
 @click.option('--open', 'open_browser', is_flag=True, help='Open browser')
 @click.option('--debug', is_flag=True, default=False, help='Enable debug mode')
 def start(what, port, open_browser, debug):
     """
-    Start web dashboard.
-    
+    Start web dashboard (Flask/SocketIO dev runner).
+
+    For production, prefer `python run.py` — it execs gunicorn + eventlet
+    with a single worker, which is what the async sender thread and SocketIO
+    wiring assume. This `start` command runs Flask directly and is intended
+    for CLI-driven local iteration.
+
     \b
     EXAMPLES:
-      sender start server
-      sender start server --port 3000
-      sender start --open
-      sender start --debug
+      mercury start server
+      mercury start server --port 3000
+      mercury start --open
+      mercury start --debug
     """
     banner()
     
     from ..web.app import create_app, socketio
     
     click.echo(f"Dashboard: http://127.0.0.1:{port}")
-    click.echo("Login: admin / admin")
+    click.echo("Login: use your configured ADMIN_USERNAME / ADMIN_PASSWORD")
     click.echo("Press Ctrl+C to stop\n")
     
     if open_browser:
@@ -573,9 +578,9 @@ def db():
 def db_migrate(revision: str):
     """Apply Alembic migrations to the database.
 
-    Run this once before starting the web app in multi-worker / multi-instance
-    deployments — set MERCURY_SKIP_BOOT_MIGRATIONS=1 in those environments so
-    workers don't race the upgrade at boot.
+    Run this once before starting the web app in production. The web app only
+    runs migrations on boot in non-production environments (`FLASK_ENV` !=
+    `production`) to avoid multi-worker boot races.
     """
     import os
     from alembic.config import Config as AlembicConfig

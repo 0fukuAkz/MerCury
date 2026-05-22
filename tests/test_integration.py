@@ -3,7 +3,7 @@
 import pytest
 from datetime import datetime, UTC
 
-from mercury.services.email_service import EmailService, EmailConfig
+from mercury.services.email import EmailService, EmailConfig
 from mercury.services.smtp_service import SMTPService
 
 
@@ -24,7 +24,7 @@ class TestEmailSendingWorkflow:
             "port": 587,
             "username": "test@example.com",
             "password": "password",
-            "use_tls": True
+            "tls_mode": "starttls"
         }
         smtp_service.load_from_config([smtp_config_data])
         

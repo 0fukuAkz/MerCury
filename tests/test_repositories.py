@@ -5,7 +5,7 @@ from datetime import datetime, UTC
 from mercury.data.models.campaign import Campaign, CampaignStatus
 from mercury.data.models.recipient import Recipient
 from mercury.data.models.smtp import SMTPServer
-from mercury.data.models.template import EmailTemplate
+from mercury.data.models.template import Template
 from mercury.data.repositories.campaign import CampaignRepository
 from mercury.data.repositories.recipient import RecipientRepository
 from mercury.data.repositories.smtp import SMTPRepository
@@ -25,7 +25,7 @@ class TestBaseRepository:
             port=587,
             username="test@example.com",
             password="encrypted_pass",
-            use_tls=True
+            tls_mode='starttls',
         )
         
         created = repo.create(smtp)
@@ -197,7 +197,7 @@ class TestTemplateRepository:
         """Test getting template by name."""
         repo = TemplateRepository(db_session)
         
-        template = EmailTemplate(
+        template = Template(
             name="Welcome Email",
             subject="Welcome!",
             html_content="<p>Welcome {{name}}!</p>"

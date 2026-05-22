@@ -67,18 +67,17 @@ def test_api_add_smtp_valid(mock_add, client, auth_headers):
     assert data['success'] is True
 
 def test_api_test_smtp(client, auth_headers, db_session):
-    """Route /api/smtp/test/<int:server_id> looks up by id, then runs the
+    """Route /api/smtp/test/<name> looks up by name, then runs the
     async test_connection on the shared background loop via run_async."""
     server = SMTPServer(name="TestSMTP", host="smtp.example.com", is_enabled=True)
     db_session.add(server)
     db_session.commit()
-    server_id = server.id
 
     with patch(
         'mercury.web.routes.api.smtp.run_async',
         return_value={'success': True, 'server': 'TestSMTP'},
     ):
-        response = client.post(f'/api/smtp/test/{server_id}', headers=auth_headers)
+        response = client.post(f'/api/smtp/test/{server.name}', headers=auth_headers)
     assert response.status_code == 200
     data = json.loads(response.data)
     assert data['success'] is True

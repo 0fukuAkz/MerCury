@@ -56,13 +56,21 @@ class TrackingService:
     """
     
     def __init__(self, base_url: Optional[str] = None):
+        """Initialize tracking service.
+
+        Resolves ``base_url`` from (1) the explicit argument, then (2) the
+        ``TRACKING_BASE_URL`` env var. There is no localhost fallback —
+        tracking URLs that point at the wrong host silently break
+        production deliveries, so the service raises rather than guess.
         """
-        Initialize tracking service.
-        
-        Args:
-            base_url: Base URL for tracking endpoints (e.g., https://yourdomain.com)
-        """
-        self.base_url = base_url or os.environ.get('TRACKING_BASE_URL', 'http://localhost:8080')
+        resolved = base_url or os.environ.get('TRACKING_BASE_URL')
+        if not resolved:
+            raise RuntimeError(
+                "TrackingService requires base_url. Pass it explicitly or set "
+                "the TRACKING_BASE_URL environment variable (e.g. "
+                "https://mail.yourdomain.com)."
+            )
+        self.base_url = resolved
         self._events: List[TrackingEvent] = []
     
     def generate_email_id(self, recipient: str, campaign_id: Optional[str] = None) -> str:
@@ -128,7 +136,10 @@ class TrackingService:
         Returns:
             Wrapped tracking URL
         """
-        link_id = link_id or hashlib.md5(url.encode()).hexdigest()[:8]
+        # MD5 used purely to derive a short, stable, non-secret link id
+        # from the target URL — not for any security property. usedforsecurity=False
+        # documents the intent and clears Bandit B324.
+        link_id = link_id or hashlib.md5(url.encode(), usedforsecurity=False).hexdigest()[:8]
         params = urlencode({
             'url': url,
             'lid': link_id

@@ -1,7 +1,7 @@
 """Services layer - Business logic for campaigns, emails, SMTP, and more."""
 
 from .campaign_service import CampaignService
-from .email_service import EmailService
+from .email import EmailService
 from .smtp_service import SMTPService
 from .tracking_service import TrackingService
 from .bounce_service import BounceService

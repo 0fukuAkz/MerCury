@@ -133,9 +133,7 @@ def api_create_campaign():
         ),
         auto_company_logo=bool(data.get('auto_company_logo', False)),
         hide_from_email_header=bool(data.get('hide_from_email_header', False)),
-        # Default True when missing — preserves historical behavior for
-        # any client that doesn't yet send the field.
-        include_default_body=bool(data.get('include_default_body', True)),
+        include_default_body=bool(data.get('include_default_body', False)),
 
         # Links rotation
         links=links,

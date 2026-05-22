@@ -32,7 +32,7 @@ def _make_csrf_app(db_engine):
     TestSession = sessionmaker(bind=db_engine)
 
     with patch('mercury.web.app.init_db'), \
-         patch('mercury.web.app.UserRepository') as MockRepo, \
+         patch('mercury.security.auth.UserRepository') as MockRepo, \
          patch('mercury.web.app.get_app_context', return_value=mock_context), \
          patch('mercury.data.database.get_session_direct', side_effect=TestSession), \
          patch('mercury.services.smtp_service.get_session_direct', side_effect=TestSession), \

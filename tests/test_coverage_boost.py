@@ -26,12 +26,11 @@ def app_no_login(db_engine):
     TestSession = sessionmaker(bind=db_engine)
 
     with patch('mercury.web.app.init_db'), \
-         patch('mercury.web.app.UserRepository') as MockRepo, \
+         patch('mercury.security.auth.UserRepository') as MockRepo, \
          patch('mercury.web.app.get_app_context', return_value=mock_context), \
          patch('mercury.data.database.get_session_direct', side_effect=TestSession), \
          patch('mercury.services.smtp_service.get_session_direct', side_effect=TestSession), \
          patch('mercury.services.campaign_service.get_session_direct', side_effect=TestSession), \
-         patch('mercury.web.app.get_session_direct', side_effect=TestSession), \
          patch('mercury.services.identity_service.get_session_direct', side_effect=TestSession), \
          patch('mercury.services.settings_service.get_session_direct', side_effect=TestSession), \
          patch.dict(os.environ, {'API_KEYS': 'test_api_key'}):
@@ -356,7 +355,7 @@ def test_api_update_smtp(cl, db_engine):
     session = Session()
     try:
         s = SMTPServer(name='testsmtp', host='smtp.example.com', port=587,
-                       username='user', password='pass', use_tls=True)
+                       username='user', password='pass', tls_mode='starttls')
         session.add(s)
         session.commit()
     finally:
@@ -385,7 +384,7 @@ def test_api_delete_smtp(cl, db_engine):
     session = Session()
     try:
         s = SMTPServer(name='delsmtp', host='smtp.example.com', port=587,
-                       username='user', password='pass', use_tls=True)
+                       username='user', password='pass', tls_mode='starttls')
         session.add(s)
         session.commit()
     finally:

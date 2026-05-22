@@ -75,7 +75,7 @@ def smtp_config() -> SMTPServerConfig:
         port=587,
         username="test@example.com",
         password="testpass123",
-        use_tls=True,
+        tls_mode='starttls',
         max_per_minute=60,
         max_per_hour=1000
     )
@@ -191,12 +191,11 @@ def app(db_engine):
     # patches remain for callers that still snapshot the function at import
     # time (services, web.app, web.routes.templates).
     with patch('mercury.web.app.init_db'), \
-         patch('mercury.web.app.UserRepository') as MockRepo, \
+         patch('mercury.security.auth.UserRepository') as MockRepo, \
          patch('mercury.web.app.get_app_context', return_value=mock_context), \
          patch('mercury.data.database.get_session_direct', side_effect=TestSession), \
          patch('mercury.services.smtp_service.get_session_direct', side_effect=TestSession), \
          patch('mercury.services.campaign_service.get_session_direct', side_effect=TestSession), \
-         patch('mercury.web.app.get_session_direct', side_effect=TestSession), \
          patch('mercury.services.identity_service.get_session_direct', side_effect=TestSession), \
          patch('mercury.services.settings_service.get_session_direct', side_effect=TestSession), \
          patch.dict(os.environ, {'API_KEYS': 'test_api_key'}):

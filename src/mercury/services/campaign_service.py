@@ -20,7 +20,7 @@ from ..data.models import (
 )
 from ..utils.async_io import AsyncFileLogger
 from ..utils.validation import is_valid_email
-from .email_service import EmailService, EmailConfig
+from .email import EmailService, EmailConfig
 from .smtp_service import SMTPService
 
 logger = logging.getLogger(__name__)

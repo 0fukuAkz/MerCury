@@ -147,8 +147,10 @@ class PlaceholderProcessor:
         unique_id = str(uuid.uuid4())
         short_id = unique_id[:8]
         
-        # Hash of email for consistent random values
-        email_hash = hashlib.md5(email.encode()).hexdigest() if email else ''
+        # Hash of email for consistent random values — not a security property,
+        # just a deterministic seed for placeholder generation. usedforsecurity=False
+        # documents the intent and clears Bandit B324.
+        email_hash = hashlib.md5(email.encode(), usedforsecurity=False).hexdigest() if email else ''
         
         placeholders = {
             # Recipient info

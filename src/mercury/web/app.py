@@ -19,10 +19,8 @@ from alembic import command as alembic_command
 from ..app_context import AppContext, get_app_context, set_app_context
 from ..utils.logging_config import configure_logging
 from ..utils.app_dirs import get_log_dir
-from ..data.database import init_db, get_session_direct
-from ..data.models import User
-from ..security.auth import get_user_by_id, hash_password
-from ..data.repositories import UserRepository
+from ..data.database import init_db
+from ..security.auth import get_user_by_id, init_auth
 
 # Import extensions (limiter, socketio)
 from .extensions import socketio, start_background_loop
@@ -58,34 +56,36 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
     # Configuration
     app.config['ENV'] = os.environ.get('FLASK_ENV', 'development')
     app.config['DEBUG'] = os.environ.get('FLASK_DEBUG', '0').lower() in ('true', '1')
-    _secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-prod')
     _flask_env = os.environ.get('FLASK_ENV', 'development').lower()
     _is_production = _flask_env == 'production'
-    _default_keys = {'dev-secret-key-change-in-prod', 'prod-secret-key-change-this'}
-    # Fail closed on the default SECRET_KEY: only an explicit dev/test env or
-    # MERCURY_DEV=1 may run with the dev key. Previously this only fired when
-    # FLASK_ENV was *literally* "production" — a typo or unset FLASK_ENV
-    # silently shipped the dev key.
     _dev_envs = {'development', 'dev', 'test', 'testing', 'local'}
-    _explicit_dev = _flask_env in _dev_envs or os.environ.get('MERCURY_DEV', '').lower() in ('1', 'true', 'yes')
-    if _secret_key in _default_keys and not _explicit_dev:
-        raise RuntimeError(
-            "SECRET_KEY is set to a known insecure default and the environment is not "
-            "marked as development. Either set SECRET_KEY to a strong random value, or "
-            f"set FLASK_ENV to one of {sorted(_dev_envs)} / set MERCURY_DEV=1 to opt into "
-            "the dev key explicitly."
-        )
+    _explicit_dev = _flask_env in _dev_envs
+
+    # SECRET_KEY: required if not in an explicit dev environment. No default;
+    # no `MERCURY_DEV` escape hatch. If you need a key for `make dev`, set
+    # `FLASK_ENV=development` (which is the default anyway) and set
+    # `SECRET_KEY` to anything.
+    _secret_key = os.environ.get('SECRET_KEY')
+    if not _secret_key:
+        if not _explicit_dev:
+            raise RuntimeError(
+                "SECRET_KEY is not set. Generate one with "
+                "`python -c 'import secrets; print(secrets.token_hex(32))'` and "
+                f"export it. Or set FLASK_ENV to one of {sorted(_dev_envs)} for "
+                "local iteration."
+            )
+        _secret_key = 'dev-secret-key-DO-NOT-USE-IN-PROD'
     app.config['SECRET_KEY'] = _secret_key
 
     # Production env-var preflight: surface common mis-configurations at boot
     # rather than failing in surprising ways much later.
     if _is_production:
-        _prod_warnings: list[str] = []
         if 'ADMIN_PASSWORD' not in os.environ:
-            _prod_warnings.append(
-                "ADMIN_PASSWORD not set — the bootstrap admin will be created with "
-                "the well-known default 'admin'. Set ADMIN_PASSWORD before first boot."
+            raise RuntimeError(
+                "ADMIN_PASSWORD is not set and FLASK_ENV=production. Refusing "
+                "to boot with the default 'admin' bootstrap password."
             )
+        _prod_warnings: list[str] = []
         if not os.environ.get('API_KEYS', '').strip():
             _prod_warnings.append(
                 "API_KEYS not set — programmatic API access will be disabled."
@@ -255,23 +255,10 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
             init_db()
             
             # --- Run Alembic migrations to head ---
-            # Default behavior:
-            #   - production: SKIP. Run `alembic upgrade head` once out-of-band
-            #     (init container / CI / pre-deploy hook) before workers start.
-            #     Multi-worker boot races are real, and the previous always-on
-            #     default was only safe because run.py forces -w 1.
-            #   - non-production: RUN. Convenient for `make dev` and tests.
-            # Override with MERCURY_BOOT_MIGRATIONS=1 (force on) or
-            # MERCURY_SKIP_BOOT_MIGRATIONS=1 (force off).
-            _force_skip = os.environ.get('MERCURY_SKIP_BOOT_MIGRATIONS', '').lower() in ('1', 'true', 'yes')
-            _force_run = os.environ.get('MERCURY_BOOT_MIGRATIONS', '').lower() in ('1', 'true', 'yes')
-            if _force_skip:
-                _run_boot_migrations = False
-            elif _force_run:
-                _run_boot_migrations = True
-            else:
-                _run_boot_migrations = not _is_production
-            if _run_boot_migrations:
+            # Non-production: run on boot (convenient for `make dev` and tests).
+            # Production: skip. Run `alembic upgrade head` once out-of-band
+            # before workers start — multi-worker boot races are real.
+            if not _is_production:
                 try:
                     _alembic_ini = os.path.join(
                         os.path.dirname(__file__), '..', '..', '..', 'alembic.ini'
@@ -283,34 +270,10 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
                     logger.warning(f"Alembic migration failed (may be a fresh DB or already current): {ex}")
             # --------------------------------------
             
-            # Create default admin if none exists
-            session = get_session_direct()
-            try:
-                repo = UserRepository(session)
-                if not repo.get_admins():
-                    logger.info("No admin user found. Creating default 'admin' user.")
-                    admin = User(
-                        username="admin",
-                        email="admin@example.com",
-                        is_admin=True,
-                        is_active=True
-                    )
-                    # Use environment variable for initial password, fallback to 'admin'
-                    initial_password = os.environ.get("ADMIN_PASSWORD", "admin")
-                    _using_default_password = 'ADMIN_PASSWORD' not in os.environ
-                    admin.password_hash = hash_password(initial_password)
-                    admin.must_change_password = _using_default_password
-                    session.add(admin)
-                    session.commit()
-                    if _using_default_password:
-                        logger.warning(
-                            "Created default admin user with password 'admin'. "
-                            "Set the ADMIN_PASSWORD environment variable and change this immediately."
-                        )
-                    else:
-                        logger.info("Created default admin user with password from ADMIN_PASSWORD env var.")
-            finally:
-                session.close()
+            # Admin bootstrap: only creates a user when ADMIN_USERNAME and
+            # ADMIN_PASSWORD are both set in the environment. There is no
+            # admin/admin fallback.
+            init_auth(app)
 
         except Exception as e:
             logger.error(f"Failed to initialize database: {e}")
@@ -319,6 +282,9 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
     return app
 
 if __name__ == '__main__':
-    # Allow running directly with python -m mercury.web.app
+    # Allow running directly with python -m mercury.web.app — bind to all
+    # interfaces is intentional for the dev runner so the app is reachable
+    # from container/host/VM networks during local iteration. Production uses
+    # run.py + gunicorn behind a reverse proxy, not this entry point.
     app = create_app(config={'DEBUG': True})
-    socketio.run(app, host='0.0.0.0', port=5000, allow_unsafe_werkzeug=True)
+    socketio.run(app, host='0.0.0.0', port=5000, allow_unsafe_werkzeug=True)  # nosec B104

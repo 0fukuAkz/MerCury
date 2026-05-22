@@ -29,13 +29,9 @@ class SMTPServer(Base, BaseModel):
     username = Column(String(255))
     _password = Column('password', String(500))  # Encrypted password storage
     
-    # Connection settings.
-    # `tls_mode` is the source of truth ('none' | 'starttls' | 'ssl');
-    # use_tls / use_ssl are retained for back-compat and kept in sync by
-    # the tls_mode setter below.
-    tls_mode = Column(String(16), default='starttls')
-    use_tls = Column(Boolean, default=True)
-    use_ssl = Column(Boolean, default=False)
+    # Connection settings. `tls_mode` is the single TLS field
+    # ('none' | 'starttls' | 'ssl').
+    tls_mode = Column(String(16), default='starttls', nullable=False)
     use_auth = Column(Boolean, default=True)
     timeout = Column(Integer, default=30)
     
@@ -140,31 +136,13 @@ class SMTPServer(Base, BaseModel):
             not self.circuit_open
         )
     
-    # ---- tls_mode helpers ---------------------------------------------------
-    # The setter keeps use_tls/use_ssl in lockstep with tls_mode so any
-    # legacy reader sees consistent values. The getter resolves to a
-    # canonical mode even on rows that pre-date the migration (e.g.
-    # if tls_mode somehow ends up None at runtime).
     _TLS_MODES = ('none', 'starttls', 'ssl')
 
-    @property
-    def effective_tls_mode(self) -> str:
-        """Canonical TLS mode, falling back to the legacy bools if unset."""
-        if self.tls_mode in self._TLS_MODES:
-            return self.tls_mode
-        if self.use_ssl:
-            return 'ssl'
-        if self.use_tls:
-            return 'starttls'
-        return 'none'
-
     def set_tls_mode(self, mode: str) -> None:
-        """Set tls_mode and keep the legacy booleans in sync."""
+        """Validate and set tls_mode."""
         if mode not in self._TLS_MODES:
             raise ValueError(f"tls_mode must be one of {self._TLS_MODES}, got {mode!r}")
         self.tls_mode = mode
-        self.use_tls = (mode == 'starttls')
-        self.use_ssl = (mode == 'ssl')
 
     def get_connection_config(self) -> dict:
         """Get configuration dict for SMTP connection."""
@@ -174,9 +152,7 @@ class SMTPServer(Base, BaseModel):
             'port': self.port,
             'username': self.username,
             'password': self.password,
-            'tls_mode': self.effective_tls_mode,
-            'use_tls': self.use_tls,
-            'use_ssl': self.use_ssl,
+            'tls_mode': self.tls_mode or 'starttls',
             'use_auth': self.use_auth,
             'timeout': self.timeout,
             'from_email': self.from_email,

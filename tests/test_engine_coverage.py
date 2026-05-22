@@ -545,7 +545,7 @@ class TestAsyncSenderCoverage:
             "port": 587,
             "username": "u@t.com",
             "password": "pw",
-            "use_tls": True,
+            "tls_mode": "starttls",
             "max_per_minute": 30,
             "max_per_hour": 500,
         }
@@ -583,7 +583,7 @@ class TestAsyncSenderCoverage:
             "port": 587,
             "username": "u@t.com",
             "password": "pw",
-            "use_tls": True,
+            "tls_mode": "starttls",
             "max_per_minute": 30,
             "max_per_hour": 500,
         }
@@ -826,7 +826,7 @@ class TestAsyncSenderCoverage:
             "port": 587,
             "username": "u@t.com",
             "password": "pw",
-            "use_tls": True,
+            "tls_mode": "starttls",
             "max_per_minute": 30,
             "max_per_hour": 500,
         }
@@ -854,7 +854,7 @@ class TestAsyncSenderCoverage:
             "port": 587,
             "username": "u@t.com",
             "password": "pw",
-            "use_tls": True,
+            "tls_mode": "starttls",
             "max_per_minute": 30,
             "max_per_hour": 500,
         }
@@ -893,7 +893,7 @@ class TestAsyncSenderCoverage:
             "port": 587,
             "username": "u@t.com",
             "password": "pw",
-            "use_tls": True,
+            "tls_mode": "starttls",
             "max_per_minute": 30,
             "max_per_hour": 500,
         }
@@ -939,7 +939,7 @@ def base_config():
         port=587,
         username="u@t.com",
         password="pw",
-        use_tls=True,
+        tls_mode='starttls',
         max_per_minute=60,
         max_per_hour=1000,
     )
@@ -970,7 +970,7 @@ class TestSMTPServerConfig:
         base_config.runtime.current_minute_count = 5
         base_config.runtime.last_minute_reset = datetime.now(UTC) - timedelta(seconds=61)
         result = base_config.check_rate_limits()
-        assert base_config.current_minute_count == 0
+        assert base_config.runtime.current_minute_count == 0
         assert result is True
 
     def test_check_rate_limits_hour_reset(self, base_config):
@@ -978,7 +978,7 @@ class TestSMTPServerConfig:
         base_config.runtime.current_hour_count = 10
         base_config.runtime.last_hour_reset = datetime.now(UTC) - timedelta(seconds=3601)
         base_config.check_rate_limits()
-        assert base_config.current_hour_count == 0
+        assert base_config.runtime.current_hour_count == 0
 
     def test_check_rate_limits_exceeded(self, base_config):
         """Returns False when limits exceeded."""
@@ -987,7 +987,7 @@ class TestSMTPServerConfig:
 
     def test_can_execute_circuit_breaker_open(self, base_config):
         """can_execute returns False when circuit is open."""
-        base_config.circuit_breaker.force_open()
+        base_config.runtime.circuit_breaker.force_open()
         assert base_config.can_execute() is False
 
 
@@ -1124,15 +1124,6 @@ class TestAsyncConnectionPool:
         assert pool.available.qsize() == 1
 
     @pytest.mark.asyncio
-    async def test_return_connection_alias(self, base_config):
-        """Line 333: return_connection is an alias for release_connection."""
-        pool = AsyncConnectionPool(base_config, pool_size=2)
-        conn = AsyncSMTPConnection(base_config)
-        conn.is_connected = True
-        await pool.return_connection(conn)
-        assert pool.available.qsize() == 1
-
-    @pytest.mark.asyncio
     async def test_close_all(self, base_config):
         """Lines 337-341: close_all closes all connections."""
         pool = AsyncConnectionPool(base_config, pool_size=2)
@@ -1189,7 +1180,7 @@ class TestSMTPConnectionPoolMulti:
     def test_select_server_no_available(self, two_configs):
         """Lines 392, 416: returns None when no servers available."""
         for cfg in two_configs:
-            cfg.circuit_breaker.force_open()
+            cfg.runtime.circuit_breaker.force_open()
         pool = SMTPConnectionPool(two_configs, selection_strategy="round_robin")
         assert pool.select_server() is None
 
@@ -1197,7 +1188,7 @@ class TestSMTPConnectionPoolMulti:
     async def test_acquire_no_servers_raises(self, two_configs):
         """Lines 441-445: acquire raises when no servers available."""
         for cfg in two_configs:
-            cfg.circuit_breaker.force_open()
+            cfg.runtime.circuit_breaker.force_open()
         pool = SMTPConnectionPool(two_configs)
         with pytest.raises(RuntimeError, match="No SMTP servers available"):
             await pool.acquire()
@@ -1219,18 +1210,18 @@ class TestSMTPConnectionPoolMulti:
         """Lines 463-465: record_success updates counters."""
         pool = SMTPConnectionPool(two_configs)
         cfg = two_configs[0]
-        initial_sent = cfg.total_sent
+        initial_sent = cfg.runtime.total_sent
         pool.record_success(cfg)
-        assert cfg.total_sent == initial_sent + 1
-        assert cfg.consecutive_failures == 0
+        assert cfg.runtime.total_sent == initial_sent + 1
+        assert cfg.runtime.consecutive_failures == 0
 
     def test_record_failure(self, two_configs):
         """Lines 463-465: record_failure updates counters."""
         pool = SMTPConnectionPool(two_configs)
         cfg = two_configs[0]
-        initial_failures = cfg.total_failures
+        initial_failures = cfg.runtime.total_failures
         pool.record_failure(cfg, Exception("error"))
-        assert cfg.total_failures == initial_failures + 1
+        assert cfg.runtime.total_failures == initial_failures + 1
 
     def test_record_failure_rate_limit_logs(self, two_configs):
         """Lines 474-476: rate-limit error is logged."""
