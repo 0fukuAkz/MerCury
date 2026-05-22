@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > documents the lineage on its own terms; future releases should be tagged
 > in git (`v2.0.0`, `v2.1.0`, ...) to match `pyproject.toml`.
 
-## [Unreleased]
+## [2.0.0] - 2026-05-21
 
 ### Removed (BREAKING)
 Backward-compatibility shims and legacy code paths were removed in a single
@@ -167,12 +167,12 @@ sweep. Migration notes per item:
   `continue-on-error: true` until the remaining `flask-cors` (4 → 6 major)
   and `pillow` (10 → 12 major) bumps are vetted in a dedicated dep-refresh PR.
 
-## [2.0.0] — pre-release lineage
+## Pre-v2.0.0 lineage
 
 This range covers all work between the initial commit (2025-12-18) and the
-current `main`. Commit subjects in this window are inconsistent — many are
+v2.0.0 cut. Commit subjects in this window are inconsistent — many are
 literally `update`, `.`, or `/` — so the bullets below are sourced from the
-commits whose subjects describe their content. Subsequent releases should be
+commits whose subjects describe their content. Subsequent releases will be
 tagged in git and pulled from cleaner commit messages.
 
 ### Added
@@ -221,5 +221,4 @@ tagged in git and pulled from cleaner commit messages.
 - Added `pip install -e .` step so pytest can import `mercury` under the
   `src/` layout.
 
-[Unreleased]: https://github.com/0fukuAkz/MerCury/compare/v2.0.0...HEAD
 [2.0.0]: https://github.com/0fukuAkz/MerCury/releases/tag/v2.0.0
