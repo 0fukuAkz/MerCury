@@ -8,7 +8,7 @@ circuit breakers, templating, tracking, scheduling, and a web dashboard —
 all in one package with a CLI and a Flask + SocketIO front-end sharing
 the same domain layer.
 
-📘 **[Full deployment & usage guide → Deployment.md](Deployment.md)**
+📘 **[Full deployment & usage guide → Deployment.md](docs/Deployment.md)**
 
 ---
 
@@ -54,7 +54,7 @@ python run.py
 Open <http://localhost:5000> and sign in with your configured
 `ADMIN_USERNAME` / `ADMIN_PASSWORD`. For the CLI path
 (`mercury new project`, `mercury send config.yaml`, …) and the full
-docker/systemd/nginx walkthroughs, see [Deployment.md](Deployment.md).
+docker/systemd/nginx walkthroughs, see [Deployment.md](docs/Deployment.md).
 
 ---
 
@@ -90,9 +90,9 @@ your client.
 
 | File | When to read it |
 | --- | --- |
-| **[Deployment.md](Deployment.md)** | Install, configure, run, deploy, troubleshoot — everything operational. |
+| **[Deployment.md](docs/Deployment.md)** | Install, configure, run, deploy, troubleshoot — everything operational. |
 | [CHANGELOG.md](CHANGELOG.md) | Release notes, breaking changes, migration paths. |
-| [SECURITY.md](SECURITY.md) | Private vulnerability reporting + production hardening checklist. |
+| [SECURITY.md](docs/SECURITY.md) | Private vulnerability reporting + production hardening checklist. |
 | [CLAUDE.md](CLAUDE.md) | Contributor / agent guide — architecture map, code conventions, repo conventions. |
 | [docs/API.md](docs/API.md) + [docs/openapi.yaml](docs/openapi.yaml) | REST API reference + OpenAPI spec. |
 

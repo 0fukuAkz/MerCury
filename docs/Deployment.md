@@ -4,7 +4,7 @@ Single landing-page for installing, configuring, running, and operating
 MerCury — covers the full path from a fresh `git clone` through
 production deployment.
 
-For the user-facing changelog, see [CHANGELOG.md](CHANGELOG.md). For
+For the user-facing changelog, see [CHANGELOG.md](../CHANGELOG.md). For
 security reporting and the hardening checklist, see
 [SECURITY.md](SECURITY.md).
 
@@ -446,7 +446,7 @@ The same one-per-line format works for:
 
 The single field for TLS is `tls_mode`: one of `'none'`, `'starttls'`,
 `'ssl'`. The legacy `use_tls` / `use_ssl` booleans were removed (see
-[CHANGELOG.md](CHANGELOG.md)).
+[CHANGELOG.md](../CHANGELOG.md)).
 
 ### Single server (YAML)
 
@@ -602,7 +602,7 @@ The `/scheduling` page supports three modes:
 ## API Reference
 
 The web app exposes a REST API under `/api/`. Detailed schema:
-[docs/API.md](docs/API.md) and [docs/openapi.yaml](docs/openapi.yaml).
+[docs/API.md](API.md) and [docs/openapi.yaml](openapi.yaml).
 
 ### Authentication
 
@@ -758,8 +758,8 @@ sudo systemctl status mercury
 
 ## Docker Deployment
 
-The repo ships a working [`Dockerfile`](Dockerfile) and
-[`docker-compose.yml`](docker-compose.yml). The compose file wires
+The repo ships a working [`Dockerfile`](../Dockerfile) and
+[`docker-compose.yml`](../docker-compose.yml). The compose file wires
 postgres + redis + a one-shot migration container + the web service,
 and uses `${VAR:?error}` enforcement so missing secrets fail at
 `docker compose up` time instead of at boot.
@@ -920,7 +920,7 @@ rm -f data/mercury.db-wal data/mercury.db-shm
 
 Set `TRACKING_BASE_URL` to your public dashboard URL. The service
 deliberately refuses to fall back to localhost — see
-[CHANGELOG.md](CHANGELOG.md) "Removed (BREAKING)" for the rationale.
+[CHANGELOG.md](../CHANGELOG.md) "Removed (BREAKING)" for the rationale.
 
 ### "ADMIN_PASSWORD is not set and FLASK_ENV=production"
 
@@ -946,7 +946,7 @@ chmod 600 /opt/mercury/.env
 
 The SMTP API and YAML loader were tightened — send `tls_mode` (one of
 `'none'`, `'starttls'`, `'ssl'`) instead. See
-[CHANGELOG.md](CHANGELOG.md) for the migration note.
+[CHANGELOG.md](../CHANGELOG.md) for the migration note.
 
 ---
 
@@ -964,7 +964,7 @@ sudo systemctl start mercury
 ```
 
 For upgrades that cross a breaking-change boundary, read the
-`### Removed (BREAKING)` section of [CHANGELOG.md](CHANGELOG.md) for
+`### Removed (BREAKING)` section of [CHANGELOG.md](../CHANGELOG.md) for
 the target version *before* you upgrade — it lists every removed
 default, env-var, and API field along with the migration step.
 
