@@ -231,6 +231,16 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
         # confirming the chain is alive.
         _progress_count = {'n': 0, 'sent': 0, 'failed': 0}
         _progress_total = len(recipients)
+        # Wall-clock-based heartbeat (in addition to the per-25-event log).
+        # Some campaigns are rate-limited to e.g. 30 emails/hour — at that
+        # cadence the per-event log fires every 50 minutes, which an
+        # operator naturally interprets as "the campaign died." A heartbeat
+        # every 30s emits a "campaign N still alive, sent=X/total=Y" line
+        # so the operator has unambiguous proof the engine is running even
+        # during deep throttle windows.
+        from time import monotonic
+        _last_heartbeat = {'t': monotonic()}
+        HEARTBEAT_INTERVAL = 30.0
         # DB-flush throttle: persist sent/failed counts every N events.
         # Previously the row's sent_count stayed at 0 in the DB for the
         # entire run and only jumped to its final value at completion —
@@ -285,6 +295,21 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
                     f"{campaign_id}: recipient={progress.get('recipient')!r} "
                     f"success={progress.get('success')}"
                 )
+
+            # Wall-clock heartbeat for rate-limited / slow campaigns where
+            # the per-event log might not fire for many minutes.
+            now = monotonic()
+            if now - _last_heartbeat['t'] >= HEARTBEAT_INTERVAL:
+                logger.info(
+                    "[heartbeat] campaign %s alive — sent=%d failed=%d "
+                    "total=%d (%.1f%%); thread=%s",
+                    campaign_id, _progress_count['sent'],
+                    _progress_count['failed'], _progress_total,
+                    100.0 * (_progress_count['sent'] + _progress_count['failed'])
+                        / max(_progress_total, 1),
+                    threading.current_thread().name,
+                )
+                _last_heartbeat['t'] = now
 
             if n % DB_FLUSH_EVERY == 0 or n == _progress_total:
                 _persist_counts()
@@ -408,8 +433,27 @@ def register_socketio_events(sio: SocketIO):
 
     @sio.on('disconnect')
     def handle_disconnect():
-        """Handle client disconnection."""
-        logger.debug("Client disconnected")
+        """Handle client disconnection.
+
+        CONTRACT: this MUST NOT touch _active_services or call .stop()
+        on any campaign. Campaigns are server-side jobs that survive
+        client navigation, refresh, tab close, and full browser exit.
+        A disconnect just means "this browser is no longer subscribed
+        to events" — the engine keeps sending.
+
+        Logged at INFO with the active-campaign count so that
+        "campaign stops on navigation" reports can be diagnosed by
+        eye: a disconnect immediately followed by progress events
+        ceasing for one of the listed campaigns proves the engine
+        died (real bug); progress events continuing proves the
+        engine is fine and the symptom is a UI staleness issue.
+        """
+        active = list(_active_services.keys())
+        logger.info(
+            "SocketIO disconnect — %d campaign(s) still running on the "
+            "server (%s). Disconnects do NOT stop running campaigns.",
+            len(active), active or '[]',
+        )
 
     @sio.on('start_campaign')
     def handle_start_campaign(data):
@@ -453,10 +497,18 @@ def register_socketio_events(sio: SocketIO):
         })
 
         app = current_app._get_current_object()
+        # daemon=False so the thread is NOT silently reaped when the
+        # main process exits (notably: werkzeug's auto-reloader in dev
+        # restarts the worker on file save, which was killing in-flight
+        # campaigns out from under operators — a likely root cause for
+        # "campaign stops when user navigates away" in development).
+        # In production with gunicorn graceful shutdown, the worker
+        # waits for non-daemon threads to finish before exiting, which
+        # is the right behavior for a half-sent campaign.
         t = threading.Thread(
             target=_run_campaign_thread,
             args=(campaign_id, sio, app),
-            daemon=True,
+            daemon=False,
             name=f"campaign-{campaign_id}",
         )
         t.start()
