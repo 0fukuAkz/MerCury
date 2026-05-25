@@ -275,6 +275,43 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
             # admin/admin fallback.
             init_auth(app)
 
+            # Reconcile orphan "sending" campaign rows. If the worker
+            # process was killed mid-run (SIGKILL, OOM, container restart),
+            # no exception handler ever fired — so the campaign row stays
+            # at status='sending' forever, with no thread alive to advance
+            # it. This is the last hole in the "stuck at sending" bug
+            # class: the run thread only updates DB at completion or in
+            # an exception, and a hard crash satisfies neither.
+            #
+            # At boot the `_active_services` dict is always empty, so any
+            # row claiming 'sending' must be orphaned. Flip it to 'failed'
+            # with a clear note in the log so operators can see what
+            # happened.
+            try:
+                from datetime import datetime, UTC
+                from ..data.repositories import CampaignRepository
+                from ..data.models.campaign import CampaignStatus
+                from ..data.database import get_session_direct as _gsd
+                _s = _gsd()
+                try:
+                    _repo = CampaignRepository(_s)
+                    _stale = _repo.get_by_status(CampaignStatus.SENDING)
+                    for _c in _stale:
+                        logger.warning(
+                            "Reconciling orphaned campaign %s (%r) — left at "
+                            "status='sending' from a previous run that didn't "
+                            "shut down cleanly. Marking as FAILED.",
+                            _c.id, _c.name,
+                        )
+                        _c.status = CampaignStatus.FAILED
+                        _c.completed_at = datetime.now(UTC)
+                        _repo.update(_c)
+                finally:
+                    _s.close()
+            except Exception as _ex:
+                # Reconciliation is best-effort — don't block boot on it.
+                logger.warning("Stale-campaign reconciliation skipped: %s", _ex)
+
         except Exception as e:
             logger.error(f"Failed to initialize database: {e}")
     
