@@ -156,31 +156,53 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
             finally:
                 session.close()
 
+        # Resolution precedence:
+        #   1. manual_recipients          (UI textarea / API explicit list)
+        #   2. linked recipient_list      (explicit DB foreign key — the
+        #      "I chose this list from the dropdown" path)
+        #   3. recipients_path snapshot   (legacy / YAML path)
+        #
+        # Previously (2) and (3) were swapped, which meant a campaign with
+        # both an attached RecipientList AND a stale recipients_path in
+        # settings would silently load the stale path. Operators uploaded
+        # a fresh list via the UI, saw the snapshot file get loaded
+        # instead, and reported "campaigns not using uploaded recipient
+        # list even when chosen."
+        recipients = []
         if config_snap.manual_recipients:
             recipients = [{'email': e} for e in config_snap.manual_recipients]
-        elif config_snap.recipients_path:
-            recipients = list(service.load_recipients_from_csv(
-                config_snap.recipients_path,
-                email_column=config_snap.email_column,
-                validate=config_snap.validate_emails,
-                deduplicate=config_snap.deduplicate,
-            ))
         else:
+            linked_list_path = None
             with app.app_context():
                 session = get_session_direct()
                 try:
                     repo = CampaignRepository(session)
                     campaign = repo.get(campaign_id)
-                    if campaign.recipient_list and campaign.recipient_list.file_path:
-                        recipients = list(service.load_recipients_from_csv(
-                            campaign.recipient_list.file_path,
-                            validate=True,
-                            deduplicate=True,
-                        ))
-                    else:
-                        recipients = []
+                    if campaign and campaign.recipient_list and campaign.recipient_list.file_path:
+                        linked_list_path = campaign.recipient_list.file_path
                 finally:
                     session.close()
+
+            if linked_list_path:
+                if config_snap.recipients_path and config_snap.recipients_path != linked_list_path:
+                    logger.warning(
+                        "Campaign %s has both a linked recipient_list (%s) AND a "
+                        "stale recipients_path (%s); using the linked list. Clean "
+                        "up the settings.recipients_path to silence this.",
+                        campaign_id, linked_list_path, config_snap.recipients_path,
+                    )
+                recipients = list(service.load_recipients_from_csv(
+                    linked_list_path,
+                    validate=True,
+                    deduplicate=True,
+                ))
+            elif config_snap.recipients_path:
+                recipients = list(service.load_recipients_from_csv(
+                    config_snap.recipients_path,
+                    email_column=config_snap.email_column,
+                    validate=config_snap.validate_emails,
+                    deduplicate=config_snap.deduplicate,
+                ))
 
         if not recipients:
             with app.app_context():
@@ -207,19 +229,82 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
         # Counter so we can rate-limit log noise — log first 3, then every
         # 25th, then the last one. Keeps the log readable while still
         # confirming the chain is alive.
-        _progress_count = {'n': 0}
+        _progress_count = {'n': 0, 'sent': 0, 'failed': 0}
         _progress_total = len(recipients)
+        # DB-flush throttle: persist sent/failed counts every N events.
+        # Previously the row's sent_count stayed at 0 in the DB for the
+        # entire run and only jumped to its final value at completion —
+        # which made the dashboard reset to 0 every time the user navigated
+        # away from /campaigns and back ("running campaigns start over"),
+        # and made it impossible to see how far a long campaign had
+        # progressed if the browser session was lost. Persisting every
+        # 25 events trades a small write amplification for accurate
+        # cross-session progress reporting.
+        DB_FLUSH_EVERY = 25
+
+        def _persist_counts():
+            """Flush current sent/failed counts to the DB row."""
+            try:
+                with app.app_context():
+                    session = get_session_direct()
+                    try:
+                        repo = CampaignRepository(session)
+                        c = repo.get(campaign_id)
+                        if c is None:
+                            return
+                        c.sent_count = _progress_count['sent']
+                        c.failed_count = _progress_count['failed']
+                        c.total_recipients = _progress_total
+                        repo.update(c)
+                    finally:
+                        session.close()
+            except Exception as ex:
+                logger.warning(
+                    "Mid-run count persistence failed for campaign %s: %s "
+                    "(send continues; counts will catch up at completion).",
+                    campaign_id, ex,
+                )
 
         async def _progress_cb(progress: dict):
             _progress_count['n'] += 1
             n = _progress_count['n']
+            # Maintain cumulative tallies locally so we can both (a) include
+            # them in the emitted payload (so the frontend SETS instead of
+            # increments — eliminates the "counts don't match exactly" drift
+            # caused by missed events while the tab was inactive), and
+            # (b) periodically flush them to the DB so a user joining mid-
+            # send (or returning after navigating away) sees real progress.
+            if progress.get('success'):
+                _progress_count['sent'] += 1
+            else:
+                _progress_count['failed'] += 1
+
             if n <= 3 or n % 25 == 0 or n == _progress_total:
                 logger.info(
                     f"[progress] cb #{n}/{_progress_total} for campaign "
                     f"{campaign_id}: recipient={progress.get('recipient')!r} "
                     f"success={progress.get('success')}"
                 )
-            _emit('campaign_progress', {'campaign_id': campaign_id, **progress})
+
+            if n % DB_FLUSH_EVERY == 0 or n == _progress_total:
+                _persist_counts()
+
+            _emit('campaign_progress', {
+                'campaign_id': campaign_id,
+                # Authoritative cumulative counts — frontend uses these
+                # to SET sent_count/failed_count (not increment), so the
+                # displayed value always matches what the engine has
+                # actually processed, even if some events were dropped
+                # in transit or the page just loaded.
+                'sent': _progress_count['sent'],
+                'failed': _progress_count['failed'],
+                'total': _progress_total,
+                # Per-recipient context (kept for backwards compatibility
+                # with the campaigns.html handler's success-increment
+                # branch, though that branch is now redundant given the
+                # cumulative counts above).
+                **progress,
+            })
 
         stats = run_async(service.run_campaign(recipients, progress_callback=_progress_cb))
 
@@ -279,12 +364,22 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
                 try:
                     repo = CampaignRepository(session)
                     campaign = repo.get(campaign_id)
-                    campaign.status = CampaignStatus.FAILED
-                    repo.update(campaign)
+                    # Guard against the campaign being deleted mid-run —
+                    # used to AttributeError on .status assignment, which
+                    # was swallowed by the outer except below, leaving the
+                    # DB stuck at status='sending' if a re-create happened.
+                    if campaign is not None:
+                        campaign.status = CampaignStatus.FAILED
+                        campaign.completed_at = datetime.now(UTC)
+                        repo.update(campaign)
                 finally:
                     session.close()
         except Exception:
-            pass
+            logger.exception(
+                "Couldn't even mark campaign %s as FAILED after a crash — "
+                "the row will stay at 'sending' until manually reset.",
+                campaign_id,
+            )
         _emit('campaign_error', {'campaign_id': campaign_id, 'error': str(exc)})
     finally:
         _active_services.pop(campaign_id, None)

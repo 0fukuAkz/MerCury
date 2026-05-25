@@ -927,16 +927,17 @@
     socket.on('campaign_progress', function(data) {
         var c = allCampaigns.find(function(x) { return x.id === data.campaign_id; });
         if (!c) return;
-        // initial event shape: {total, sent, failed, status:'sending'}
+        // The backend now always includes cumulative `sent`/`failed`/`total`
+        // on every progress event (computed from the engine's authoritative
+        // tally). We SET — don't increment — so missed events while the tab
+        // was inactive can't cause the displayed count to drift from the
+        // real value. The legacy local-increment branch (per-event
+        // success:bool) is gone because it was the source of the
+        // "sent vs failed doesn't match exact sent/failed" reports.
         if (data.status !== undefined) c.status           = data.status;
         if (data.total  !== undefined) c.total_recipients = data.total;
         if (data.sent   !== undefined) c.sent_count       = data.sent;
         if (data.failed !== undefined) c.failed_count     = data.failed;
-        // per-email event shape: {index, success:bool, percent, recipient}
-        if (data.success !== undefined) {
-            if (data.success) c.sent_count   = (c.sent_count   || 0) + 1;
-            else              c.failed_count = (c.failed_count || 0) + 1;
-        }
         if (c.total_recipients)
             c.send_rate = Math.round((c.sent_count || 0) / c.total_recipients * 1000) / 10;
         schedulePatch(c.id);
