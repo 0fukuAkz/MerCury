@@ -642,6 +642,29 @@ class SMTPConnectionPool:
 
         config = self.select_server()
         if not config:
+            # Surface the most recent real failure from each tripped
+            # circuit breaker. Previously this raised a bare "No SMTP
+            # servers available" which became the user-facing error for
+            # every subsequent cascading recipient — hiding the actual
+            # cause (e.g. iCloud's 5.7.0 "From address is not one of
+            # your addresses"). With this, the cascade error includes
+            # the root cause so the operator doesn't need to dig
+            # through per-recipient logs.
+            details = []
+            for c in self.configs:
+                try:
+                    cb_stats = c.runtime.circuit_breaker.get_stats()
+                    if cb_stats.get('state') == 'open':
+                        msgs = cb_stats.get('last_error_messages') or []
+                        last = msgs[-1] if msgs else 'unknown'
+                        details.append(f"{c.name}: circuit open — last error: {last}")
+                except Exception:
+                    pass
+            if details:
+                raise RuntimeError(
+                    "All SMTP servers' circuit breakers are open. "
+                    + " | ".join(details)
+                )
             raise RuntimeError("No SMTP servers available")
 
         pool = self.pools[config.name]

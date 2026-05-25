@@ -4,7 +4,7 @@ import logging
 from datetime import datetime, timedelta, UTC
 from typing import Optional, Dict, Any
 from enum import Enum
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,15 @@ class CircuitBreakerStats:
     opened_at: Optional[datetime] = None
     total_opens: int = 0
     total_trips: int = 0  # Total state changes
-    
+    # Most-recent failure messages (kept small — last 5). The root cause
+    # of a circuit-open used to be invisible: the breaker would log "5
+    # failures in 300s" and operators had to dig through the per-recipient
+    # log to find that all 5 were the same iCloud 5.7.0 reject. Keeping
+    # the last few errors on the stats lets us include them in the
+    # OPENING log line AND in the "No SMTP servers available" cascade
+    # error so the cause is visible without log archaeology.
+    last_error_messages: list = field(default_factory=list)
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             'state': self.state.value,
@@ -46,7 +54,8 @@ class CircuitBreakerStats:
             'last_success_time': self.last_success_time.isoformat() if self.last_success_time else None,
             'opened_at': self.opened_at.isoformat() if self.opened_at else None,
             'total_opens': self.total_opens,
-            'total_trips': self.total_trips
+            'total_trips': self.total_trips,
+            'last_error_messages': list(self.last_error_messages),
         }
 
 
@@ -152,40 +161,63 @@ class CircuitBreaker:
     def record_failure(self, error: Exception):
         """
         Record failed operation.
-        
+
         Args:
             error: Exception that occurred
         """
         current_state = self._get_current_state()
         now = datetime.now(UTC)
-        
+
         self._stats.last_failure_time = now
         self._stats.failure_count += 1
         self._recent_failures.append(now)
-        
+
+        # Capture the error text on the stats (cap at 5 entries, FIFO).
+        # The actual diagnostic value is the unique-message set — repeated
+        # identical 5.7.0 rejects from iCloud occupy all 5 slots and tell
+        # the operator nothing they don't already know from one. So we
+        # dedupe by message text before appending.
+        msg = f"{type(error).__name__}: {str(error)[:200]}"
+        if msg not in self._stats.last_error_messages:
+            self._stats.last_error_messages.append(msg)
+            if len(self._stats.last_error_messages) > 5:
+                self._stats.last_error_messages.pop(0)
+
         # Clean old failures outside monitoring window
         cutoff = now - timedelta(seconds=self.config.monitor_window_seconds)
         self._recent_failures = [
             f for f in self._recent_failures if f > cutoff
         ]
-        
+
         # Check if we should open the circuit
         if current_state == CircuitState.CLOSED:
             if len(self._recent_failures) >= self.config.failure_threshold:
+                # Loud-log the root cause(s) on the same line as the OPEN
+                # event. The previous log just said "5 failures in 300s"
+                # with no hint of what kind of failures — operators had
+                # to grep failed-emails.txt to find that all 5 were the
+                # same iCloud 5.7.0 reject. Now the cause is visible
+                # inline.
+                causes = ' | '.join(self._stats.last_error_messages) or '(no error captured)'
                 logger.error(
-                    f"⚠️  Circuit breaker OPENING for {self.server_name} "
-                    f"({len(self._recent_failures)} failures in {self.config.monitor_window_seconds}s)"
+                    "⚠️  Circuit breaker OPENING for %s "
+                    "(%d failures in %ds). Recent unique errors: %s",
+                    self.server_name,
+                    len(self._recent_failures),
+                    self.config.monitor_window_seconds,
+                    causes,
                 )
                 self._stats.state = CircuitState.OPEN
                 self._stats.opened_at = now
                 self._stats.total_opens += 1
                 self._stats.total_trips += 1
-        
+
         elif current_state == CircuitState.HALF_OPEN:
             # Any failure in half-open immediately opens circuit
             logger.warning(
-                f"⚠️  Circuit breaker RE-OPENING for {self.server_name} "
-                f"(failure during half-open state)"
+                "⚠️  Circuit breaker RE-OPENING for %s "
+                "(failure during half-open state): %s",
+                self.server_name, msg,
             )
             self._stats.state = CircuitState.OPEN
             self._stats.opened_at = now
