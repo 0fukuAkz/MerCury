@@ -26,7 +26,85 @@ from .smtp_service import SMTPService
 logger = logging.getLogger(__name__)
 
 
-@dataclass 
+def _detect_csv_encoding(path: str, sample_bytes: int = 1024 * 1024) -> str:
+    """Return the most likely text encoding for a CSV file.
+
+    Tries UTF-8 first (the right answer for ~95% of files); on
+    UnicodeDecodeError sniffs the first 64 KB via charset-normalizer
+    (which ships transitively via requests). Falls back to utf-8 with
+    a warning if detection fails — the open() in the caller uses
+    errors='replace' as a final safety net so the read at least
+    proceeds and the operator sees the problem in the data, not as a
+    crash.
+
+    Common real-world cases this catches:
+      * Russian/Cyrillic Excel exports → cp1251 / windows-1251
+      * Chinese Excel exports          → gb18030 / gbk
+      * Japanese Excel exports         → shift-jis / cp932
+      * Western European Excel exports → windows-1252 / iso-8859-1
+    """
+    try:
+        with open(path, 'rb') as f:
+            head = f.read(sample_bytes)
+    except OSError:
+        return 'utf-8'
+
+    # Some test fixtures patch open() with mock_open(read_data=<str>),
+    # which returns str regardless of mode. Treat that as "already
+    # decoded, no detection needed" — the read in the caller will get
+    # the same str through and csv.DictReader handles it.
+    if not isinstance(head, (bytes, bytearray)):
+        return 'utf-8'
+
+    # Fast path: BOM-tolerant UTF-8 (Excel adds a BOM on Save As CSV UTF-8).
+    try:
+        head.decode('utf-8-sig')
+        return 'utf-8-sig'
+    except UnicodeDecodeError:
+        pass
+
+    try:
+        from charset_normalizer import from_bytes
+        # Restrict candidates to the encodings business-tool CSV exports
+        # actually use. Without this, charset-normalizer considers exotic
+        # legacy codecs (big5hkscs, cp949, euc-jis-2004, ...) that score
+        # equally low chaos on short Cyrillic samples and beat the right
+        # answer alphabetically. Whitelist is the union of Excel's Save-As
+        # defaults across the locales operators have actually hit:
+        #   * Russian Excel:      cp1251 / windows-1251
+        #   * Chinese Excel:      gb18030 / gbk
+        #   * Japanese Excel:     shift_jis / cp932
+        #   * Korean Excel:       cp949 / euc-kr
+        #   * Western Excel:      windows-1252 / iso-8859-1
+        #   * Anything else:      utf-8 / utf-16 (covered earlier already)
+        business_csv_encodings = [
+            'utf_8', 'utf_16',
+            'cp1251', 'windows-1251',
+            'gb18030', 'gbk',
+            'shift_jis', 'cp932',
+            'cp949', 'euc_kr',
+            'windows-1252', 'iso-8859-1',
+        ]
+        best = from_bytes(head, cp_isolation=business_csv_encodings).best()
+        if best is not None and best.encoding:
+            logger.info(
+                "CSV %s: detected non-UTF-8 encoding %r (confidence: %.2f). "
+                "Re-saving as UTF-8 will make future loads faster.",
+                path, best.encoding, 1.0 - best.chaos,
+            )
+            return best.encoding
+    except ImportError:
+        pass
+
+    logger.warning(
+        "CSV %s: could not detect encoding; reading as utf-8 with "
+        "errors='replace'. Non-ASCII names may render as '?' or similar.",
+        path,
+    )
+    return 'utf-8'
+
+
+@dataclass
 class CampaignConfig:
     """Campaign configuration from YAML."""
     name: str
@@ -327,8 +405,17 @@ class CampaignService:
         # Note: Deduplication still requires memory proportional to unique email count.
         # If memory is critical, we might need Bloom filters or disk-based dedup.
         seen_emails = set()
-        
-        with open(csv_path, 'r', encoding='utf-8-sig') as f:
+
+        # Auto-detect CSV encoding instead of hardcoding utf-8. Excel exports
+        # from localized environments are commonly cp1251 (Russian/Cyrillic),
+        # gb18030 (Chinese), shift-jis (Japanese), or windows-1252 (Western
+        # Europe). Hardcoding utf-8 meant those operators got UnicodeDecodeError
+        # at first byte — and downstream they reported "{{first_name}} doesn't
+        # render in my language" because the name column never reached the
+        # placeholder processor.
+        encoding = _detect_csv_encoding(csv_path)
+
+        with open(csv_path, 'r', encoding=encoding, errors='replace') as f:
             reader = csv.DictReader(f)
             
             # Smart column detection
