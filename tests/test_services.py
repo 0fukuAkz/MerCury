@@ -126,6 +126,56 @@ def test_load_recipients_from_csv_validation():
         assert len(recipients) == 1
         assert recipients[0]['email'] == 'a@b.com'
 
+
+@pytest.mark.parametrize("encoding,first_name,last_name", [
+    # The three real-world cases that broke before the auto-detect fix:
+    # localized-Excel exports to CSV from Russian/Chinese/Japanese locales.
+    ("cp1251",     "Иван",     "Петров"),     # Russian Excel default
+    ("gb18030",    "李明",     "王"),         # Chinese Excel default
+    ("shift_jis",  "山田",     "太郎"),       # Japanese Excel default
+    ("windows-1252", "François", "Müller"),   # Western European Excel default
+])
+def test_load_recipients_from_csv_handles_non_utf8_encodings(
+    encoding, first_name, last_name, tmp_path,
+):
+    """Real-world: CSV exports from localized Excel are NOT UTF-8.
+
+    Regression guard for the bug where Russian / Chinese / Japanese
+    operators got UnicodeDecodeError at first byte and reported
+    "{{first_name}} doesn't render in my language" — because their
+    CSV's name column never reached the placeholder processor at all.
+    The fix auto-detects encoding via charset-normalizer; this test
+    proves Excel's four most-common non-UTF-8 outputs all load
+    correctly without name-data corruption.
+    """
+    # Build a realistically-sized CSV (~20 rows). charset-normalizer
+    # needs enough non-ASCII context to confidently disambiguate between
+    # encoding families that all "decode cleanly" on tiny inputs
+    # (cp1251/big5/shift_jis are all single- or double-byte codecs that
+    # happily decode any byte sequence — distinguishing them requires
+    # statistical patterns over multiple lines of real text).
+    header = "email,First Name,Last Name\n"
+    rows_text = "".join(
+        f"user{i}@example.com,{first_name},{last_name}\n"
+        for i in range(20)
+    )
+    csv_path = tmp_path / f"recipients_{encoding}.csv"
+    csv_path.write_bytes((header + rows_text).encode(encoding))
+
+    service = CampaignService()
+    rows = list(service.load_recipients_from_csv(str(csv_path)))
+
+    assert len(rows) == 20
+    row = rows[0]
+    assert row['email'] == 'user0@example.com'
+    # The original-case CSV header survives (the placeholder-processor
+    # case-tolerant lookup handles {{first_name}} matching it later).
+    assert row.get('First Name') == first_name, (
+        f"{encoding}: name {first_name!r} mangled to {row.get('First Name')!r}"
+    )
+    assert row.get('Last Name') == last_name
+
+
 @pytest.mark.asyncio
 async def test_run_campaign_flow():
     service = CampaignService()
@@ -170,11 +220,14 @@ def test_smtp_service_load_from_database(mock_db_session, mock_smtp_repo):
     mock_server.name = "smtp1"
     mock_server.host = "host1"
     mock_server.port = 587
-    # Mock other attributes used in SMTPServerConfig
+    # Other attributes load_from_database reads through to
+    # SMTPServerConfig. tls_mode is the single TLS field
+    # (use_tls/use_ssl were removed in v2.0.0 — setting them on
+    # the mock now silently does nothing, which is exactly the
+    # bug class this test was failing to catch).
     mock_server.username = "u"
     mock_server.password = "p"
-    mock_server.use_tls = True
-    mock_server.use_ssl = False
+    mock_server.tls_mode = "starttls"
     mock_server.use_auth = True
     mock_server.timeout = 30
     mock_server.from_email = ""
@@ -183,12 +236,17 @@ def test_smtp_service_load_from_database(mock_db_session, mock_smtp_repo):
     mock_server.priority = 0
     mock_server.max_per_minute = 100
     mock_server.max_per_hour = 1000
-    
+
     mock_smtp_repo.return_value.get_active.return_value = [mock_server]
-    
+
     configs = service.load_from_database()
     assert len(configs) == 1
     assert configs[0].name == "smtp1"
+    # Lock in the contract: the config carries the model's tls_mode
+    # value (not a default, not a Mock leaking through). If anyone
+    # re-removes the tls_mode read from load_from_database, this
+    # assertion will catch it.
+    assert configs[0].tls_mode == "starttls"
 
 def test_smtp_service_add_server(mock_db_session, mock_smtp_repo):
     service = SMTPService()

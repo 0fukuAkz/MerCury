@@ -131,6 +131,7 @@ class SMTPService:
             }
 
         from ..engine.connection_pool import AsyncSMTPConnection  # noqa: F401
+
         mode = config.tls_mode
         client: aiosmtplib.SMTP | None = None
         stage = 'tcp'
@@ -145,11 +146,20 @@ class SMTPService:
             await client.connect()
 
             if mode == 'starttls':
+                # aiosmtplib.starttls() issues the post-upgrade EHLO
+                # internally (RFC 3207 requires it). Sending a second
+                # EHLO here used to be the iCloud-failure path: AWS
+                # SES tolerates the duplicate, but iCloud and some
+                # strict Postfix configs reject the second EHLO with a
+                # 503 "bad sequence" / 550. Trust starttls() to leave
+                # the session in an EHLO'd state.
                 stage = 'tls'
                 await client.starttls()
-
-            stage = 'ehlo'
-            await client.ehlo()
+            else:
+                # No STARTTLS upgrade happened, so connect() didn't
+                # leave us with an EHLO'd session — send one now.
+                stage = 'ehlo'
+                await client.ehlo()
 
             auth_attempted = False
             if config.use_auth and config.username:
@@ -168,28 +178,111 @@ class SMTPService:
             }
 
         except aiosmtplib.SMTPAuthenticationError as e:
+            # Authenticated endpoint, so include the relay's actual
+            # response (truncated) — operators need this to tell
+            # "wrong password" from "app-specific password required"
+            # from "user disabled".
             return {
                 'success': False, 'server': server_name, 'host': config.host, 'port': config.port,
                 'stage': 'auth', 'error_type': 'auth_failed',
                 'error': f'Authentication rejected ({getattr(e, "code", "n/a")})',
+                'details': str(e)[:300],
             }
-        except aiosmtplib.SMTPConnectError:
+        except aiosmtplib.SMTPConnectTimeoutError as e:
+            # Distinct from generic connect error: the TCP handshake
+            # started but the relay didn't respond in time. Common
+            # for iCloud over IPv6 when the AAAA path isn't routable
+            # (Python tries v6 first by default and waits the full
+            # timeout before falling back).
+            return {
+                'success': False, 'server': server_name, 'host': config.host, 'port': config.port,
+                'stage': stage, 'error_type': 'tcp_timeout',
+                'error': f'Timed out connecting to {config.host}:{config.port} after {config.timeout}s',
+                'details': str(e)[:300],
+                'hint': (
+                    'If this server worked from elsewhere, the most common cause is an IPv6 '
+                    'routing problem: Python tries the AAAA record first and waits the full '
+                    'timeout before falling back to IPv4. Workaround: set the server `timeout` '
+                    'lower (e.g. 10s) so the v6 path fails fast and v4 kicks in, or run on a '
+                    'host with working IPv6.'
+                ),
+            }
+        except aiosmtplib.SMTPConnectResponseError as e:
+            # TCP succeeded, but the server's greeting wasn't a 220.
+            # Usually means we're connected to the right port but the
+            # server is rejecting us (rate-limited, IP-blocked,
+            # protocol mismatch).
+            return {
+                'success': False, 'server': server_name, 'host': config.host, 'port': config.port,
+                'stage': stage, 'error_type': 'bad_greeting',
+                'error': f'Connected but greeting was not 220 ({getattr(e, "code", "n/a")})',
+                'details': str(e)[:300],
+            }
+        except aiosmtplib.SMTPConnectError as e:
+            # Generic connect failure: DNS failure, connection refused,
+            # network unreachable, etc. The `details` text is what
+            # actually tells you which — without it, the operator is
+            # guessing.
+            #
+            # We sniff for DNS-failure signatures specifically because
+            # that's the most actionable diagnosis ("change your DNS
+            # resolver") and the most common confused-with-firewall
+            # cause. Real example seen in the wild: consumer routers
+            # return SERVFAIL for smtp.mail.me.com while resolving
+            # AWS SES hosts fine, so iCloud fails and AWS works.
+            err_text = str(e).lower()
+            dns_signatures = (
+                'nodename nor servname',     # macOS getaddrinfo
+                'name or service not known',  # Linux getaddrinfo
+                'temporary failure in name resolution',
+                'no address associated with hostname',
+                'getaddrinfo failed',         # generic
+            )
+            if any(sig in err_text for sig in dns_signatures):
+                return {
+                    'success': False, 'server': server_name, 'host': config.host, 'port': config.port,
+                    'stage': stage, 'error_type': 'dns_failure',
+                    'error': f'Hostname {config.host} does not resolve via system DNS',
+                    'details': str(e)[:300],
+                    'hint': (
+                        f'Your DNS resolver cannot resolve {config.host}. Try: '
+                        f'(1) `dig @8.8.8.8 {config.host}` to verify Google\'s DNS sees it; '
+                        f'(2) if (1) works, change your DNS resolver — on macOS: '
+                        f'`networksetup -setdnsservers Wi-Fi 8.8.8.8 8.8.4.4`; '
+                        f'(3) some consumer routers have stale Apple/Microsoft subdomain '
+                        f'entries — switching to 1.1.1.1 / 8.8.8.8 fixes it.'
+                    ),
+                }
             return {
                 'success': False, 'server': server_name, 'host': config.host, 'port': config.port,
                 'stage': stage, 'error_type': 'tcp_failed',
-                'error': 'Could not connect to host (TCP or DNS failure)',
+                'error': f'Could not connect to {config.host}:{config.port}',
+                'details': str(e)[:300] or f'{type(e).__name__} (no message)',
+                'hint': (
+                    'Common causes: (1) port 587 outbound blocked by ISP/firewall — try '
+                    'port 465 with tls_mode=ssl, or test from a different network; '
+                    '(2) connection refused — verify the host/port are right; '
+                    '(3) IPv6 path unreachable — see tcp_timeout hint if the symptom is timeouts.'
+                ),
             }
         except aiosmtplib.SMTPException as e:
+            # Surface the actual SMTP response code + first 300 chars
+            # of the message. This is the most common debug-blocker:
+            # the old generic "SMTP protocol error" left operators with
+            # no way to tell iCloud's 503-after-second-EHLO apart from
+            # an Office365 throttle or a Postfix policy reject.
             return {
                 'success': False, 'server': server_name, 'host': config.host, 'port': config.port,
                 'stage': stage, 'error_type': 'protocol_failed',
                 'error': f'SMTP protocol error ({getattr(e, "code", "n/a")})',
+                'details': str(e)[:300],
             }
-        except (OSError, TimeoutError):
+        except (OSError, TimeoutError) as e:
             return {
                 'success': False, 'server': server_name, 'host': config.host, 'port': config.port,
                 'stage': stage, 'error_type': 'tls_failed' if stage == 'tls' else 'tcp_failed',
                 'error': f'Network failure during {stage}',
+                'details': f'{type(e).__name__}: {str(e)[:200]}',
             }
         except Exception as e:
             # Log the raw text server-side for debugging; return a sanitized
