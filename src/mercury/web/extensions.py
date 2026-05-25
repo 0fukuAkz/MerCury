@@ -103,10 +103,20 @@ else:
 # SocketIO async mode must agree with whichever server is running the app:
 #   - run.py launches gunicorn --worker-class eventlet  → 'eventlet'
 #   - make dev / socketio.run(allow_unsafe_werkzeug=True) → 'threading'
+#   - pytest                                              → 'threading'
 # Hard-coding one breaks the other (WebSocket upgrade silently fails when
-# async_mode disagrees with the worker class). Default matches the
-# production runner; override for plain-werkzeug dev.
-_async_mode = os.environ.get('SOCKETIO_ASYNC_MODE', 'eventlet').strip() or 'eventlet'
+# async_mode disagrees with the worker class — and tellingly, the broken
+# direction is silent: events get queued and never delivered, no error
+# logged anywhere, the browser console just shows a stalled long-poll).
+#
+# We default to 'threading' because it works for every dev / test path
+# (Flask dev server, werkzeug, pytest, gunicorn --worker-class sync).
+# run.py explicitly sets SOCKETIO_ASYNC_MODE=eventlet on the gunicorn
+# subprocess env to opt into the production fast-path. Anyone running
+# gunicorn --worker-class eventlet by hand (e.g. in their own deployment
+# scripts) needs the same env var. docker-compose.yml sets it; the Dockerfile
+# CMD inherits it from there.
+_async_mode = os.environ.get('SOCKETIO_ASYNC_MODE', 'threading').strip() or 'threading'
 
 socketio = SocketIO(
     async_mode=_async_mode,

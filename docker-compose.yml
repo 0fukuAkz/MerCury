@@ -22,6 +22,12 @@ services:
       # shared across workers — Redis is the production default. Override only
       # if you genuinely intend a single-worker, ephemeral-state deploy.
       - RATE_LIMIT_STORAGE=${RATE_LIMIT_STORAGE:-redis://redis:6379/0}
+      # SocketIO async backend must agree with the gunicorn worker class.
+      # The Dockerfile CMD uses --worker-class eventlet, so we need eventlet
+      # mode here. The default in src/ is 'threading' (dev-friendly); this
+      # is the production opt-in. Without it, live-progress events queue
+      # but never reach connected browsers.
+      - SOCKETIO_ASYNC_MODE=eventlet
       # Boot-time alembic upgrade is OFF by default in production (see app.py).
       # The `migrations` service below applies them once before web starts.
     depends_on:

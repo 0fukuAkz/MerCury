@@ -304,7 +304,17 @@ def main():
             "mercury.web.app:create_app()",
         ]
 
-        env = {**os.environ, "PYTHONPATH": str(ROOT_DIR / "src")}
+        # Force SocketIO to the eventlet async backend that matches the
+        # --worker-class eventlet line above. The mercury extensions module
+        # defaults to 'threading' so dev / test paths work out of the box;
+        # production opt-in lives here. Without this, SocketIO would use
+        # the wrong async primitives and live-progress events would silently
+        # fail to reach the browser even though gunicorn+eventlet is fine.
+        env = {
+            **os.environ,
+            "PYTHONPATH": str(ROOT_DIR / "src"),
+            "SOCKETIO_ASYNC_MODE": "eventlet",
+        }
 
         global _gunicorn_proc
         _gunicorn_proc = subprocess.Popen(cmd, env=env)

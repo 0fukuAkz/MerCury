@@ -753,6 +753,11 @@ User=mercury
 Group=mercury
 WorkingDirectory=/opt/mercury
 EnvironmentFile=/opt/mercury/.env
+# SocketIO async backend MUST agree with the gunicorn worker class.
+# The mercury package defaults to 'threading' so dev/test paths work
+# out of the box; this is the production opt-in. Without it,
+# live-progress events queue but never reach connected browsers.
+Environment=SOCKETIO_ASYNC_MODE=eventlet
 # eventlet worker + single worker process is REQUIRED — the SocketIO
 # and async-sender wiring assume a single process. Do not change -w.
 ExecStart=/opt/mercury/venv/bin/gunicorn \
