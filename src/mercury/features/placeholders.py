@@ -105,14 +105,47 @@ class PlaceholderProcessor:
         """
         recipient_data = recipient_data or {}
         now = datetime.now(UTC)
-        
+
+        # Build a case-and-format-tolerant lookup view over recipient_data so
+        # CSV columns like "First Name" / "FirstName" / "First_Name" / "fname"
+        # all resolve to {{first_name}}. Previously only the exact key
+        # "first_name" matched, and any other capitalization silently fell
+        # back to the email-local-part derivation — which produced
+        # convincing-but-wrong values ("Support" from support@x.com) that
+        # operators perceived as "the placeholder doesn't work."
+        #
+        # We do this only for the well-known built-in fields. Arbitrary CSV
+        # columns still match by their literal name (the right contract: a
+        # `region` column reaches `{{region}}` literally).
+        def _lookup(*candidates: str) -> str:
+            """Find the first non-empty value among given key candidates,
+            tried both exactly and case-insensitively."""
+            # Exact match (fast path; preserves original behavior)
+            for k in candidates:
+                v = recipient_data.get(k)
+                if v not in (None, ''):
+                    return str(v)
+            # Case-insensitive match across recipient_data keys, with
+            # whitespace and punctuation normalized to underscore so
+            # "First Name", "First_Name", "first-name" all collapse.
+            normalized = {
+                re.sub(r'[\s\-]+', '_', k.strip().lower()): v
+                for k, v in recipient_data.items()
+                if isinstance(k, str)
+            }
+            for k in candidates:
+                v = normalized.get(re.sub(r'[\s\-]+', '_', k.lower()))
+                if v not in (None, ''):
+                    return str(v)
+            return ''
+
         # Parse email if provided
-        email = recipient_data.get('email', '')
+        email = _lookup('email', 'recipient_email', 'recipient')
         local_part = ''
         domain = ''
         domain_name = ''
         tld = ''
-        
+
         if '@' in email:
             local_part, domain = email.rsplit('@', 1)
             if '.' in domain:
@@ -120,12 +153,21 @@ class PlaceholderProcessor:
                 tld = domain.rsplit('.', 1)[1]
             else:
                 domain_name = domain
-        
-        # Generate first/last name from email if not provided
-        first_name = recipient_data.get('first_name', '')
-        last_name = recipient_data.get('last_name', '')
-        
+
+        # Generate first/last name from email if not provided.
+        # Tolerant lookup means a CSV with any reasonable spelling of the
+        # name columns (First Name, FirstName, first_name, fname, etc.)
+        # wins over the email-derived fallback.
+        first_name = _lookup('first_name', 'firstname', 'first', 'fname', 'given_name')
+        last_name = _lookup('last_name', 'lastname', 'last', 'lname', 'surname', 'family_name')
+
         if not first_name and local_part:
+            logger.debug(
+                "Placeholder fallback: deriving first_name from email "
+                "local-part %r because recipient_data has no first_name / "
+                "firstname / fname / etc. column. If your CSV has a name "
+                "column, check its header capitalization.", local_part,
+            )
             # Try to extract name from email
             parts = re.split(r'[._\-]', local_part)
             if parts:
@@ -137,8 +179,7 @@ class PlaceholderProcessor:
         # override the email-derived default. Without this, an explicit
         # placeholders={"name": "Alice"} would lose to the email-derived "U1".
         full_name = (
-            recipient_data.get('full_name')
-            or recipient_data.get('name')
+            _lookup('full_name', 'fullname', 'name')
             or f"{first_name} {last_name}".strip()
             or local_part.capitalize()
         )
@@ -169,7 +210,7 @@ class PlaceholderProcessor:
             'full_name': full_name,
             'fullname': full_name,
             'name': full_name,
-            'company': recipient_data.get('company', domain_name.capitalize()),
+            'company': _lookup('company', 'company_name', 'organization', 'org') or domain_name.capitalize(),
             
             # Date/Time
             'date': now.strftime('%Y-%m-%d'),
