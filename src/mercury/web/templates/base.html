@@ -653,25 +653,17 @@
 
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script>
-        // Initialize WebSocket connection (window-scoped so child templates can access it)
+        // Window-scoped socket so child templates can subscribe to
+        // campaign events. Per-page handlers live in each template's
+        // own script block — we deliberately do NOT register generic
+        // selector-based progress handlers here, because the
+        // ".progress-bar" selector cross-contaminates every page that
+        // happens to have an element of that class (it used to clobber
+        // the campaigns table's per-row bars with whichever campaign's
+        // event arrived last).
         var socket = io();
-
-        socket.on('connect', function () {
-            console.log('Connected to server');
-        });
-
-        socket.on('campaign_progress', function (data) {
-            console.log('Progress:', data);
-            // Update progress UI
-            const progressBar = document.querySelector('.progress-bar');
-            if (progressBar) {
-                progressBar.style.width = data.percent + '%';
-            }
-        });
-
-        socket.on('campaign_complete', function (data) {
-            console.log('Campaign complete:', data);
-        });
+        socket.on('connect',    function () { console.log('[socket] connected'); });
+        socket.on('disconnect', function () { console.log('[socket] disconnected'); });
     </script>
 
     {% block extra_js %}{% endblock %}

@@ -221,7 +221,50 @@
     loadCampaigns();
     loadServers();
 
-    // Refresh every 30 seconds
-    setInterval(loadStats, 30000);
+    // ── Live updates via SocketIO ──────────────────────────────────────
+    // The campaign send pipeline emits `campaign_started` /
+    // `campaign_progress` / `campaign_complete` events from the backend
+    // (see app_context.emit_progress + the eventlet bridge greenlet).
+    // Without subscribing, the dashboard goes stale for up to 30s after
+    // every event — operators ended up reflexively refreshing.
+    //
+    // We register inside DOMContentLoaded because this <script> sits in
+    // the "content" template block, which renders BEFORE base.html's
+    // `var socket = io()` at the bottom of the document. Registering
+    // synchronously here would reference an undefined `socket`. By the
+    // time DOMContentLoaded fires, all inline scripts (including base
+    // .html's socket init) have executed.
+    //
+    // Progress fires per-recipient (potentially 50/sec on a fast send),
+    // so we DEBOUNCE the refresh: at most one /api/stats + /api/campaigns
+    // refresh per 1.5 seconds. The poll-fallback still runs every 10s
+    // (down from 30s) so users with broken WebSocket transport — e.g.
+    // corporate firewalls that strip the Upgrade header — still see
+    // near-real-time updates.
+    window.addEventListener('DOMContentLoaded', function () {
+        if (typeof socket === 'undefined') return;
+        let _refreshScheduled = false;
+        function scheduleLiveRefresh() {
+            if (_refreshScheduled) return;
+            _refreshScheduled = true;
+            setTimeout(function () {
+                _refreshScheduled = false;
+                loadStats();
+                loadCampaigns();
+            }, 1500);
+        }
+        socket.on('campaign_started',  scheduleLiveRefresh);
+        socket.on('campaign_progress', scheduleLiveRefresh);
+        socket.on('campaign_complete', scheduleLiveRefresh);
+        socket.on('campaign_paused',   scheduleLiveRefresh);
+        socket.on('campaign_resumed',  scheduleLiveRefresh);
+    });
+
+    // Poll fallback (tightened 30s → 10s): catches users whose WebSocket
+    // transport is blocked by a proxy that strips Connection: Upgrade.
+    setInterval(function () {
+        loadStats();
+        loadCampaigns();
+    }, 10000);
 </script>
 {% endblock %}

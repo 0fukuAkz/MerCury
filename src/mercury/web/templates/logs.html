@@ -116,5 +116,31 @@
     loadStats();
     loadSuccessLogs();
     loadFailedLogs();
+
+    // ── Live updates via SocketIO ──────────────────────────────────────
+    // Without this, the logs view stayed frozen until the operator
+    // refreshed — even though new send results were piling up in the
+    // backend in real time. Debounced (1.5s) so a fast send loop doesn't
+    // hammer /api/logs/* on every per-recipient tick.
+    //
+    // Registered inside DOMContentLoaded because this <script> is in
+    // the "content" template block, which renders before base.html's
+    // `var socket = io()` — same reasoning as index.html.
+    window.addEventListener('DOMContentLoaded', function () {
+        if (typeof socket === 'undefined') return;
+        let _refreshScheduled = false;
+        function scheduleLogRefresh() {
+            if (_refreshScheduled) return;
+            _refreshScheduled = true;
+            setTimeout(function () {
+                _refreshScheduled = false;
+                loadStats();
+                loadSuccessLogs();
+                loadFailedLogs();
+            }, 1500);
+        }
+        socket.on('campaign_progress', scheduleLogRefresh);
+        socket.on('campaign_complete', scheduleLogRefresh);
+    });
 </script>
 {% endblock %}
