@@ -1,12 +1,46 @@
 """Structured logging configuration using structlog."""
 
 import os
+import re
 import sys
 import logging
 from typing import Optional
 from datetime import datetime, UTC
 
 import structlog
+
+
+class _SuppressEngineIOSocketShutdown(logging.Filter):
+    """Drop ``python-engineio``'s harmless socket-cleanup chatter.
+
+    When a SocketIO client upgrades transport from polling to
+    websocket, the old polling FD is closed by one greenlet; the
+    cleanup path then calls ``shutdown()`` on it and races into
+    ``Errno 9: Bad file descriptor``. The SocketIO session is fine —
+    the message is on a socket that's already gone, after the work
+    is done — but it logs once per upgrade and once per abrupt
+    disconnect (every tab refresh / navigate / close). On a busy
+    dashboard, dozens per minute.
+
+    Happens with every async backend (eventlet, gevent, threading),
+    so we suppress globally rather than per-backend. Other
+    ``engineio.server`` log entries (real protocol errors, auth
+    rejections, etc.) still pass through.
+    """
+
+    _NOISE = re.compile(r'socket shutdown error.*Bad file descriptor')
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return not self._NOISE.search(record.getMessage())
+
+
+# Apply at import time. Idempotent — logging.Filter instances added to
+# the same logger are de-duped by identity, and we re-add a fresh
+# instance each import, so worst case we have a tiny extra filter
+# object in the chain. Doing it here (rather than inside
+# configure_logging) means it's active even before configure_logging
+# runs, which matters for early-boot engineio traffic.
+logging.getLogger('engineio.server').addFilter(_SuppressEngineIOSocketShutdown())
 
 
 def configure_logging(
