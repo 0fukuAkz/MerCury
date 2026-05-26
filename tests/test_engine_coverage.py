@@ -1186,11 +1186,19 @@ class TestSMTPConnectionPoolMulti:
 
     @pytest.mark.asyncio
     async def test_acquire_no_servers_raises(self, two_configs):
-        """Lines 441-445: acquire raises when no servers available."""
+        """Lines 441-445: acquire raises when no servers available.
+
+        New error contract (post-iCloud-diag fix): the message includes
+        the root cause from each tripped breaker so cascade failures
+        are self-diagnosing. Either wording is acceptable — the old
+        "No SMTP servers available" still fires when there are zero
+        configs at all; the new "circuit breakers are open" fires when
+        configs exist but all are tripped.
+        """
         for cfg in two_configs:
             cfg.runtime.circuit_breaker.force_open()
         pool = SMTPConnectionPool(two_configs)
-        with pytest.raises(RuntimeError, match="No SMTP servers available"):
+        with pytest.raises(RuntimeError, match=r"circuit breakers are open|No SMTP servers available"):
             await pool.acquire()
 
     @pytest.mark.asyncio

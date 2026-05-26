@@ -94,7 +94,10 @@ async def test_multi_pool_acquire_no_servers():
     pool.configs[0].runtime.circuit_breaker.record_failure(Exception())
     pool.configs[0].runtime.circuit_breaker.record_failure(Exception())
     
-    with pytest.raises(RuntimeError, match="No SMTP servers available"):
+    # New contract: when all servers' breakers are open, the error
+    # includes the root cause (last error from each tripped breaker)
+    # so the operator doesn't have to grep failed-emails.txt.
+    with pytest.raises(RuntimeError, match=r"circuit breakers are open"):
         await pool.acquire()
 
 def test_status(mock_config):
