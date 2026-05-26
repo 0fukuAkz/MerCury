@@ -100,6 +100,34 @@ class WebhookService:
         # Load webhooks from environment
         self._load_webhooks_from_env()
     
+    def _is_safe_webhook_url(self, url: str) -> bool:
+        """Check if webhook URL is safe from SSRF."""
+        if os.environ.get('ALLOW_INTERNAL_WEBHOOKS', 'False').lower() in ('true', '1', 'yes'):
+            return True
+            
+        try:
+            from urllib.parse import urlparse
+            import ipaddress
+            
+            parsed = urlparse(url)
+            hostname = parsed.hostname
+            if not hostname:
+                return False
+                
+            if hostname.lower() in ('localhost', 'metadata.google.internal'):
+                return False
+                
+            try:
+                ip = ipaddress.ip_address(hostname)
+                if ip.is_private or ip.is_loopback or ip.is_link_local:
+                    return False
+            except ValueError:
+                pass # Domain name
+                
+            return True
+        except Exception:
+            return False
+    
     def _load_webhooks_from_env(self) -> None:
         """Load webhook configurations from environment variables."""
         # Format: WEBHOOK_1_URL, WEBHOOK_1_SECRET, WEBHOOK_1_EVENTS
@@ -109,6 +137,11 @@ class WebhookService:
             if not url:
                 break
             
+            if not self._is_safe_webhook_url(url):
+                logger.warning(f"Skipping webhook env_{i} due to unsafe URL (SSRF protection): {url}")
+                i += 1
+                continue
+                
             secret = os.environ.get(f'WEBHOOK_{i}_SECRET')
             events_str = os.environ.get(f'WEBHOOK_{i}_EVENTS', '*')
             
@@ -156,6 +189,9 @@ class WebhookService:
         """
         import uuid
         
+        if not self._is_safe_webhook_url(url):
+            raise ValueError("Webhook URL is not permitted (SSRF protection). Set ALLOW_INTERNAL_WEBHOOKS=True if internal IPs are required.")
+            
         webhook = WebhookConfig(
             id=webhook_id or str(uuid.uuid4()),
             url=url,

@@ -488,17 +488,38 @@ class SMTPConnectionPool:
             self.configs = [
                 (new_config if c.name == name else c) for c in self.configs
             ]
-            self.pools[name] = AsyncConnectionPool(
-                new_config,
-                pool_size=self._pool_size_per_server,
-            )
+            
+            # If the server was renamed, we need to map the new pool to the new name,
+            # and clean up the old name key.
+            if new_config.name != name:
+                self.pools[new_config.name] = AsyncConnectionPool(
+                    new_config,
+                    pool_size=self._pool_size_per_server,
+                )
+                old_pool = self.pools.pop(name, None)
+                if old_pool:
+                    try:
+                        import asyncio
+                        # We don't await here directly since invalidate_server is called safely 
+                        # but just to be safe, close it asynchronously.
+                        # Wait, we are in an async function.
+                        await old_pool.close_all()
+                    except Exception as e:
+                        logger.warning(f"close_all error for {name} during invalidate: {e}")
+            else:
+                self.pools[name] = AsyncConnectionPool(
+                    new_config,
+                    pool_size=self._pool_size_per_server,
+                )
 
         # Close out the old pool (or the just-replaced one if no
         # new_config was passed — operator wanted a force-reset).
-        try:
-            await self.pools[name].close_all() if new_config is None else None
-        except Exception as e:
-            logger.warning(f"close_all error for {name} during invalidate: {e}")
+        # We only do this if it wasn't a rename (rename cleanup happens above).
+        if name in self.pools:
+            try:
+                await self.pools[name].close_all() if new_config is None else None
+            except Exception as e:
+                logger.warning(f"close_all error for {name} during invalidate: {e}")
         logger.info(f"Invalidated pool for SMTP server '{name}'")
         return True
     

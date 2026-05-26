@@ -94,4 +94,18 @@ def detailed_health_check():
             'error': str(e)
         }
         
+    from flask_login import current_user
+    from flask import request
+    from ...security.auth import validate_api_key
+
+    is_authed = False
+    if current_user and current_user.is_authenticated:
+        is_authed = True
+    elif request.headers.get('X-API-Key') and validate_api_key(request.headers.get('X-API-Key')):
+        is_authed = True
+
+    if not is_authed:
+        # Strip details for unauthenticated users
+        return jsonify({'status': status['status']}), 200
+
     return jsonify(status), 200

@@ -98,9 +98,15 @@ def api_send_test_email():
                 if tpl:
                     html_body = tpl.html_content
         elif template_path:
-            if os.path.isfile(template_path):
-                with open(template_path, 'r', encoding='utf-8') as f:
-                    html_body = f.read()
+            # Prevent Arbitrary File Read (C-2)
+            try:
+                target_path = os.path.realpath(template_path)
+                safe_base = os.path.realpath(os.getcwd())
+                if target_path.startswith(safe_base) and os.path.isfile(target_path):
+                    with open(target_path, 'r', encoding='utf-8') as f:
+                        html_body = f.read()
+            except Exception:
+                pass
 
         primary_link = (data.get('primary_link') or '').strip()
         links_raw = data.get('links') or data.get('links_list') or []

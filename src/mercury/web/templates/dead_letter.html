@@ -14,7 +14,7 @@
         <div class="stat-value error" id="pending-count">0</div>
     </div>
     <div class="stat-card">
-        <div class="stat-label">Total Processed</div>
+        <div class="stat-label">Total Failed</div>
         <div class="stat-value accent" id="processed-count">0</div>
     </div>
     <div class="stat-card">
@@ -24,6 +24,17 @@
     <div class="stat-card">
         <div class="stat-label">Discarded</div>
         <div class="stat-value warning" id="discarded-count">0</div>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 1.5rem;">
+    <div class="card-header">
+        <h2 class="card-title">Error Breakdown</h2>
+    </div>
+    <div class="card-body" style="padding: 1rem;">
+        <ul id="error-breakdown-list" style="margin: 0; padding-left: 1.5rem;">
+            <li class="text-muted">Loading...</li>
+        </ul>
     </div>
 </div>
 
@@ -70,6 +81,16 @@
             document.getElementById('processed-count').textContent = statsData.total_processed || 0;
             document.getElementById('retried-count').textContent = statsData.retried || 0;
             document.getElementById('discarded-count').textContent = statsData.discarded || 0;
+            
+            const errorList = document.getElementById('error-breakdown-list');
+            if (statsData.by_error_type && Object.keys(statsData.by_error_type).length > 0) {
+                errorList.innerHTML = Object.entries(statsData.by_error_type)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([errorType, count]) => `<li><strong>${count}</strong> - ${errorType}</li>`)
+                    .join('');
+            } else {
+                errorList.innerHTML = '<li class="text-muted">No errors recorded</li>';
+            }
 
             const items = itemsData.items || [];
             const tbody = document.getElementById('dead-letter-table');

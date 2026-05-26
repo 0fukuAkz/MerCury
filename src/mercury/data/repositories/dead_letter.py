@@ -176,11 +176,20 @@ class DeadLetterRepository(BaseRepository[DeadLetter]):
         Returns:
             Statistics dictionary
         """
+        from sqlalchemy import func
+        
         total = self.count()
-        unresolved = len(self.get_unresolved(limit=10000))
+        
+        unresolved_stmt = select(func.count(DeadLetter.id)).where(DeadLetter.resolved == False)
+        unresolved = self.session.execute(unresolved_stmt).scalar() or 0
+        
+        retried_stmt = select(func.count(DeadLetter.id)).where(DeadLetter.retry_count > 0)
+        retried = self.session.execute(retried_stmt).scalar() or 0
+        
+        discarded_stmt = select(func.count(DeadLetter.id)).where(DeadLetter.resolved == True)
+        discarded = self.session.execute(discarded_stmt).scalar() or 0
         
         # Count by error type
-        from sqlalchemy import func
         stmt = (
             select(DeadLetter.error_type, func.count(DeadLetter.id))
             .group_by(DeadLetter.error_type)
@@ -190,7 +199,13 @@ class DeadLetterRepository(BaseRepository[DeadLetter]):
         return {
             'total': total,
             'unresolved': unresolved,
-            'resolved': total - unresolved,
-            'by_error_type': error_counts
+            'resolved': discarded,
+            'by_error_type': error_counts,
+            
+            # Keys mapped exactly for the UI
+            'pending': unresolved,
+            'total_processed': total,
+            'retried': retried,
+            'discarded': discarded
         }
 

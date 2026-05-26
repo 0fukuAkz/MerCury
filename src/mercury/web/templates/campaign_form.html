@@ -900,7 +900,7 @@
 
 <script>
     /* ── Edit-mode seed data ─────────────────────────────────────────────── */
-    var EDIT_CAMPAIGN = {{ campaign | safe if campaign else 'null' }};
+    var EDIT_CAMPAIGN = {{ campaign | tojson if campaign else 'null' }};
     var EDIT_MODE = !!EDIT_CAMPAIGN;
 
     /* ── Draft autosave (localStorage) ──────────────────────────────────── */
@@ -1548,12 +1548,16 @@
                 .filter(function(s) { return s.length > 0; });
             emails = emails.filter(function(v, i, arr) { return arr.indexOf(v) === i; });
             data['manual_recipients'] = emails;
-            delete data['recipients_path'];
+            data['recipients_path'] = ''; // Explicitly clear path so backend removes it
         } else if (_recipientsSource === 'file') {
             // Use the free-text file path input
             data['recipients_path'] = (document.getElementById('recipientsFilePathInput').value || '').trim();
+            data['manual_recipients'] = []; // Explicitly clear manual
+        } else {
+            // 'list' mode: recipients_path is already set via hidden input from the select
+            // We just need to make sure manual_recipients is cleared
+            data['manual_recipients'] = [];
         }
-        // 'list' mode: recipients_path is already set via hidden input from the select
 
         formData.forEach(function(value, key) {
             if (key === 'attachment_ids') return;  // handled below

@@ -208,12 +208,20 @@ class TemplateEngine:
             else:
                 full_path = include_path
             
-            if os.path.exists(full_path):
-                try:
-                    with open(full_path, 'r', encoding='utf-8') as f:
+            # Prevent Arbitrary File Read (C-2)
+            try:
+                target_path = os.path.realpath(full_path)
+                safe_base = os.path.realpath(os.getcwd())
+                
+                # Further restrict if base_dir is known to be safer than CWD
+                if self.config.template_path:
+                    safe_base = os.path.realpath(os.path.dirname(self.config.template_path))
+                    
+                if target_path.startswith(safe_base) and os.path.exists(target_path):
+                    with open(target_path, 'r', encoding='utf-8') as f:
                         return f.read()
-                except Exception as e:
-                    logger.warning(f"Failed to include {include_path}: {e}")
+            except Exception as e:
+                logger.warning(f"Failed to include {include_path}: {e}")
             
             return match.group(0)
         

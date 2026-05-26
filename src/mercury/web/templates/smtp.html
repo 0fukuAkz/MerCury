@@ -584,6 +584,11 @@
             '<div class="edit-row-grid">',
 
             '<div>',
+            '  <div class="field-label">Name <span class="req">*</span></div>',
+            '  <input class="field-input" name="name" value="' + esc(name) + '" required autocomplete="off">',
+            '</div>',
+
+            '<div>',
             '  <div class="field-label">Host <span class="req">*</span></div>',
             '  <input class="field-input" name="host" value="' + esc(currentHost) + '" required autocomplete="off">',
             '</div>',
@@ -651,7 +656,11 @@
         saveBtn.disabled = true;
         saveBtn.textContent = 'Saving…';
 
+        var new_name = form.elements['name'] ? form.elements['name'].value.trim() : name;
+        if (!new_name) { showToast('Name is required', 'error'); return; }
+
         var data = {
+            name:    new_name,
             host:    host,
             port:    parseInt(form.elements['port'].value) || 587,
             tls_mode: form.elements['tls_mode'].value,
@@ -674,7 +683,7 @@
             var result = await res.json();
 
             if (result.success) {
-                showToast('Server "' + name + '" updated', 'success');
+                showToast('Server "' + new_name + '" updated', 'success');
                 cancelEdit();
                 loadServers();
             } else {

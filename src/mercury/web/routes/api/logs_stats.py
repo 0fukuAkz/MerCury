@@ -31,7 +31,7 @@ def api_failed_logs():
         repo = LogRepository(session)
         logs = repo.get_recent_failed(limit=100)
         failures = [
-            f"{log.recipient_email}: {log.error_message} ({log.failed_at.isoformat()})"
+            f"{log.recipient_email}|{log.error_message} ({log.failed_at.isoformat() if log.failed_at else 'Unknown time'})"
             for log in logs
         ]
         return jsonify({'failures': failures})

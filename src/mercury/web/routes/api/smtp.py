@@ -80,7 +80,26 @@ def api_list_smtp():
     with session_scope() as session:
         repo = SMTPRepository(session)
         servers = repo.get_all()
-        return jsonify({'servers': [s.to_dict() for s in servers]})
+        
+        # Aggregate real-time rate limit counts from active connection pools
+        minute_counts = {}
+        try:
+            from ....engine.connection_pool import iter_active_pools
+            active_pools = iter_active_pools()
+            for pool in active_pools:
+                status = pool.get_status()
+                for name, s_status in status.items():
+                    minute_counts[name] = minute_counts.get(name, 0) + s_status.get('minute_count', 0)
+        except Exception:
+            pass
+            
+        result = []
+        for s in servers:
+            s_dict = s.to_dict()
+            s_dict['current_minute_count'] = minute_counts.get(s.name, 0)
+            result.append(s_dict)
+            
+        return jsonify({'servers': result})
 
 
 @api_bp.route('/smtp', methods=['POST'])
@@ -172,6 +191,14 @@ def api_update_smtp(name):
                     'success': False,
                     'error': 'use_auth=True requires a non-empty username',
                 }), 400
+
+        if 'name' in data and data['name'].strip():
+            new_name = data['name'].strip()
+            if new_name != server.name:
+                existing = repo.get_by_name(new_name)
+                if existing:
+                    return jsonify({'success': False, 'error': f"Server name '{new_name}' is already in use"}), 400
+                server.name = new_name
 
         if 'host' in data:
             server.host = data['host']

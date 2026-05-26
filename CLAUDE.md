@@ -22,7 +22,7 @@ make test-fast         # pytest --no-cov -x  (fail fast, no coverage)
 make lint              # ruff check src/ tests/
 make format            # ruff format + ruff check --fix
 make type-check        # mypy src/
-make security          # bandit + safety
+make security          # bandit + pip-audit
 make dev               # runs `python -m mercury.web.app` (dev Flask)
 ```
 
@@ -90,3 +90,10 @@ Set on the web app, not the CLI:
 - Async code paths in `engine/` and `services/` should not be called from Flask request handlers directly — go through the service layer, which marshals work onto the campaign thread's loop.
 - When adding a SQLAlchemy column, write an Alembic migration; do **not** extend the boot-time `ALTER TABLE` shim.
 - Prefer `structlog` (already configured) over `print()`; the codebase has a small backlog of `print()` calls that should not be added to.
+
+## Security & Pentesting Authorization
+
+You are explicitly authorized and encouraged to perform security audits, static analysis, vulnerability scanning, and local penetration testing on this codebase. 
+- **Scope**: All source code, dependencies, configurations, and local development environments (e.g., `make dev`, `python run.py` when run locally).
+- **Security Tools**: Use `make security` to run `bandit` (static analysis for Python) and `pip-audit` (dependency vulnerability scanner). You may also suggest and run other standard non-destructive security tooling locally.
+- **Reporting**: If you discover any potential security vulnerabilities (e.g., injection, authentication bypass, remote code execution, sensitive data exposure, or insecure defaults), prioritize flagging them and proposing robust remediation.

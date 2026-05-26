@@ -91,8 +91,22 @@ class EncryptionService:
         # Use a fixed salt derived from environment or a default
         # In production, this should be stored securely
         if salt is None:
-            salt_str = os.environ.get('ENCRYPTION_SALT', 'mercury-default-salt')
-            salt = salt_str.encode()
+            salt_str = os.environ.get('ENCRYPTION_SALT')
+            if salt_str:
+                salt = salt_str.encode()
+            else:
+                from ..utils.app_dirs import get_data_dir
+                salt_path = get_data_dir() / '.encryption.salt'
+                if salt_path.exists():
+                    salt = salt_path.read_bytes().strip()
+                else:
+                    salt = os.urandom(32)
+                    salt_path.write_bytes(salt)
+                    try:
+                        salt_path.chmod(0o600)
+                    except OSError:
+                        pass
+                    logger.info("Generated new encryption salt at %s", salt_path)
         
         kdf = PBKDF2HMAC(
             algorithm=hashes.SHA256(),

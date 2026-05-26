@@ -36,8 +36,8 @@ def edit_campaign(campaign_id):
         if not campaign:
             from flask import abort
             abort(404)
-        campaign_json = json.dumps(campaign.to_dict())
-    return render_template('campaign_form.html', campaign=campaign_json)
+        campaign_dict = campaign.to_dict()
+    return render_template('campaign_form.html', campaign=campaign_dict)
 
 @views_bp.route('/smtp')
 @login_required

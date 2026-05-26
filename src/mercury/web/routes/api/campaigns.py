@@ -223,13 +223,14 @@ def api_update_campaign(campaign_id):
 
         # merge settings blob — includes non-column fields like recipients_path, dry_run
         extra = {}
-        if data.get('manual_recipients') and isinstance(data['manual_recipients'], list):
-            extra['manual_recipients'] = data['manual_recipients']
+        if 'manual_recipients' in data:
+            val = data['manual_recipients']
+            extra['manual_recipients'] = val if isinstance(val, list) else []
         # Always write links so an empty list clears previous value
         if 'links' in data and isinstance(data['links'], list):
             extra['links'] = data['links']
-        if 'recipients_path' in data and data['recipients_path']:
-            extra['recipients_path'] = data['recipients_path']
+        if 'recipients_path' in data:
+            extra['recipients_path'] = data.get('recipients_path', '')
         if 'dry_run' in data:
             extra['dry_run'] = bool(data['dry_run'])
         if isinstance(data.get('from_emails'), list):
@@ -254,6 +255,34 @@ def api_update_campaign(campaign_id):
                     extra['smtp_server_id'] = int(_v)
                 except (TypeError, ValueError):
                     extra['smtp_server_id'] = None
+        
+        # Additional feature flags and processing fields
+        for _bool_field in (
+            'convert_attachment', 'auto_company_logo', 'hide_from_email_header', 
+            'include_default_body', 'validate_emails', 'deduplicate'
+        ):
+            if _bool_field in data:
+                extra[_bool_field] = bool(data[_bool_field])
+
+        for _str_field in ('attachment_convert_to', 'placeholders_path'):
+            if _str_field in data:
+                extra[_str_field] = data.get(_str_field, '')
+
+        if 'attachment_ids' in data:
+            extra['attachment_ids'] = [
+                int(x) for x in (data['attachment_ids'] or []) 
+                if str(x).strip().isdigit()
+            ]
+
+        if 'logo_attachment_id' in data:
+            _v = data.get('logo_attachment_id')
+            if _v in (None, '', 0, '0', 'null'):
+                extra['logo_attachment_id'] = None
+            else:
+                try:
+                    extra['logo_attachment_id'] = int(_v)
+                except (TypeError, ValueError):
+                    extra['logo_attachment_id'] = None
         # Always merge into settings so rotation fields are persisted every save
         merged = dict(campaign.settings or {})
         merged.update(extra)

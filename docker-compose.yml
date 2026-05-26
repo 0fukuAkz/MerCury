@@ -6,7 +6,7 @@ services:
     environment:
       - FLASK_ENV=production
       - FLASK_DEBUG=0
-      - DATABASE_URL=postgresql://mercury:mercury@db:5432/mercury
+      - DATABASE_URL=postgresql://mercury:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@db:5432/mercury
       - SECRET_KEY=${SECRET_KEY:?SECRET_KEY must be set}
       # First-admin bootstrap. All three are required together — the app
       # refuses to auto-create an admin user without them and you'll be
@@ -21,7 +21,7 @@ services:
       # Rate-limit storage. memory:// loses all state on restart and cannot be
       # shared across workers — Redis is the production default. Override only
       # if you genuinely intend a single-worker, ephemeral-state deploy.
-      - RATE_LIMIT_STORAGE=${RATE_LIMIT_STORAGE:-redis://redis:6379/0}
+      - RATE_LIMIT_STORAGE=${RATE_LIMIT_STORAGE:-redis://:${REDIS_PASSWORD:?REDIS_PASSWORD must be set}@redis:6379/0}
       # SocketIO async backend must agree with the gunicorn worker class.
       # The Dockerfile CMD uses --worker-class eventlet, so we need eventlet
       # mode here. The default in src/ is 'threading' (dev-friendly); this
@@ -43,7 +43,7 @@ services:
     build: .
     command: ["alembic", "upgrade", "head"]
     environment:
-      - DATABASE_URL=postgresql://mercury:mercury@db:5432/mercury
+      - DATABASE_URL=postgresql://mercury:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@db:5432/mercury
       - SECRET_KEY=${SECRET_KEY:?SECRET_KEY must be set}
     depends_on:
       - db
@@ -55,12 +55,13 @@ services:
       - postgres_data:/var/lib/postgresql/data
     environment:
       - POSTGRES_USER=mercury
-      - POSTGRES_PASSWORD=mercury
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
       - POSTGRES_DB=mercury
     restart: unless-stopped
 
   redis:
     image: redis:7-alpine
+    command: redis-server --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
     # Persistence isn't required for rate-limit counters; restart resets are
     # acceptable. Add a volume here if you also use redis for other state.
     restart: unless-stopped

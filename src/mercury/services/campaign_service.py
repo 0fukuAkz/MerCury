@@ -660,7 +660,34 @@ class CampaignService:
                     
                     # Batch insert to DB via repository
                     if db_logs:
-                        LogRepository(session).bulk_create(db_logs)
+                        try:
+                            LogRepository(session).bulk_create(db_logs)
+                        except Exception as e:
+                            logger.warning(f"Failed to bulk save email logs, likely deleted campaign: {e}")
+                            session.rollback()
+
+                    # Batch update SMTPServer metrics
+                    if result.results:
+                        smtp_stats = {}
+                        for r in result.results:
+                            if not r.smtp_server:
+                                continue
+                            if r.smtp_server not in smtp_stats:
+                                smtp_stats[r.smtp_server] = {'sent': 0, 'failed': 0}
+                            if r.success:
+                                smtp_stats[r.smtp_server]['sent'] += 1
+                            else:
+                                smtp_stats[r.smtp_server]['failed'] += 1
+                                
+                        if smtp_stats:
+                            from ..data.repositories.smtp import SMTPRepository
+                            smtp_repo = SMTPRepository(session)
+                            for server_name, stats in smtp_stats.items():
+                                server = smtp_repo.get_by_name(server_name)
+                                if server:
+                                    server.total_sent += stats['sent']
+                                    server.total_failed += stats['failed']
+                            session.commit()
 
                     total_stats['chunks_processed'] += 1
                     

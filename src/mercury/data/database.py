@@ -4,7 +4,8 @@ import os
 import threading
 from contextlib import contextmanager
 from typing import Generator, Iterator
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker, Session, declarative_base
 
 Base = declarative_base()
@@ -13,6 +14,13 @@ _engine = None
 _SessionLocal = None
 _engine_lock = threading.Lock()
 _session_lock = threading.Lock()
+
+@event.listens_for(Engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    if "sqlite" in dbapi_connection.__class__.__module__.lower():
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
 
 
 def get_engine(db_url: str = None):

@@ -26,6 +26,28 @@ from ..security.auth import get_user_by_id, init_auth
 from .extensions import socketio, start_background_loop
 from .events import register_socketio_events
 
+# Monkey-patch eventlet websocket to suppress noisy EBADF logs on disconnect
+try:
+    import errno
+    import eventlet.websocket
+    _original_close = eventlet.websocket.WebSocket.close
+    
+    def _quiet_close(self):
+        try:
+            self._send_closing_frame(True)
+            self.socket.shutdown(True)
+        except OSError as e:
+            if getattr(e, 'errno', None) not in (errno.ENOTCONN, errno.EBADF):
+                self.log.write('{ctx} socket shutdown error: {e}'.format(ctx=self.log_context, e=e))
+        except Exception:
+            pass
+        finally:
+            self.socket.close()
+            
+    eventlet.websocket.WebSocket.close = _quiet_close
+except ImportError:
+    pass
+
 # Import routes
 from .routes.auth import auth_bp
 from .routes.api import api_bp

@@ -343,12 +343,13 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
             try:
                 repo = CampaignRepository(session)
                 campaign = repo.get(campaign_id)
-                campaign.status = final_status
-                campaign.completed_at = datetime.now(UTC)
-                campaign.sent_count = stats.get('sent', 0)
-                campaign.failed_count = stats.get('failed', 0)
-                campaign.total_recipients = stats.get('total', len(recipients))
-                repo.update(campaign)
+                if campaign is not None:
+                    campaign.status = final_status
+                    campaign.completed_at = datetime.now(UTC)
+                    campaign.sent_count = stats.get('sent', 0)
+                    campaign.failed_count = stats.get('failed', 0)
+                    campaign.total_recipients = stats.get('total', len(recipients))
+                    repo.update(campaign)
             finally:
                 session.close()
 

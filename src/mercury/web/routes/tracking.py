@@ -6,6 +6,7 @@ from flask import Blueprint, request, abort, make_response, redirect
 from ...services.tracking_service import TrackingService, TRACKING_PIXEL_GIF, _email_id_registry
 from ...data.database import session_scope
 from ...data.models import EmailLog
+from ..extensions import limiter
 
 tracking_bp = Blueprint('tracking', __name__, url_prefix='/track')
 
@@ -58,6 +59,7 @@ def _update_email_log(email_id: str, event_type: str, ip: str = '', ua: str = ''
 
 
 @tracking_bp.route('/open/<email_id>')
+@limiter.limit("60/minute")
 def track_open(email_id):
     """Track email open via 1x1 transparent pixel."""
     recipient = _lookup_recipient(email_id)
@@ -85,6 +87,7 @@ def track_open(email_id):
     return response
 
 @tracking_bp.route('/click/<email_id>')
+@limiter.limit("60/minute")
 def track_click(email_id):
     """Track link click and redirect to destination."""
     url = _safe_redirect_url(request.args.get('url', '/'))
@@ -107,11 +110,12 @@ def track_click(email_id):
     return redirect(url)
 
 @tracking_bp.route('/unsubscribe/<email_id>/<token>')
+@limiter.limit("10/minute")
 def track_unsubscribe(email_id, token):
     """Handle unsubscribe requests."""
     from ...security.auth import validate_unsubscribe_token
     
-    if not validate_unsubscribe_token(email_id, token):
+    if not validate_unsubscribe_token(token=token, email_id=email_id):
         abort(403, 'Invalid unsubscribe token')
     
     recipient = _lookup_recipient(email_id)

@@ -22,7 +22,8 @@ from . import (
 
 def _recipients_dir() -> str:
     """Return the absolute path to the data/recipients directory, creating it if needed."""
-    base = os.path.join(os.getcwd(), 'data', 'recipients')
+    from ....utils.app_dirs import get_data_dir
+    base = os.path.join(get_data_dir(), 'recipients')
     os.makedirs(base, exist_ok=True)
     return base
 
