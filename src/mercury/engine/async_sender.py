@@ -247,8 +247,15 @@ class AsyncEmailSender:
         from_email = from_email or self.default_from_email
         from_name = from_name or self.default_from_name
         
-        # Dry run mode
+        # Dry run mode — skip the SMTP send AND the pool acquire (preview
+        # must work without real credentials), but still pace through the
+        # rate limiter so the preview reflects the timing the real run
+        # would have. Without this, --preview returns instantly even for
+        # max_per_minute=20 configs, lying to operators about how long
+        # the actual campaign will take.
         if self.dry_run:
+            if self.rate_limiter:
+                await self.rate_limiter.acquire(timeout=None)
             logger.info(f"[DRY-RUN] Would send to {recipient}: {subject}")
             return EmailResult(
                 success=True,

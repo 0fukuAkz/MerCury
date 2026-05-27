@@ -90,6 +90,15 @@ class RetryQueue:
         self._queue: List[RetryItem] = []
         self._items: Dict[str, RetryItem] = {}
         self._lock = asyncio.Lock()
+        # Separate lock for disk persistence so disk I/O doesn't block
+        # all queue mutations. Snapshots are computed under self._lock
+        # (cheap dict comprehension), then handed to _persist_state which
+        # takes only self._persist_lock for the disk write. Each snapshot
+        # carries a sequence number so an older snapshot arriving after a
+        # newer one is skipped (last-writer-wins by enqueue order).
+        self._persist_lock = asyncio.Lock()
+        self._persist_seq = 0
+        self._persisted_seq = 0
         self._running = False
         self._process_task: Optional[asyncio.Task] = None
         
@@ -118,21 +127,21 @@ class RetryQueue:
                 item = self._items[id]
                 item.attempt += 1
                 item.last_error = error
-                
+
                 if item.attempt >= item.max_attempts:
                     item.status = RetryStatus.EXHAUSTED
                     self.stats['total_exhausted'] += 1
                     logger.warning(f"Retry exhausted for {id} after {item.attempt} attempts")
                 else:
                     item.calculate_next_retry(
-                        self.config.base_delay, 
+                        self.config.base_delay,
                         self.config.max_delay
                     )
-                    # FIX: Do not push to heap again if already in queue. 
-                    # The item is modified in-place (reference), so when it pops from heap 
-                    # it will have the new next_retry_at. 
+                    # FIX: Do not push to heap again if already in queue.
+                    # The item is modified in-place (reference), so when it pops from heap
+                    # it will have the new next_retry_at.
                     # However, heapq doesn't re-sort when items change.
-                    # We need to re-heapify or accept that the order might be slightly stale 
+                    # We need to re-heapify or accept that the order might be slightly stale
                     # until it pops. Efficient approach: remove and re-add or lazy delete.
                     # Given the constraints, we will re-push but handle duplicates in get_ready.
                     heapq.heappush(self._queue, item)
@@ -151,10 +160,13 @@ class RetryQueue:
                 self._items[id] = item
                 heapq.heappush(self._queue, item)
                 self.stats['total_added'] += 1
-            
-            # FIX: Await non-blocking persistence
-            await self._persist_state()
-            return item
+
+            # Snapshot under the main lock — cheap. Disk I/O happens
+            # after the lock is released, see _persist_state.
+            snapshot = self._build_snapshot_locked()
+
+        await self._persist_state(snapshot)
+        return item
     
     async def get_ready(self) -> List[RetryItem]:
         """Get items ready for retry."""
@@ -195,12 +207,16 @@ class RetryQueue:
     
     async def mark_success(self, id: str):
         """Mark item as successfully processed."""
+        snapshot: Optional[Dict[str, Any]] = None
         async with self._lock:
             if id in self._items:
                 self._items[id].status = RetryStatus.SUCCESS
                 self.stats['total_success'] += 1
                 del self._items[id]
-                await self._persist_state()
+                snapshot = self._build_snapshot_locked()
+
+        if snapshot is not None:
+            await self._persist_state(snapshot)
     
     async def mark_failed(self, id: str, error: str):
         """Mark item as failed, will be retried."""
@@ -272,22 +288,53 @@ class RetryQueue:
                 logger.error(f"Error in retry queue: {e}")
                 await asyncio.sleep(self.config.process_interval)
     
-    async def _persist_state(self):
-        """Persist queue state to disk asynchronously."""
+    def _build_snapshot_locked(self) -> Dict[str, Any]:
+        """Build a serializable snapshot of queue state.
+
+        MUST be called while ``self._lock`` is held. Returning here lets
+        callers release the main lock before paying the disk write, so
+        queue mutations aren't blocked by fsync latency.
+        """
+        return {
+            'items': {k: v.to_dict() for k, v in self._items.items()},
+            'stats': dict(self.stats),
+        }
+
+    async def _persist_state(self, snapshot: Optional[Dict[str, Any]] = None):
+        """Persist queue state to disk asynchronously.
+
+        If ``snapshot`` is None we build one inline — only safe for
+        callers that don't hold self._lock and accept a transient view.
+        Callers that DO hold self._lock should pre-snapshot via
+        _build_snapshot_locked() and pass it in, then release the lock
+        before awaiting this method. That's how add()/mark_success()/
+        mark_failed() avoid holding self._lock across disk I/O.
+
+        Concurrent persists are serialized by self._persist_lock and
+        coalesced by sequence number: if a newer snapshot has already
+        been persisted by the time we win the lock, we skip — older
+        state should never overwrite newer state on disk just because
+        of task-scheduling order.
+        """
         if not self.persist_path:
             return
-        
-        try:
-            state = {
-                'items': {k: v.to_dict() for k, v in self._items.items()},
-                'stats': self.stats
-            }
-            
-            # FIX: Run file I/O in thread pool to avoid blocking event loop
-            await asyncio.to_thread(self._write_state_to_disk, state)
-            
-        except Exception as e:
-            logger.error(f"Failed to persist retry queue: {e}")
+
+        if snapshot is None:
+            async with self._lock:
+                snapshot = self._build_snapshot_locked()
+
+        self._persist_seq += 1
+        my_seq = self._persist_seq
+
+        async with self._persist_lock:
+            if my_seq <= self._persisted_seq:
+                # A newer snapshot has already been written; skip this one.
+                return
+            try:
+                await asyncio.to_thread(self._write_state_to_disk, snapshot)
+                self._persisted_seq = my_seq
+            except Exception as e:
+                logger.error(f"Failed to persist retry queue: {e}")
 
     def _write_state_to_disk(self, state: dict):
         """Synchronous write helper for to_thread."""
