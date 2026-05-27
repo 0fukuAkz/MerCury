@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 import aiosmtplib
 
 from .circuit_breaker import CircuitBreaker, CircuitBreakerConfig
+from ..exceptions import SMTPRateLimitError
 
 logger = logging.getLogger(__name__)
 
@@ -309,7 +310,14 @@ class AsyncConnectionPool:
                 return
             
             last_exc: Optional[Exception] = None
-            for _ in range(min(2, self.pool_size)):  # Start with 2 connections
+            # Seed the full pool. The previous min(2, pool_size) cap meant
+            # a campaign with concurrency=50 and pool_size_per_server=10
+            # opened only 2 warm connections — the first ~48 sends all
+            # serialized on the get_connection queue-wait race, defeating
+            # the pool's whole purpose. Failures during seeding are still
+            # tolerated individually below; we only fail-fast if EVERY
+            # connection attempt fails (handled after the loop).
+            for _ in range(self.pool_size):
                 try:
                     conn = AsyncSMTPConnection(self.config)
                     await conn.connect()
@@ -351,48 +359,78 @@ class AsyncConnectionPool:
 
     
     async def get_connection(self, timeout: float = 10.0) -> AsyncSMTPConnection:
-        """Get a connection from the pool."""
+        """Get a connection from the pool.
+
+        Operates against a single deadline computed at entry. The previous
+        implementation recursed with the same ``timeout`` on stale-replace
+        races, which produced two problems: (1) the effective wait halved
+        on every recursion (``timeout/2`` per branch) so a caller asking
+        for 30s could quietly get 7.5s after two recursions, and (2) under
+        sustained churn the recursion depth grew unbounded. This loop
+        spends *real* time against ``deadline`` and rotates between
+        "wait for an existing conn" and "open a new one when pool has
+        room" until one path succeeds or the deadline expires.
+        """
         await self.initialize()
-        
-        try:
-            # Try to get existing connection
-            conn = await asyncio.wait_for(self.available.get(), timeout=timeout/2)
-            
-            # Check if connection is still valid
-            if (
-                not conn.is_connected
-                or conn.age_seconds > self.max_connection_age
-                or conn.idle_seconds > self.max_idle_time
-            ):
-                await conn.close()
-                if conn in self.connections:
-                    self.connections.remove(conn)
-                
-                # FIX: Immediately try to get a replacement instead of looping/waiting
-                # If we can create a new one, do it now
-                async with self.lock:
-                    if len(self.connections) < self.pool_size:
-                        conn = AsyncSMTPConnection(self.config)
-                        await conn.connect()
-                        self.connections.append(conn)
-                    else:
-                        # Pool is full but we just discarded one? 
-                        # Race condition handled by loop
-                        return await self.get_connection(timeout)
-            
-            return conn
-            
-        except asyncio.TimeoutError:
-            # Create new connection if pool allows
+
+        loop = asyncio.get_event_loop()
+        deadline = loop.time() + timeout
+
+        def _remaining() -> float:
+            return max(0.0, deadline - loop.time())
+
+        while True:
+            remaining = _remaining()
+            if remaining <= 0:
+                raise asyncio.TimeoutError(
+                    f"get_connection timed out for {self.config.name} after {timeout:.1f}s"
+                )
+
+            # Split the remaining budget so neither branch can starve the
+            # other: spend up to half waiting for a queued connection, leave
+            # the other half for opening one if the pool has headroom.
+            try:
+                conn = await asyncio.wait_for(
+                    self.available.get(), timeout=max(0.05, remaining / 2)
+                )
+            except asyncio.TimeoutError:
+                conn = None
+
+            if conn is not None:
+                # Stale connection — discard and try again. Continuing the
+                # loop (rather than recursing) preserves the original
+                # deadline, so a flurry of stale conns can't shrink the
+                # effective timeout.
+                if (
+                    not conn.is_connected
+                    or conn.age_seconds > self.max_connection_age
+                    or conn.idle_seconds > self.max_idle_time
+                ):
+                    await conn.close()
+                    async with self.lock:
+                        if conn in self.connections:
+                            self.connections.remove(conn)
+                    continue
+                return conn
+
+            # No conn appeared in time — try to open a new one if there's
+            # room. Holding the lock across connect() is unavoidable: we
+            # need the slot count to be consistent with the slot we're
+            # filling. SMTP connect on a healthy server is fast (<300ms);
+            # if the relay is slow, the deadline check above will eventually
+            # bail out.
             async with self.lock:
                 if len(self.connections) < self.pool_size:
                     conn = AsyncSMTPConnection(self.config)
-                    await conn.connect()
+                    try:
+                        await conn.connect()
+                    except Exception:
+                        # Don't keep a half-open record in the pool.
+                        raise
                     self.connections.append(conn)
                     return conn
-            
-            # Wait for available connection
-            return await asyncio.wait_for(self.available.get(), timeout=timeout/2)
+            # Pool is full and the queue starved — fall through to retry
+            # the queue wait on the remaining budget.
     
     async def release_connection(self, conn: AsyncSMTPConnection):
         """Return connection to pool."""
@@ -726,10 +764,15 @@ class SMTPConnectionPool:
         rt.circuit_breaker.record_failure(error)
         rt.total_failures += 1
         rt.consecutive_failures += 1
-        
-        # Check for rate limiting
-        error_str = str(error).lower()
-        if any(kw in error_str for kw in ['rate', 'throttle', 'too many', '421', '450']):
+
+        # Rate-limit detection used to live here as a keyword scan over
+        # ``str(error).lower()`` — but by the time record_failure is
+        # called, async_sender.categorize_smtp_error has already turned
+        # the exception into SMTPRateLimitError when appropriate (using
+        # both RFC 5321 status codes and the same keyword fallback). The
+        # local scan added nothing except misfires on substrings like
+        # "corporate" → matches "rate". Use the typed exception instead.
+        if isinstance(error, SMTPRateLimitError):
             logger.warning(f"Rate limiting detected on {config.name}")
     
     async def close_all(self):
