@@ -637,6 +637,15 @@ class CampaignService:
                                 subject=self.config.subject if self.config else "",
                                 from_email=self.config.from_email if self.config else "",
                                 smtp_server_name=email_result.smtp_server,
+                                # Persist the relay's actual response text. Without
+                                # this, status='sent' only means "no exception was
+                                # raised by send_message" — operators have no way
+                                # to distinguish a real 250 (with queue-id) from a
+                                # silently-discarded relay-accept-then-drop, and
+                                # bounce investigation has nothing to correlate
+                                # against. The column already existed on the model
+                                # and was just being dropped here.
+                                smtp_response=email_result.smtp_response,
                                 correlation_id=email_result.correlation_id or None
                             ))
                         else:
@@ -653,6 +662,15 @@ class CampaignService:
                                 failed_at=datetime.now(UTC),
                                 subject=self.config.subject if self.config else "",
                                 from_email=self.config.from_email if self.config else "",
+                                # Capture the server's response text on the failure
+                                # path too — many "errors" are well-formed SMTP
+                                # rejections (550 mailbox-not-exist, 5.7.0 from-
+                                # not-allowed) whose response body is the most
+                                # useful piece of diagnostic data we have. Also
+                                # carry the smtp_server name so per-server failure
+                                # patterns are queryable without joining log files.
+                                smtp_server_name=email_result.smtp_server,
+                                smtp_response=email_result.smtp_response,
                                 error_message=email_result.error,
                                 error_type=email_result.error_type,
                                 correlation_id=email_result.correlation_id or None
