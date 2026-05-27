@@ -93,14 +93,27 @@ def categorize_smtp_error(error: Exception) -> tuple[bool, str, Exception]:
             return False, 'permanent', PermanentSMTPError(err_msg, smtp_response=err_msg)
 
     # 4. Keyword heuristics (last resort, locale-fragile).
+    #
+    # Matched on \b-anchored regex instead of plain substring. The
+    # previous ``'mailbox' in err_msg.lower()`` fired on recipient
+    # addresses like ``mailbox-tester@example.com`` embedded in the
+    # error text, mis-bucketing transient errors as permanent mailbox
+    # failures and burying real recipients in the dead-letter log.
+    # Multi-word phrases like 'rate limit' still match correctly because
+    # \b anchors at the boundary between word and non-word chars on
+    # either end of the phrase.
     error_str = err_msg.lower()
-    if any(k in error_str for k in ['rate limit', 'throttl', 'too many']):
+
+    def _hits(words: list[str]) -> bool:
+        return any(re.search(rf'\b{re.escape(w)}\b', error_str) for w in words)
+
+    if _hits(['rate limit', 'throttl', 'throttled', 'throttling', 'too many']):
         return True, 'rate_limit', SMTPRateLimitError(err_msg, smtp_response=err_msg)
-    if any(k in error_str for k in ['mailbox', 'does not exist', 'unknown user', 'no such']):
+    if _hits(['mailbox', 'does not exist', 'unknown user', 'no such']):
         return False, 'mailbox_error', SMTPMailboxError(err_msg, smtp_response=err_msg)
-    if any(k in error_str for k in ['timeout', 'temporarily', 'busy', 'try again', 'disconnect']):
+    if _hits(['timeout', 'temporarily', 'busy', 'try again', 'disconnect', 'disconnected']):
         return True, 'transient', TransientSMTPError(err_msg, smtp_response=err_msg)
-    if any(k in error_str for k in ['invalid', 'disabled', 'blocked', 'spam', 'blacklist']):
+    if _hits(['invalid', 'disabled', 'blocked', 'spam', 'blacklist', 'blacklisted']):
         return False, 'permanent', PermanentSMTPError(err_msg, smtp_response=err_msg)
 
     # 5. Default: transient (safer for retries on unknown errors).
@@ -491,15 +504,20 @@ class AsyncEmailSender:
         ]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
-        # Process results
+        # Process results. Pair each return value with the original
+        # recipient by index so an unexpected exception (one that escaped
+        # send_email's own except block, e.g. a cancellation or a bug in
+        # the placeholder substitution) still records the actual recipient
+        # address. The previous ``recipient='unknown'`` made it impossible
+        # to retry or even know who didn't get the email.
         processed_results = []
-        for r in results:
+        for recipient_data, r in zip(recipients, results):
             if isinstance(r, EmailResult):
                 processed_results.append(r)
             elif isinstance(r, Exception):
                 processed_results.append(EmailResult(
                     success=False,
-                    recipient='unknown',
+                    recipient=recipient_data.get('email', 'unknown'),
                     correlation_id=str(uuid.uuid4()),
                     timestamp=datetime.now(UTC),
                     error=str(r),
