@@ -214,10 +214,33 @@ class AsyncSMTPConnection:
         self.last_used = datetime.now(UTC)
         self.messages_sent = 0
     
+    # Ports where plaintext SMTP is almost always misconfiguration: 587 is
+    # submission (RFC 4409 — STARTTLS expected), 465 is implicit-TLS
+    # submission, 2525 is the unofficial-but-conventional alt-submission.
+    # If we see tls_mode='none' on one of these, the user almost certainly
+    # picked the wrong dropdown value OR was bitten by the use_tls=0
+    # migration backfill in 20260515_0001_a1c5d9e3f721 — which faithfully
+    # translated legacy use_tls=0 to tls_mode='none' for pre-existing rows
+    # that should've been STARTTLS. Either way, mail goes out plaintext
+    # (or auth gets rejected outright), the relay accepts/rejects with
+    # whatever code it wants, and the operator wonders why nothing's
+    # delivering. Loud once-per-connect log so the cause is obvious.
+    _TLS_EXPECTED_PORTS = (465, 587, 2525)
+
     async def connect(self) -> None:
         """Establish async SMTP connection. Dispatches on ``tls_mode``."""
         mode = self.config.tls_mode
         implicit_tls = (mode == 'ssl')
+
+        if mode == 'none' and self.config.port in self._TLS_EXPECTED_PORTS:
+            logger.warning(
+                "⚠️  SMTP server %s configured with tls_mode='none' on port %d "
+                "(submission port — STARTTLS or implicit TLS is expected). "
+                "Plaintext AUTH will likely be rejected and any mail that DOES "
+                "go out is unencrypted. Set tls_mode='starttls' (587/2525) or "
+                "'ssl' (465) in the SMTP form to fix.",
+                self.config.name, self.config.port,
+            )
 
         self.client = aiosmtplib.SMTP(
             hostname=self.config.host,
