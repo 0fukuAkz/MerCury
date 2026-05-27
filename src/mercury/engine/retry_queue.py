@@ -178,6 +178,15 @@ class RetryQueue:
                 if item.status == RetryStatus.EXHAUSTED:
                     continue
 
+                # Skip items already in-flight. add() pushes a duplicate
+                # heap entry when called on an existing id (lazy-delete
+                # strategy); without this guard a stale entry can be popped
+                # while the same item is still being processed by an
+                # earlier handler invocation — handler runs twice, the
+                # recipient receives the email twice.
+                if item.status == RetryStatus.RETRYING:
+                    continue
+
                 # Prepare for retry
                 item.status = RetryStatus.RETRYING
                 ready.append(item)

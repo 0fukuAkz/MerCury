@@ -293,6 +293,11 @@ class AsyncConnectionPool:
         self.available: asyncio.Queue = asyncio.Queue()
         self.lock = asyncio.Lock()
         self._initialized = False
+        # Strong refs to fire-and-forget replenish tasks. Without this the
+        # only reference to the Task is the event loop's weak one, and CPython
+        # will happily GC a still-pending task — producing "Task was destroyed
+        # but it is pending!" warnings and silently dropping the replenish.
+        self._background_tasks: "set[asyncio.Task]" = set()
     
     async def initialize(self):
         """Initialize the pool with connections."""
@@ -405,7 +410,9 @@ class AsyncConnectionPool:
                 self.connections.remove(conn)
         
         # FIX: Proactively replenish to wake up waiters
-        asyncio.create_task(self._replenish_one())
+        task = asyncio.create_task(self._replenish_one())
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
     
     async def close_all(self):
         """Close all connections."""
@@ -482,110 +489,123 @@ class SMTPConnectionPool:
         if name not in self.pools:
             return False
 
-        # Replace config first so any concurrent acquire() that hits the
-        # newly-created pool reads the fresh credentials.
+        # Always capture the pool we're about to displace BEFORE swapping
+        # in the replacement, so we can close its sockets cleanly. The
+        # previous structure had a branch (same-name replace) that
+        # overwrote self.pools[name] without ever closing the displaced
+        # pool — orphaning every AsyncSMTPConnection it held.
+        old_pool: Optional[AsyncConnectionPool] = self.pools.get(name)
+
         if new_config is not None:
             self.configs = [
                 (new_config if c.name == name else c) for c in self.configs
             ]
-            
-            # If the server was renamed, we need to map the new pool to the new name,
-            # and clean up the old name key.
-            if new_config.name != name:
-                self.pools[new_config.name] = AsyncConnectionPool(
-                    new_config,
-                    pool_size=self._pool_size_per_server,
-                )
-                old_pool = self.pools.pop(name, None)
-                if old_pool:
-                    try:
-                        import asyncio
-                        # We don't await here directly since invalidate_server is called safely 
-                        # but just to be safe, close it asynchronously.
-                        # Wait, we are in an async function.
-                        await old_pool.close_all()
-                    except Exception as e:
-                        logger.warning(f"close_all error for {name} during invalidate: {e}")
-            else:
-                self.pools[name] = AsyncConnectionPool(
-                    new_config,
-                    pool_size=self._pool_size_per_server,
-                )
+            target_name = new_config.name
+            self.pools[target_name] = AsyncConnectionPool(
+                new_config,
+                pool_size=self._pool_size_per_server,
+            )
+            # Rename case: drop the old key so the server isn't reachable
+            # under its prior name.
+            if target_name != name:
+                self.pools.pop(name, None)
+        # If new_config is None this is a pure force-reset: we still want
+        # to close the existing pool so the next acquire opens fresh
+        # connections. The pool entry stays in self.pools — close_all()
+        # flips _initialized False, so initialize() will rebuild on demand.
 
-        # Close out the old pool (or the just-replaced one if no
-        # new_config was passed — operator wanted a force-reset).
-        # We only do this if it wasn't a rename (rename cleanup happens above).
-        if name in self.pools:
+        if old_pool is not None:
             try:
-                await self.pools[name].close_all() if new_config is None else None
+                await old_pool.close_all()
             except Exception as e:
                 logger.warning(f"close_all error for {name} during invalidate: {e}")
+
         logger.info(f"Invalidated pool for SMTP server '{name}'")
         return True
     
-    def _select_server_weighted(self) -> Optional[SMTPServerConfig]:
+    def _candidate_configs(
+        self, candidates: Optional[List[SMTPServerConfig]] = None
+    ) -> List[SMTPServerConfig]:
+        """Snapshot the candidate list. Defaults to self.configs.
+
+        Taking a local snapshot (not a live reference) is important: the
+        config list can be mutated by invalidate_server() running on the
+        Flask request thread while a campaign-loop task is mid-selection.
+        """
+        source = candidates if candidates is not None else self.configs
+        # list() copies the reference list so a concurrent mutation of
+        # self.configs (by invalidate_server) can't shorten the iteration
+        # mid-flight. The element objects themselves are still shared.
+        return list(source)
+
+    def _select_server_weighted(
+        self, candidates: Optional[List[SMTPServerConfig]] = None
+    ) -> Optional[SMTPServerConfig]:
         """Select server using weighted random selection."""
         import random
-        
-        available = [
-            c for c in self.configs 
-            if c.can_execute()
-        ]
-        
+
+        available = [c for c in self._candidate_configs(candidates) if c.can_execute()]
+
         if not available:
             return None
-        
+
         total_weight = sum(c.weight for c in available)
         if total_weight <= 0:
             return random.choice(available)
-        
+
         r = random.uniform(0, total_weight)
         cumulative = 0
         for config in available:
             cumulative += config.weight
             if r <= cumulative:
                 return config
-        
+
         return available[-1]
-    
-    def _select_server_round_robin(self) -> Optional[SMTPServerConfig]:
+
+    def _select_server_round_robin(
+        self, candidates: Optional[List[SMTPServerConfig]] = None
+    ) -> Optional[SMTPServerConfig]:
         """Select server using round-robin."""
-        available = [
-            c for c in self.configs 
-            if c.can_execute()
-        ]
-        
+        available = [c for c in self._candidate_configs(candidates) if c.can_execute()]
+
         if not available:
             return None
-        
+
         config = available[self._round_robin_index % len(available)]
         self._round_robin_index += 1
         return config
-    
-    def _select_server_priority(self) -> Optional[SMTPServerConfig]:
+
+    def _select_server_priority(
+        self, candidates: Optional[List[SMTPServerConfig]] = None
+    ) -> Optional[SMTPServerConfig]:
         """Select server by priority."""
-        available = [
-            c for c in self.configs 
-            if c.can_execute()
-        ]
-        
+        available = [c for c in self._candidate_configs(candidates) if c.can_execute()]
+
         if not available:
             return None
-        
+
         # Sort by priority (higher is better)
         available.sort(key=lambda c: c.priority, reverse=True)
         return available[0]
-    
-    def select_server(self) -> Optional[SMTPServerConfig]:
-        """Select best available server."""
+
+    def select_server(
+        self, candidates: Optional[List[SMTPServerConfig]] = None
+    ) -> Optional[SMTPServerConfig]:
+        """Select best available server.
+
+        ``candidates`` lets callers restrict selection to a subset (used by
+        ``select_server_for_from`` to rotate only among owners of a given
+        From address) without the previous self.configs swap-and-restore
+        hack, which was racy under concurrent invalidate_server().
+        """
         if self.selection_strategy == 'weighted':
-            return self._select_server_weighted()
+            return self._select_server_weighted(candidates)
         elif self.selection_strategy == 'round_robin':
-            return self._select_server_round_robin()
+            return self._select_server_round_robin(candidates)
         elif self.selection_strategy == 'priority':
-            return self._select_server_priority()
+            return self._select_server_priority(candidates)
         else:
-            return self._select_server_weighted()
+            return self._select_server_weighted(candidates)
 
     def select_server_for_from(self, from_email: str) -> Optional[SMTPServerConfig]:
         """Pick a healthy server that declares ownership of ``from_email``.
@@ -610,23 +630,19 @@ class SMTPConnectionPool:
         if not from_email:
             return None
         target = from_email.strip().lower()
+        # Snapshot self.configs once — see _candidate_configs for why the
+        # live reference is unsafe under concurrent invalidate_server.
         owners = [
-            c for c in self.configs
+            c for c in list(self.configs)
             if c.can_execute() and (c.from_email or '').strip().lower() == target
         ]
         if not owners:
             return None
         if len(owners) == 1:
             return owners[0]
-        # Multiple owners — apply normal strategy among them. We do this by
-        # temporarily masking self.configs; cleaner than duplicating each
-        # strategy with a candidate-list parameter.
-        original_configs = self.configs
-        try:
-            self.configs = owners
-            return self.select_server()
-        finally:
-            self.configs = original_configs
+        # Multiple owners — apply normal strategy among them via the
+        # candidates parameter instead of swapping self.configs in place.
+        return self.select_server(candidates=owners)
     
     async def acquire(
         self,
