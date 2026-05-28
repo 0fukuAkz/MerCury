@@ -508,6 +508,23 @@
             </div>
 
             <div class="form-section" style="margin-bottom:1rem">
+                <div class="section-title">Mail Priority</div>
+                <div class="form-group">
+                    <label class="form-label" for="mailPrioritySelect">Priority Level</label>
+                    <select class="form-select form-input" id="mailPrioritySelect" name="mail_priority">
+                        <option value="1">High (1)</option>
+                        <option value="2">High (2)</option>
+                        <option value="3" selected>Normal (3)</option>
+                        <option value="4">Low (4)</option>
+                        <option value="5">Low (5)</option>
+                    </select>
+                    <div class="form-hint">
+                        Sets the X-Priority and Importance headers. Most email clients display a red "!" for High priority. Normal (3) omits headers.
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-section" style="margin-bottom:1rem">
                 <div class="section-title">Proxy Configuration</div>
                 <div style="display:flex;align-items:center;gap:0.6rem;padding:0.65rem 0.9rem;background:rgba(0,255,255,0.05);border:1px solid rgba(0,255,255,0.2);border-radius:var(--radius);font-size:0.78rem;color:var(--text-secondary)">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--neon-cyan)" stroke-width="2" style="flex-shrink:0">
@@ -1464,7 +1481,8 @@
             }
         }
 
-        // Rate & concurrency
+        // Rate, priority, & concurrency
+        if (c.mail_priority)        set('[name="mail_priority"]',         c.mail_priority);
         if (c.concurrency)          set('[name="concurrency"]',           c.concurrency);
         if (c.rate_per_minute)      set('[name="rate_per_minute"]',       c.rate_per_minute);
         if (c.rate_per_hour)        set('[name="rate_per_hour"]',         c.rate_per_hour);

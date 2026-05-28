@@ -89,6 +89,7 @@ def _build_config_from_campaign(campaign) -> CampaignConfig:
         track_opens=bool(settings.get("track_opens", True)),
         track_clicks=bool(settings.get("track_clicks", True)),
         tracking_base_url=settings.get("tracking_base_url") or "",
+        mail_priority=settings.get("mail_priority", "3"),
     )
 
 
@@ -229,7 +230,8 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
         # Counter so we can rate-limit log noise — log first 3, then every
         # 25th, then the last one. Keeps the log readable while still
         # confirming the chain is alive.
-        _progress_count = {'n': 0, 'sent': 0, 'failed': 0}
+        import time
+        _progress_count = {'n': 0, 'sent': 0, 'failed': 0, 'errors': {}, 'start_time': time.monotonic()}
         _progress_total = len(recipients)
         # Wall-clock-based heartbeat (in addition to the per-25-event log).
         # Some campaigns are rate-limited to e.g. 30 emails/hour — at that
@@ -288,6 +290,8 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
                 _progress_count['sent'] += 1
             else:
                 _progress_count['failed'] += 1
+                err_type = progress.get('error_type') or 'unknown'
+                _progress_count['errors'][err_type] = _progress_count['errors'].get(err_type, 0) + 1
 
             if n <= 3 or n % 25 == 0 or n == _progress_total:
                 logger.info(
@@ -324,11 +328,11 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
                 'sent': _progress_count['sent'],
                 'failed': _progress_count['failed'],
                 'total': _progress_total,
-                # Per-recipient context (kept for backwards compatibility
-                # with the campaigns.html handler's success-increment
-                # branch, though that branch is now redundant given the
-                # cumulative counts above).
-                **progress,
+                'errors': _progress_count['errors'],
+                'velocity': round((_progress_count['sent'] + _progress_count['failed']) / max((monotonic() - _progress_count['start_time']) / 60.0, 0.01), 1),
+                # Per-recipient context (filtered to remove non-serializable objects
+                # and colliding keys like 'total' which is chunk-scoped)
+                **{k: v for k, v in progress.items() if k not in ('result', 'total')},
             })
 
         stats = run_async(service.run_campaign(recipients, progress_callback=_progress_cb))
@@ -585,6 +589,20 @@ def register_socketio_events(sio: SocketIO):
         svc = _active_services.get(campaign_id)
         if svc:
             svc.stop()
+
+        # Update DB status to CANCELLED immediately so it persists across page refreshes
+        app = current_app._get_current_object()
+        with app.app_context():
+            session = get_session_direct()
+            try:
+                repo = CampaignRepository(session)
+                campaign = repo.get(campaign_id)
+                if campaign:
+                    campaign.status = CampaignStatus.CANCELLED
+                    campaign.completed_at = datetime.now(UTC)
+                    repo.update(campaign)
+            finally:
+                session.close()
 
         sio.emit('campaign_stopped', {
             'campaign_id': campaign_id,

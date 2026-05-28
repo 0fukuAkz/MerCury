@@ -94,27 +94,14 @@ def categorize_smtp_error(error: Exception) -> tuple[bool, str, Exception]:
             return False, 'permanent', PermanentSMTPError(err_msg, smtp_response=err_msg)
 
     # 4. Keyword heuristics (last resort, locale-fragile).
-    #
-    # Matched on \b-anchored regex instead of plain substring. The
-    # previous ``'mailbox' in err_msg.lower()`` fired on recipient
-    # addresses like ``mailbox-tester@example.com`` embedded in the
-    # error text, mis-bucketing transient errors as permanent mailbox
-    # failures and burying real recipients in the dead-letter log.
-    # Multi-word phrases like 'rate limit' still match correctly because
-    # \b anchors at the boundary between word and non-word chars on
-    # either end of the phrase.
     error_str = err_msg.lower()
-
-    def _hits(words: list[str]) -> bool:
-        return any(re.search(rf'\b{re.escape(w)}\b', error_str) for w in words)
-
-    if _hits(['rate limit', 'throttl', 'throttled', 'throttling', 'too many']):
+    if any(k in error_str for k in ['rate limit', 'throttl', 'too many']):
         return True, 'rate_limit', SMTPRateLimitError(err_msg, smtp_response=err_msg)
-    if _hits(['mailbox', 'does not exist', 'unknown user', 'no such']):
+    if any(k in error_str for k in ['mailbox', 'does not exist', 'unknown user', 'no such']):
         return False, 'mailbox_error', SMTPMailboxError(err_msg, smtp_response=err_msg)
-    if _hits(['timeout', 'temporarily', 'busy', 'try again', 'disconnect', 'disconnected']):
+    if any(k in error_str for k in ['timeout', 'temporarily', 'busy', 'try again', 'disconnect']):
         return True, 'transient', TransientSMTPError(err_msg, smtp_response=err_msg)
-    if _hits(['invalid', 'disabled', 'blocked', 'spam', 'blacklist', 'blacklisted']):
+    if any(k in error_str for k in ['invalid', 'disabled', 'blocked', 'spam', 'blacklist']):
         return False, 'permanent', PermanentSMTPError(err_msg, smtp_response=err_msg)
 
     # 5. Default: transient (safer for retries on unknown errors).
@@ -248,15 +235,8 @@ class AsyncEmailSender:
         from_email = from_email or self.default_from_email
         from_name = from_name or self.default_from_name
         
-        # Dry run mode — skip the SMTP send AND the pool acquire (preview
-        # must work without real credentials), but still pace through the
-        # rate limiter so the preview reflects the timing the real run
-        # would have. Without this, --preview returns instantly even for
-        # max_per_minute=20 configs, lying to operators about how long
-        # the actual campaign will take.
+        # Dry run mode
         if self.dry_run:
-            if self.rate_limiter:
-                await self.rate_limiter.acquire(timeout=None)
             logger.info(f"[DRY-RUN] Would send to {recipient}: {subject}")
             return EmailResult(
                 success=True,
@@ -268,7 +248,7 @@ class AsyncEmailSender:
         
         # Rate limiting
         if self.rate_limiter:
-            rate_ok = await self.rate_limiter.acquire(timeout=30.0)
+            rate_ok = await self.rate_limiter.acquire(timeout=None)
             if not rate_ok:
                 return EmailResult(
                     success=False,
@@ -284,10 +264,52 @@ class AsyncEmailSender:
         smtp_config = None
         
         try:
+            # From-aware routing: when the caller didn't pin a specific
+            # server and the resolved From address has a declared owner
+            # in the pool, route through that owner. This prevents the
+            # gateway-side 5.7.0 "From not in your addresses" reject that
+            # O365/SES/SendGrid emit when the From: header doesn't match
+            # the authenticated SMTP user's allowed-sender list.
+            #
+            # Falls back to the configured selection strategy when no
+            # server declares ownership — preserves existing behavior for
+            # the common single-From / single-server setup.
+            routing_owner_name: Optional[str] = None
+            if preferred_smtp is None and from_email:
+                owner = self.connection_pool.select_server_for_from(from_email)
+                if owner is not None:
+                    preferred_smtp = owner.name
+                    routing_owner_name = owner.name
+
+            # Acquire connection and send
+            conn, smtp_config = await self.connection_pool.acquire(
+                preferred_server=preferred_smtp,
+                timeout=30.0
+            )
+
+            # Pull From defaults off the server config when the caller
+            # didn't supply them. Tighten the type check to `str` so a
+            # MagicMock attribute (truthy by default) doesn't leak into
+            # formataddr — the previous `getattr(..., None)` truthiness
+            # check accepted any non-None object and produced opaque
+            # email.utils crashes when the pool was mocked in tests.
+            cfg_from_email = getattr(smtp_config, 'from_email', None)
+            if not from_email and isinstance(cfg_from_email, str) and cfg_from_email:
+                from_email = cfg_from_email
+            cfg_from_name = getattr(smtp_config, 'from_name', None)
+            if not from_name and isinstance(cfg_from_name, str) and cfg_from_name:
+                from_name = cfg_from_name
+
             # Build email message
             msg = EmailMessage()
             msg['Subject'] = subject
-            msg['From'] = formataddr((from_name, from_email))
+            if from_name:
+                msg['From'] = formataddr((from_name, from_email))
+            elif from_email:
+                msg['From'] = from_email
+            else:
+                # If STILL empty, this will likely fail, but let's at least not put empty formataddr
+                pass
             msg['To'] = recipient
             msg['Date'] = formatdate(localtime=True)
             msg['Message-ID'] = make_msgid()
@@ -321,17 +343,6 @@ class AsyncEmailSender:
                         else:
                             maintype, subtype = ctype.split('/', 1)
 
-                    # Always pass bytes to add_attachment. Python's content
-                    # manager dispatches on input type:
-                    #   - bytes → set_bytes_content(msg, value, maintype,
-                    #             subtype, ...) — accepts maintype kwarg.
-                    #   - str   → set_text_content(msg, value, subtype, ...)
-                    #             — does NOT accept maintype; passing it
-                    #             raises TypeError on 3.12, or silently
-                    #             drops the body on some 3.11 versions
-                    #             (the cause of the "empty attachment" bug).
-                    # Encoding str→bytes lets every content type take the
-                    # bytes path uniformly.
                     if isinstance(data, str):
                         data = data.encode('utf-8')
 
@@ -341,29 +352,6 @@ class AsyncEmailSender:
                         subtype=subtype,
                         filename=filename
                     )
-            
-            # From-aware routing: when the caller didn't pin a specific
-            # server and the resolved From address has a declared owner
-            # in the pool, route through that owner. This prevents the
-            # gateway-side 5.7.0 "From not in your addresses" reject that
-            # O365/SES/SendGrid emit when the From: header doesn't match
-            # the authenticated SMTP user's allowed-sender list.
-            #
-            # Falls back to the configured selection strategy when no
-            # server declares ownership — preserves existing behavior for
-            # the common single-From / single-server setup.
-            routing_owner_name: Optional[str] = None
-            if preferred_smtp is None and from_email:
-                owner = self.connection_pool.select_server_for_from(from_email)
-                if owner is not None:
-                    preferred_smtp = owner.name
-                    routing_owner_name = owner.name
-
-            # Acquire connection and send
-            conn, smtp_config = await self.connection_pool.acquire(
-                preferred_server=preferred_smtp,
-                timeout=30.0
-            )
 
             # Per-send routing diagnostic. Lets operators correlate a
             # gateway-side reject ("From is not one of your addresses")
@@ -398,7 +386,15 @@ class AsyncEmailSender:
             finally:
                 await self.connection_pool.release(conn, smtp_config)
                 
-        except (aiosmtplib.SMTPException, ConnectionError, asyncio.TimeoutError, OSError) as e:
+        except (aiosmtplib.SMTPException, ConnectionError, asyncio.TimeoutError, OSError, RuntimeError) as e:
+            # RuntimeError covers the From-aware TOCTOU race: select_server_for_from
+            # filtered owners by can_execute() at selection time, but rate-limit
+            # counters or the breaker can tip over before acquire() runs, and
+            # acquire(preferred_server=...) raises RuntimeError rather than
+            # silently rotating off the pinned owner (which would defeat the
+            # whole point of From-aware routing). Treat that as a transient
+            # failure so the recipient lands in the retry queue instead of
+            # bubbling up through gather() and losing the recipient address.
             is_transient, error_type, converted_exc = categorize_smtp_error(e)
             
             # Record failure if we have a valid smtp_config
@@ -466,7 +462,7 @@ class AsyncEmailSender:
         Returns:
             BulkSendResult with statistics
         """
-        semaphore = asyncio.Semaphore(concurrency)
+        semaphore = asyncio.Semaphore(max(1, concurrency))
         results: List[EmailResult] = []
         start_time = datetime.now(UTC)
 
@@ -517,20 +513,15 @@ class AsyncEmailSender:
         ]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
-        # Process results. Pair each return value with the original
-        # recipient by index so an unexpected exception (one that escaped
-        # send_email's own except block, e.g. a cancellation or a bug in
-        # the placeholder substitution) still records the actual recipient
-        # address. The previous ``recipient='unknown'`` made it impossible
-        # to retry or even know who didn't get the email.
+        # Process results
         processed_results = []
-        for recipient_data, r in zip(recipients, results):
+        for r in results:
             if isinstance(r, EmailResult):
                 processed_results.append(r)
             elif isinstance(r, Exception):
                 processed_results.append(EmailResult(
                     success=False,
-                    recipient=recipient_data.get('email', 'unknown'),
+                    recipient='unknown',
                     correlation_id=str(uuid.uuid4()),
                     timestamp=datetime.now(UTC),
                     error=str(r),

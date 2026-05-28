@@ -22,8 +22,22 @@ def _safe_redirect_url(url: str) -> str:
 
 
 def _lookup_recipient(email_id: str) -> str:
-    """Look up recipient email from the email_id registry."""
-    return _email_id_registry.get(email_id, '')
+    """Look up recipient email from the email_id registry, falling back to database."""
+    val = _email_id_registry.get(email_id)
+    if val:
+        return val
+    try:
+        with session_scope() as session:
+            log = session.query(EmailLog).filter(
+                EmailLog.correlation_id == email_id
+            ).first()
+            if log:
+                # Cache it back in the registry for future fast lookups
+                _email_id_registry[email_id] = log.recipient_email
+                return log.recipient_email
+    except Exception:
+        pass
+    return ''
 
 
 def _update_email_log(email_id: str, event_type: str, ip: str = '', ua: str = ''):

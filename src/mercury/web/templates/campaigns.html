@@ -144,6 +144,8 @@
     .act-btn.pause:hover  { background: rgba(255,107,53,0.1); }
     .act-btn.del    { color: var(--error); border-color: rgba(255,0,85,0.3); }
     .act-btn.del:hover    { background: rgba(255,0,85,0.1); box-shadow: 0 0 8px rgba(255,0,85,0.2); }
+    .act-btn.stop   { color: var(--error); border-color: rgba(255,0,85,0.4); }
+    .act-btn.stop:hover   { background: rgba(255,0,85,0.1); box-shadow: 0 0 8px rgba(255,0,85,0.25); }
     .act-btn.edit   { color: var(--neon-cyan); border-color: rgba(0,255,255,0.3); }
     .act-btn.edit:hover   { background: rgba(0,255,255,0.1); box-shadow: 0 0 8px rgba(0,255,255,0.2); }
 
@@ -381,7 +383,8 @@
                 <th>Progress</th>
                 <th>Sent</th>
                 <th>Failed</th>
-                <th>Rate</th>
+                <th>Success %</th>
+                <th>Speed</th>
                 <th>Actions</th>
             </tr>
         </thead>
@@ -474,8 +477,18 @@
             if (isSending && remaining > 0) leftHtml += `<div><span class="lbl">Remaining</span>${remaining.toLocaleString()}</div>`;
             leftHtml += `</div>`;
 
-            if (c.status === 'failed') {
-                leftHtml += `<div style="margin-top:0.6rem;padding:0.4rem 0.6rem;border:1px solid rgba(255,0,85,0.25);border-radius:4px;font-size:0.76rem;color:var(--error);background:rgba(255,0,85,0.05)">Campaign failed — check logs for details</div>`;
+            if (c.status === 'failed' || c.errors && Object.keys(c.errors).length > 0) {
+                let errHtml = '';
+                if (c.errors && Object.keys(c.errors).length > 0) {
+                    errHtml = '<ul style="margin: 0.3rem 0 0 1rem; padding: 0;">';
+                    for (const [eType, count] of Object.entries(c.errors)) {
+                        errHtml += `<li><b>${eType}:</b> ${count}</li>`;
+                    }
+                    errHtml += '</ul>';
+                } else if (c.status === 'failed') {
+                    errHtml = 'Campaign failed — check logs for details';
+                }
+                leftHtml += `<div style="margin-top:0.6rem;padding:0.4rem 0.6rem;border:1px solid rgba(255,0,85,0.25);border-radius:4px;font-size:0.76rem;color:var(--error);background:rgba(255,0,85,0.05)">${errHtml}</div>`;
             }
         } else {
             leftHtml += `<p class="detail-sec-title">Run Results</p>
@@ -576,7 +589,8 @@
         const sent   = c.sent_count       || 0;
         const failed = c.failed_count     || 0;
         const pct    = total > 0 ? Math.min(100, Math.round((sent + failed) / total * 100)) : 0;
-        const rate   = c.send_rate        != null ? c.send_rate : 0;
+        const rate   = c.send_rate        != null ? c.send_rate : (total > 0 ? Math.round(sent / total * 1000) / 10 : 0);
+        const speed  = c.velocity         != null ? c.velocity : 0;
         const sc     = STATUS_CFG[c.status] || { cls: 'badge-info', label: c.status || '—' };
 
         const tr = document.createElement('tr');
@@ -631,6 +645,7 @@
         const tdSent = fmtCell('font-mono text-success', sent.toLocaleString());
         const tdFail = fmtCell('font-mono text-error',   failed.toLocaleString());
         const tdRate = fmtCell('font-mono',              rate + '%');
+        const tdSpeed = fmtCell('font-mono text-muted',  speed + '/min');
 
         /* actions */
         const tdAct = document.createElement('td');
@@ -654,6 +669,8 @@
             mkBtn('pause', '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>', 'Pause', () => pauseCampaign(c.id));
         if (c.status === 'paused')
             mkBtn('resume', '<polygon points="5 3 19 12 5 21 5 3"/>', 'Resume', () => resumeCampaign(c.id));
+        if (c.status === 'sending' || c.status === 'paused')
+            mkBtn('stop', '<rect x="4" y="4" width="16" height="16" rx="2"/>', 'Stop', () => stopCampaign(c.id, c.name));
         if (c.status === 'draft' || c.status === 'scheduled') {
             const editBtn = document.createElement('a');
             editBtn.href = `/campaigns/${c.id}/edit`;
@@ -676,7 +693,7 @@
         cb.addEventListener('change', updateBulkBar);
         tdCb.appendChild(cb);
 
-        [tdCb, tdName, tdType, tdStatus, tdProg, tdSent, tdFail, tdRate, tdAct].forEach(td => tr.appendChild(td));
+        [tdCb, tdName, tdType, tdStatus, tdProg, tdSent, tdFail, tdRate, tdSpeed, tdAct].forEach(td => tr.appendChild(td));
         return tr;
     }
 
@@ -764,7 +781,7 @@
         if (list.length === 0) {
             const tr = document.createElement('tr');
             const td = document.createElement('td');
-            td.colSpan = 9;
+            td.colSpan = 10;
             td.style.padding = '0';
             td.innerHTML = `
                 <div class="empty-state">
@@ -791,7 +808,7 @@
         if (list.length > _visibleCount) {
             var tr = document.createElement('tr');
             var td = document.createElement('td');
-            td.colSpan = 9;
+            td.colSpan = 10;
             td.style.textAlign = 'center';
             td.style.padding = '1rem';
             var remaining = list.length - _visibleCount;
@@ -838,6 +855,10 @@
     function startCampaign(id)  { _emitLifecycle('start_campaign',  id, 'Starting campaign…'); }
     function pauseCampaign(id)  { _emitLifecycle('pause_campaign',  id, 'Pausing campaign…'); }
     function resumeCampaign(id) { _emitLifecycle('resume_campaign', id, 'Resuming campaign…'); }
+    function stopCampaign(id, name) {
+        if (!confirm('Stop campaign "' + (name || 'untitled') + '"?\nThis will cancel the campaign and it cannot be resumed.')) return;
+        _emitLifecycle('stop_campaign', id, 'Stopping campaign…');
+    }
 
     async function cloneCampaign(id) {
         try {
@@ -873,14 +894,16 @@
         var sent   = c.sent_count       || 0;
         var failed = c.failed_count     || 0;
         var pct    = total > 0 ? Math.min(100, Math.round((sent + failed) / total * 100)) : 0;
-        var rate   = c.send_rate != null ? c.send_rate : 0;
+        var rate   = c.send_rate != null ? c.send_rate : (total > 0 ? Math.round(sent / total * 1000) / 10 : 0);
+        var speed  = c.velocity != null ? c.velocity : 0;
         var sc     = STATUS_CFG[c.status] || { cls: 'badge-info', label: c.status || '—' };
-        var badge  = cells[2].querySelector('.badge');
+        var badge  = cells[3].querySelector('.badge');
         if (badge) { badge.className = 'badge ' + sc.cls; badge.textContent = sc.label; }
-        cells[3].innerHTML = '<div class="prog-wrap"><span class="prog-pct">' + pct + '%</span><div class="prog-bar"><div class="prog-fill" style="width:' + pct + '%"></div></div></div>';
-        cells[4].textContent = sent.toLocaleString();
-        cells[5].textContent = failed.toLocaleString();
-        cells[6].textContent = rate + '%';
+        cells[4].innerHTML = '<div class="prog-wrap"><span class="prog-pct">' + pct + '%</span><div class="prog-bar"><div class="prog-fill" style="width:' + pct + '%"></div></div></div>';
+        cells[5].textContent = sent.toLocaleString();
+        cells[6].textContent = failed.toLocaleString();
+        cells[7].textContent = rate + '%';
+        cells[8].textContent = speed + '/min';
     }
 
     function replaceRow(c) {
@@ -938,6 +961,8 @@
         if (data.total  !== undefined) c.total_recipients = data.total;
         if (data.sent   !== undefined) c.sent_count       = data.sent;
         if (data.failed !== undefined) c.failed_count     = data.failed;
+        if (data.errors !== undefined) c.errors           = data.errors;
+        if (data.velocity !== undefined) c.velocity       = data.velocity;
         if (c.total_recipients)
             c.send_rate = Math.round((c.sent_count || 0) / c.total_recipients * 1000) / 10;
         schedulePatch(c.id);
@@ -971,6 +996,16 @@
         var c = allCampaigns.find(function(x) { return x.id === data.campaign_id; });
         if (c) {
             c.status = 'sending';
+            replaceRow(c);
+            updateStats(allCampaigns);
+        }
+    });
+
+    socket.on('campaign_stopped', function(data) {
+        var c = allCampaigns.find(function(x) { return x.id === data.campaign_id; });
+        if (c) {
+            c.status = 'cancelled';
+            if (data.timestamp) c.completed_at = data.timestamp;
             replaceRow(c);
             updateStats(allCampaigns);
         }

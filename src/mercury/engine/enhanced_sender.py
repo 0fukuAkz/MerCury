@@ -280,7 +280,7 @@ class EnhancedAsyncEmailSender(AsyncEmailSender):
             return result
         
         # Use parent's bulk sending logic but with our custom send function
-        semaphore = asyncio.Semaphore(kwargs.get('concurrency', 50))
+        semaphore = asyncio.Semaphore(max(1, kwargs.get('concurrency', 50)))
         results = []
         start_time = datetime.now(UTC)
         

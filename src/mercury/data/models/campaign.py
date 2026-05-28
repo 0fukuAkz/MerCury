@@ -140,11 +140,20 @@ class Campaign(Base, BaseModel):
         result['logo_attachment_id'] = int(_logo_id) if _logo_id is not None else None
         result['auto_company_logo'] = bool(s.get('auto_company_logo', False))
         result['hide_from_email_header'] = bool(s.get('hide_from_email_header', False))
+        result['include_default_body'] = bool(s.get('include_default_body', True))
+        
+        # Tracking settings
+        result['enable_tracking'] = bool(s.get('enable_tracking', True))
+        result['track_opens'] = bool(s.get('track_opens', True))
+        result['track_clicks'] = bool(s.get('track_clicks', True))
+        result['tracking_base_url'] = s.get('tracking_base_url', '')
+
         # Recipient-list options. Defaults TRUE on both (sane production
         # default) — explicit False is only stored when the operator
         # toggled the box off.
         result['validate_emails'] = bool(s.get('validate_emails', True))
         result['deduplicate'] = bool(s.get('deduplicate', True))
+        result['mail_priority'] = s.get('mail_priority', '3')
         if self.started_at and self.completed_at:
             result['duration_seconds'] = int((self.completed_at - self.started_at).total_seconds())
         else:

@@ -93,6 +93,68 @@ def api_list_smtp():
         except Exception:
             pass
             
+        # Get accurate sent and failed counts from EmailLog
+        from ....data.models.email_log import EmailLog, EmailStatus
+        from sqlalchemy import func
+        
+        success_statuses = [
+            EmailStatus.SENT.value,
+            EmailStatus.DELIVERED.value,
+            EmailStatus.OPENED.value,
+            EmailStatus.CLICKED.value
+        ]
+        failure_statuses = [
+            EmailStatus.FAILED.value,
+            EmailStatus.BOUNCED.value
+        ]
+        
+        log_stats = {}
+        try:
+            stmt = session.query(
+                EmailLog.smtp_server_name,
+                EmailLog.status,
+                func.count(EmailLog.id)
+            ).filter(
+                EmailLog.smtp_server_name.is_not(None)
+            ).group_by(
+                EmailLog.smtp_server_name,
+                EmailLog.status
+            )
+            
+            for server_name, status, count in stmt.all():
+                if server_name not in log_stats:
+                    log_stats[server_name] = {'sent': 0, 'failed': 0}
+                if status in success_statuses:
+                    log_stats[server_name]['sent'] += count
+                elif status in failure_statuses:
+                    log_stats[server_name]['failed'] += count
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to query EmailLog SMTP stats: {e}")
+            
+        # Update server statistics in memory + database
+        updated = False
+        for s in servers:
+            if s.name in log_stats:
+                new_sent = log_stats[s.name]['sent']
+                new_failed = log_stats[s.name]['failed']
+            else:
+                new_sent = 0
+                new_failed = 0
+                
+            if s.total_sent != new_sent or s.total_failed != new_failed:
+                s.total_sent = new_sent
+                s.total_failed = new_failed
+                updated = True
+                
+        if updated:
+            try:
+                session.commit()
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"Failed to commit updated SMTP stats: {e}")
+                session.rollback()
+
         result = []
         for s in servers:
             s_dict = s.to_dict()
@@ -148,7 +210,7 @@ def api_add_smtp():
 @api_key_or_login_required
 @limiter.limit("5/minute")
 def api_test_smtp(name: str):
-    """Test connection to a specific SMTP server by name."""
+    """Test connection to a specific SMTP server by name statefully."""
     with session_scope() as session:
         repo = SMTPRepository(session)
         server = repo.get_by_name(name)
@@ -159,7 +221,7 @@ def api_test_smtp(name: str):
         service = SMTPService()
         service.load_from_config([s.get_connection_config() for s in servers])
 
-        result = run_async(service.test_connection(server.name))
+        result = run_async(service.check_server_health(server.name))
         return jsonify(result)
 
 
@@ -253,3 +315,51 @@ def api_delete_smtp(name):
             return jsonify({'success': False, 'error': 'Server not found'}), 404
         repo.delete(server)
         return jsonify({'success': True})
+
+
+@api_bp.route('/smtp/health', methods=['GET'])
+@api_key_or_login_required
+@limiter.limit("30/minute")
+def api_smtp_health_status():
+    """Get the latest health checks status of all configured SMTP servers."""
+    with session_scope() as session:
+        repo = SMTPRepository(session)
+        servers = repo.get_all()
+        return jsonify({
+            'servers': [
+                {
+                    'name': s.name,
+                    'host': s.host,
+                    'port': s.port,
+                    'status': s.status,
+                    'is_enabled': s.is_enabled,
+                    'last_checked_at': (s.settings or {}).get('last_checked_at'),
+                    'health_error': (s.settings or {}).get('health_error'),
+                    'health_error_type': (s.settings or {}).get('health_error_type'),
+                }
+                for s in servers
+            ]
+        })
+
+
+@api_bp.route('/smtp/health/check', methods=['POST'])
+@api_key_or_login_required
+@limiter.limit("5/minute")
+def api_trigger_smtp_health_checks():
+    """Manually trigger background health checks on all active SMTP servers."""
+    with session_scope() as session:
+        repo = SMTPRepository(session)
+        servers = repo.get_all()
+        configs = [s.get_connection_config() for s in servers if s.is_enabled]
+    
+    if not configs:
+        return jsonify({'success': False, 'error': 'No enabled SMTP servers configured'}), 400
+        
+    service = SMTPService()
+    service.load_from_config(configs)
+    
+    results = run_async(service.check_all_health())
+    return jsonify({
+        'success': True,
+        'results': results
+    })

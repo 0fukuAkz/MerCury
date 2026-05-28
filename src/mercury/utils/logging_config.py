@@ -62,26 +62,12 @@ def configure_logging(
     if json_output is None:
         json_output = not is_development
     
-    # Configure standard library logging
-    logging.basicConfig(
-        format="%(message)s",
-        stream=sys.stdout,
-        level=getattr(logging, level.upper())
-    )
-
     # Silence noisy third-party loggers in non-debug mode
     if not is_development:
         for _noisy in ('engineio', 'socketio', 'werkzeug', 'aiosmtplib', 'asyncio'):
             logging.getLogger(_noisy).setLevel(logging.WARNING)
     
-    # Add file handler if specified
-    if log_file:
-        os.makedirs(os.path.dirname(log_file) or '.', exist_ok=True)
-        file_handler = logging.FileHandler(log_file)
-        file_handler.setLevel(getattr(logging, level.upper()))
-        logging.getLogger().addHandler(file_handler)
-    
-    # Configure structlog processors
+    # Configure structlog processors (shared between structlog and standard library)
     shared_processors = [
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
@@ -93,24 +79,45 @@ def configure_logging(
         structlog.processors.UnicodeDecoder(),
     ]
     
+    # Determine the final rendering processor
     if json_output:
-        # JSON output for production
-        processors = shared_processors + [
-            structlog.processors.JSONRenderer()
-        ]
+        renderer = structlog.processors.JSONRenderer()
     else:
-        # Pretty console output for development
-        processors = shared_processors + [
-            structlog.dev.ConsoleRenderer(colors=True)
-        ]
+        renderer = structlog.dev.ConsoleRenderer(colors=True)
     
+    # 1. Configure structlog to route through the standard library formatter
     structlog.configure(
-        processors=processors,
+        processors=shared_processors + [
+            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+        ],
         wrapper_class=structlog.stdlib.BoundLogger,
         context_class=dict,
         logger_factory=structlog.stdlib.LoggerFactory(),
         cache_logger_on_first_use=True,
     )
+    
+    # 2. Configure the standard library formatter to render all logs using structlog
+    formatter = structlog.stdlib.ProcessorFormatter(
+        processor=renderer,
+        foreign_pre_chain=shared_processors,
+    )
+    
+    # 3. Apply formatter to root logger handlers
+    root_logger = logging.getLogger()
+    root_logger.handlers.clear()
+    root_logger.setLevel(getattr(logging, level.upper()))
+    
+    # Add stdout handler
+    stream_handler = logging.StreamHandler(sys.stdout)
+    stream_handler.setFormatter(formatter)
+    root_logger.addHandler(stream_handler)
+    
+    # Add file handler if specified
+    if log_file:
+        os.makedirs(os.path.dirname(log_file) or '.', exist_ok=True)
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setFormatter(formatter)
+        root_logger.addHandler(file_handler)
 
 
 def get_logger(name: str = None) -> structlog.stdlib.BoundLogger:

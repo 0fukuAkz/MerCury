@@ -14,6 +14,7 @@ class EmailConfig:
     template_path: Optional[str] = None
     placeholders_path: Optional[str] = None
     html_content: Optional[str] = None
+    campaign_id: Optional[int] = None
 
     # Attachments — library only.
     attachment_ids: Optional[List[int]] = None
@@ -43,6 +44,10 @@ class EmailConfig:
     track_opens: bool = True
     track_clicks: bool = True
     tracking_base_url: Optional[str] = None
+
+    # Mail priority (RFC 2156 / MS extensions)
+    # '1' = high, '3' = normal (default), '5' = low
+    mail_priority: str = '3'
 
     # Sending options
     dry_run: bool = False
@@ -91,4 +96,6 @@ class EmailConfig:
             track_opens=config.track_opens,
             track_clicks=config.track_clicks,
             tracking_base_url=config.tracking_base_url or None,
+            mail_priority=getattr(config, 'mail_priority', '3') or '3',
+            campaign_id=getattr(config, 'campaign_id', None),
         )

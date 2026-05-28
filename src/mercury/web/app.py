@@ -37,8 +37,11 @@ try:
             self._send_closing_frame(True)
             self.socket.shutdown(True)
         except OSError as e:
-            if getattr(e, 'errno', None) not in (errno.ENOTCONN, errno.EBADF):
-                self.log.write('{ctx} socket shutdown error: {e}'.format(ctx=self.log_context, e=e))
+            err = getattr(e, 'errno', None)
+            if err is None and e.args:
+                err = e.args[0]
+            if err not in (errno.ENOTCONN, errno.EBADF) and 'Bad file descriptor' not in str(e):
+                self.log.write('{ctx} socket shutdown error: {e}\n'.format(ctx=self.log_context, e=e))
         except Exception:
             pass
         finally:

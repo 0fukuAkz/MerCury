@@ -147,6 +147,9 @@ def api_create_campaign():
         track_clicks=data.get('track_clicks', True),
         tracking_base_url=data.get('tracking_base_url', ''),
 
+        # Mail priority
+        mail_priority=data.get('mail_priority', '3'),
+
         # Pinned SMTP server
         smtp_server_id=smtp_server_id,
     )
@@ -264,7 +267,7 @@ def api_update_campaign(campaign_id):
             if _bool_field in data:
                 extra[_bool_field] = bool(data[_bool_field])
 
-        for _str_field in ('attachment_convert_to', 'placeholders_path'):
+        for _str_field in ('attachment_convert_to', 'placeholders_path', 'mail_priority'):
             if _str_field in data:
                 extra[_str_field] = data.get(_str_field, '')
 

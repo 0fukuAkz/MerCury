@@ -144,6 +144,35 @@ _background_loop_thread: threading.Thread | None = None
 _background_loop_lock = threading.Lock()
 
 
+async def _periodic_smtp_health_check() -> None:
+    """Periodically run SMTP health checks on all enabled servers."""
+    # Fast initial delay of 30s to let startup stabilize
+    await asyncio.sleep(30)
+    while True:
+        try:
+            logger.info("⏰ Triggering periodic background SMTP health checks")
+            from ..services.smtp_service import SMTPService
+            from ..data.database import session_scope
+            from ..data.repositories.smtp import SMTPRepository
+            
+            with session_scope() as session:
+                repo = SMTPRepository(session)
+                servers = repo.get_all()
+                configs = [s.get_connection_config() for s in servers if s.is_enabled]
+            
+            if configs:
+                service = SMTPService()
+                service.load_from_config(configs)
+                await service.check_all_health()
+                logger.info("⏰ Background SMTP health checks completed successfully")
+            else:
+                logger.debug("⏰ No enabled SMTP servers found for health check")
+        except Exception as e:
+            logger.exception("Error in background SMTP health check daemon")
+        # Sleep for 5 minutes (300 seconds)
+        await asyncio.sleep(300)
+
+
 def _run_loop_forever(loop: asyncio.AbstractEventLoop) -> None:
     asyncio.set_event_loop(loop)
     loop.run_forever()
@@ -165,6 +194,7 @@ def start_background_loop() -> asyncio.AbstractEventLoop:
             return _background_loop
 
         _background_loop = asyncio.new_event_loop()
+        _background_loop.create_task(_periodic_smtp_health_check())
         _background_loop_thread = threading.Thread(
             target=_run_loop_forever,
             args=(_background_loop,),

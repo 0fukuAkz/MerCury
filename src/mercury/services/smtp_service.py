@@ -382,3 +382,151 @@ class SMTPService:
             await self._connection_pool.close_all()
             self._connection_pool = None
 
+    async def check_all_health(self) -> List[Dict[str, Any]]:
+        """Run health checks on all loaded SMTP servers.
+        
+        Updates their status (ACTIVE/ERROR) and health metrics in the database,
+        emits socket events for real-time dashboard updates, and invalidates
+        any active connection pools if their status changes.
+        """
+        import datetime
+        from ..data.database import get_session_direct
+        from ..data.repositories.smtp import SMTPRepository
+        from ..data.models.smtp import SMTPServerStatus
+        from ..engine.connection_pool import iter_active_pools, SMTPServerConfig
+        from ..web.extensions import queue_emit
+        from sqlalchemy.orm.attributes import flag_modified
+
+        results = []
+        session = get_session_direct()
+        try:
+            repo = SMTPRepository(session)
+            for config in self._configs:
+                result = await self.test_connection(config.name)
+                results.append(result)
+                
+                # Fetch DB model to update status
+                server = repo.get_by_name(config.name)
+                if server:
+                    old_status = server.status
+                    # Update status based on check
+                    if result['success']:
+                        if server.status == SMTPServerStatus.ERROR.value:
+                            server.status = SMTPServerStatus.ACTIVE.value
+                        
+                        # Clear old error metadata
+                        if not server.settings:
+                            server.settings = {}
+                        server.settings['last_checked_at'] = datetime.datetime.now(datetime.UTC).isoformat()
+                        server.settings.pop('health_error', None)
+                        server.settings.pop('health_error_type', None)
+                        server.settings.pop('health_details', None)
+                    else:
+                        server.status = SMTPServerStatus.ERROR.value
+                        if not server.settings:
+                            server.settings = {}
+                        server.settings['last_checked_at'] = datetime.datetime.now(datetime.UTC).isoformat()
+                        server.settings['health_error'] = result.get('error', 'Unknown health error')
+                        server.settings['health_error_type'] = result.get('error_type', 'tcp_failed')
+                        server.settings['health_details'] = result.get('details', '')
+                    
+                    flag_modified(server, 'settings')
+                    repo.update(server)
+
+                    # If status changed, invalidate the server in all active pools
+                    if server.status != old_status:
+                        logger.info(f"SMTP status changed for '{server.name}': {old_status} -> {server.status}. Invalidating active pools.")
+                        new_cfg_dict = server.get_connection_config()
+                        new_cfg = SMTPServerConfig.from_dict(new_cfg_dict)
+                        for pool in iter_active_pools():
+                            await pool.invalidate_server(server.name, new_cfg)
+
+            session.commit()
+            
+            # Emit Socket.IO event to update the UI
+            try:
+                queue_emit('smtp_health_updated', {'results': [r for r in results]})
+            except Exception as e:
+                logger.warning(f"Failed to queue emit smtp_health_updated: {e}")
+                
+        except Exception as e:
+            logger.exception("Error during SMTP health check execution")
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+        return results
+
+    async def check_server_health(self, name: str) -> Dict[str, Any]:
+        """Run health check on a specific SMTP server by name.
+        
+        Updates its status (ACTIVE/ERROR) and health metrics in the database,
+        emits socket events for real-time dashboard updates, and invalidates
+        any active connection pools if its status changes.
+        """
+        import datetime
+        from ..data.database import get_session_direct
+        from ..data.repositories.smtp import SMTPRepository
+        from ..data.models.smtp import SMTPServerStatus
+        from ..engine.connection_pool import iter_active_pools, SMTPServerConfig
+        from ..web.extensions import queue_emit
+        from sqlalchemy.orm.attributes import flag_modified
+
+        result = await self.test_connection(name)
+        
+        session = get_session_direct()
+        try:
+            repo = SMTPRepository(session)
+            server = repo.get_by_name(name)
+            if server:
+                old_status = server.status
+                # Update status based on check
+                if result['success']:
+                    if server.status == SMTPServerStatus.ERROR.value:
+                        server.status = SMTPServerStatus.ACTIVE.value
+                    
+                    # Clear old error metadata
+                    if not server.settings:
+                        server.settings = {}
+                    server.settings['last_checked_at'] = datetime.datetime.now(datetime.UTC).isoformat()
+                    server.settings.pop('health_error', None)
+                    server.settings.pop('health_error_type', None)
+                    server.settings.pop('health_details', None)
+                else:
+                    server.status = SMTPServerStatus.ERROR.value
+                    if not server.settings:
+                        server.settings = {}
+                    server.settings['last_checked_at'] = datetime.datetime.now(datetime.UTC).isoformat()
+                    server.settings['health_error'] = result.get('error', 'Unknown health error')
+                    server.settings['health_error_type'] = result.get('error_type', 'tcp_failed')
+                    server.settings['health_details'] = result.get('details', '')
+                
+                flag_modified(server, 'settings')
+                repo.update(server)
+
+                # If status changed, invalidate the server in all active pools
+                if server.status != old_status:
+                    logger.info(f"SMTP status changed for '{server.name}': {old_status} -> {server.status}. Invalidating active pools.")
+                    new_cfg_dict = server.get_connection_config()
+                    new_cfg = SMTPServerConfig.from_dict(new_cfg_dict)
+                    for pool in iter_active_pools():
+                        await pool.invalidate_server(server.name, new_cfg)
+            
+            session.commit()
+            
+            # Emit Socket.IO event to update the UI
+            try:
+                queue_emit('smtp_health_updated', {'results': [result]})
+            except Exception as e:
+                logger.warning(f"Failed to queue emit smtp_health_updated: {e}")
+                
+        except Exception as e:
+            logger.exception(f"Error during SMTP server '{name}' health check execution")
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+        return result
+

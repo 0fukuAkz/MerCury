@@ -17,6 +17,7 @@ from ...features.generators import AttachmentGenerator, GeneratorConfig
 from ...features.placeholders import PlaceholderProcessor
 from ...features.rotation import RotationManager, RotationStrategy
 from ...features.template_engine import TemplateEngine
+from ..bounce_service import BounceService
 from ..dead_letter_service import DeadLetterService
 from ..smtp_service import SMTPService
 from ..tracking_service import TrackingService
@@ -50,6 +51,7 @@ class EmailService:
         self._tracking_service: Optional[TrackingService] = None
         self._dead_letter_service: Optional[DeadLetterService] = None
         self._placeholder_processor: Optional[PlaceholderProcessor] = None
+        self.bounce_service = BounceService()
 
         # Default configuration
         self.config = EmailConfig()
@@ -105,10 +107,40 @@ class EmailService:
         if config.subjects and len(config.subjects) > 1:
             self._rotation_manager.register('subjects', config.subjects, strategy)
 
-        if config.from_names and len(config.from_names) >= 1:
-            self._rotation_manager.register('from_names', config.from_names, strategy)
+        # Pair (from_name, from_email) into a single rotation set so they
+        # always advance together — prevents Alice's name going out with
+        # carol@example.com's address when the two lists have different
+        # lengths or hit different rotation indices.
+        #
+        # Strategy:
+        #   - Both lists present → register paired 'sender_identity' tuples.
+        #     Lengths are aligned by zip (shorter list wins; leftover entries
+        #     in the longer list are dropped, which is intentional — a name
+        #     without a matching email, or vice-versa, is a config error).
+        #   - Only names → register 'from_names' for display-name rotation;
+        #     from_email stays static.
+        #   - Only emails → register 'from_emails' for address rotation;
+        #     from_name stays static.
+        #   - Neither → both are static (no rotation).
+        _has_names  = bool(config.from_names)
+        _has_emails = bool(config.from_emails)
 
-        if config.from_emails and len(config.from_emails) >= 1:
+        if _has_names and _has_emails:
+            # Paired rotation: (name, email) tuples advance atomically.
+            paired = list(zip(config.from_names, config.from_emails))
+            self._rotation_manager.register('sender_identity', paired, strategy)
+            # Warn about address-ownership mismatches in the paired set.
+            self._warn_unowned_from_emails(config.from_emails)
+            if len(config.from_names) != len(config.from_emails):
+                logger.warning(
+                    "from_names (%d entries) and from_emails (%d entries) differ "
+                    "in length — paired rotation uses the shorter list (%d pairs). "
+                    "Extra entries in the longer list are ignored.",
+                    len(config.from_names), len(config.from_emails), len(paired),
+                )
+        elif _has_names:
+            self._rotation_manager.register('from_names', config.from_names, strategy)
+        elif _has_emails:
             self._rotation_manager.register('from_emails', config.from_emails, strategy)
             self._warn_unowned_from_emails(config.from_emails)
 
@@ -212,8 +244,21 @@ class EmailService:
 
         # Resolve rotating header values (caller wins if explicit).
         subject = self._resolve_rotated('subjects', subject, self.config.subject)
-        from_name = self._resolve_rotated('from_names', from_name, self.config.from_name)
-        from_email = self._resolve_rotated('from_emails', from_email, self.config.from_email)
+
+        # Resolve sender identity. When both name and email are configured
+        # for rotation they are stored as paired (name, email) tuples in
+        # 'sender_identity' so they always advance atomically. When only
+        # one of the two is being rotated the individual sets are used.
+        if (from_name is None and from_email is None
+                and self._rotation_manager
+                and self._rotation_manager.is_registered('sender_identity')):
+            _identity = self._rotation_manager.get_next(
+                'sender_identity', (self.config.from_name, self.config.from_email)
+            )
+            from_name, from_email = _identity
+        else:
+            from_name  = self._resolve_rotated('from_names',  from_name,  self.config.from_name)
+            from_email = self._resolve_rotated('from_emails', from_email, self.config.from_email)
 
         ctx = SendContext(
             recipient=recipient,
@@ -356,6 +401,36 @@ class EmailService:
             from_email or self.config.from_email
         )
 
+        # Mail priority headers (RFC 2156 / MS extensions).
+        # Only inject when priority differs from normal (3) to keep
+        # headers clean for the common case.
+        priority_headers: Dict[str, str] = {}
+        _mp = self.config.mail_priority
+        if _mp == '1':
+            priority_headers = {
+                'X-Priority': '1',
+                'X-MSMail-Priority': 'High',
+                'Importance': 'High',
+            }
+        elif _mp == '2':
+            priority_headers = {
+                'X-Priority': '2',
+                'X-MSMail-Priority': 'High',
+                'Importance': 'High',
+            }
+        elif _mp == '4':
+            priority_headers = {
+                'X-Priority': '4',
+                'X-MSMail-Priority': 'Low',
+                'Importance': 'Low',
+            }
+        elif _mp == '5':
+            priority_headers = {
+                'X-Priority': '5',
+                'X-MSMail-Priority': 'Low',
+                'Importance': 'Low',
+            }
+
         result = await sender.send_email(
             recipient=recipient,
             subject=subject,
@@ -364,6 +439,7 @@ class EmailService:
             from_name=from_name,
             reply_to=reply_to or self.config.reply_to,
             attachments=attachments,
+            headers=priority_headers or None,
             correlation_id=tracking_email_id,
             force_base64_body=force_base64
         )
@@ -373,6 +449,11 @@ class EmailService:
         # recipient-level rejections.
         _SERVER_ERROR_TYPES = {'authentication_error', 'connection_error'}
         if not result.success and result.error:
+            # Categorize bounces for better error tracking
+            bounce_type, category = self.bounce_service.categorize_bounce(None, result.error)
+            if category.value != 'unknown':
+                result.error_type = category.value
+            
             if self._dead_letter_service and result.error_type not in _SERVER_ERROR_TYPES:
                 try:
                     self._dead_letter_service.add_dead_letter(
@@ -383,7 +464,8 @@ class EmailService:
                         error_type=result.error_type or 'send_failure',
                         error_message=result.error or 'Unknown error',
                         from_name=from_name,
-                        smtp_server=result.smtp_server
+                        smtp_server=result.smtp_server,
+                        campaign_id=getattr(self.config, 'campaign_id', None)
                     )
                 except Exception as e:
                     logger.warning(f"Failed to add dead letter: {e}")
@@ -516,7 +598,8 @@ class EmailService:
         recipients: List[Dict[str, Any]],
         subject: Optional[str] = None,
         html_template: Optional[str] = None,
-        progress_callback: Optional[Callable[[Dict[str, Any]], Awaitable[None]]] = None
+        progress_callback: Optional[Callable[[Dict[str, Any]], Awaitable[None]]] = None,
+        shutdown_event: Optional[asyncio.Event] = None
     ) -> BulkSendResult:
         """
         Send bulk emails to multiple recipients.
@@ -526,6 +609,7 @@ class EmailService:
             subject: Subject template (uses rotation subjects if not provided)
             html_template: HTML template (uses configured template if not provided)
             progress_callback: Async callback for progress updates
+            shutdown_event: Optional event to signal early abort
 
         Returns:
             BulkSendResult with statistics
@@ -544,10 +628,32 @@ class EmailService:
             logger.warning(f"Recipient geo/UA enrichment failed: {e}")
 
         # Use semaphore for concurrency
-        semaphore = asyncio.Semaphore(self.config.concurrency)
+        semaphore = asyncio.Semaphore(max(1, self.config.concurrency))
 
         async def send_wrapper(index: int, recipient_data: Dict[str, Any]) -> EmailResult:
+            if shutdown_event and shutdown_event.is_set():
+                return EmailResult(
+                    success=False,
+                    recipient=recipient_data['email'],
+                    correlation_id=None,
+                    timestamp=datetime.now(UTC),
+                    error="Campaign cancelled",
+                    error_type="cancelled",
+                    is_transient=False
+                )
+                
             async with semaphore:
+                if shutdown_event and shutdown_event.is_set():
+                    return EmailResult(
+                        success=False,
+                        recipient=recipient_data['email'],
+                        correlation_id=None,
+                        timestamp=datetime.now(UTC),
+                        error="Campaign cancelled",
+                        error_type="cancelled",
+                        is_transient=False
+                    )
+
                 # Get link rotation if available
                 link_to_use = None
                 if self._rotation_manager and self._rotation_manager.is_registered('links'):
@@ -568,7 +674,10 @@ class EmailService:
                         'total': total,
                         'recipient': recipient_data['email'],
                         'success': result.success,
-                        'percent': round((index + 1) / total * 100, 1)
+                        'error_type': result.error_type if not result.success else None,
+                        'error_message': result.error if not result.success else None,
+                        'percent': round((index + 1) / total * 100, 1),
+                        'result': result  # pass the full object for db logging
                     })
 
                 return result
@@ -585,11 +694,11 @@ class EmailService:
 
         for recipient_data, r in zip(recipients, results):
             if isinstance(r, Exception):
+                import traceback
+                logger.error(f"send_wrapper exception traceback: {''.join(traceback.format_exception(type(r), r, r.__traceback__))}")
                 # Pair the exception with its originating recipient by index
                 # (gather preserves order) so an unexpected error that escapes
-                # send_single still records who failed. The previous
-                # recipient='unknown' made it impossible to retry the email or
-                # even identify which input row triggered the crash.
+                # send_single still records who failed instead of 'unknown'.
                 processed_results.append(EmailResult(
                     success=False,
                     recipient=(recipient_data or {}).get('email', 'unknown'),

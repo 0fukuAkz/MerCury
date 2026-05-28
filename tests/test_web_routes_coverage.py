@@ -163,8 +163,8 @@ def test_login_post_with_next_param(client, db_engine):
 
 
 def test_logout_authenticated(logged_in_client):
-    """GET /logout for logged-in user logs out and redirects (covers lines 44-46)."""
-    resp = logged_in_client.get('/logout', follow_redirects=False)
+    """POST /logout for logged-in user logs out and redirects (covers lines 44-46)."""
+    resp = logged_in_client.post('/logout', follow_redirects=False)
     assert resp.status_code in (301, 302)
     location = resp.headers.get('Location', '')
     assert 'login' in location.lower()
@@ -271,20 +271,20 @@ def test_health_readiness_db_failure(client):
         assert data['ready'] is False
 
 
-def test_health_detailed_disk_low(client):
+def test_health_detailed_disk_low(client_no_login):
     """Detailed health marks disk as 'warning' when free < 1 GB (covers lines ~95-96)."""
     with patch('shutil.disk_usage', return_value=(100 * 1024**3, 99 * 1024**3, 512 * 1024**2)):
-        resp = client.get('/health/detailed')
+        resp = client_no_login.get('/health/detailed', headers={'X-API-Key': 'test_api_key'})
     assert resp.status_code == 200
     data = json.loads(resp.data)
     assert data['components']['disk']['status'] == 'warning'
     assert data['status'] == 'degraded'
 
 
-def test_health_detailed_disk_exception(client):
+def test_health_detailed_disk_exception(client_no_login):
     """Detailed health handles disk_usage exception (covers disk error branch)."""
     with patch('shutil.disk_usage', side_effect=OSError("No disk")):
-        resp = client.get('/health/detailed')
+        resp = client_no_login.get('/health/detailed', headers={'X-API-Key': 'test_api_key'})
     assert resp.status_code == 200
     data = json.loads(resp.data)
     assert data['components']['disk']['status'] == 'unknown'

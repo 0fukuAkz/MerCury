@@ -2,6 +2,48 @@
 
 {% block title %}Dead Letter Queue - MerCury{% endblock %}
 
+{% block extra_css %}
+<style>
+    /* ── Action buttons (inline table) ── */
+    .act-btn {
+        padding: 0.28rem 0.6rem; font-size: 0.72rem; font-weight: 600;
+        border-radius: var(--radius); border: 1px solid; cursor: pointer;
+        font-family: inherit; transition: all 0.15s; background: transparent;
+        display: inline-flex; align-items: center; gap: 0.25rem;
+        white-space: nowrap;
+    }
+    .act-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .act-btn.requeue { color: var(--neon-cyan);  border-color: rgba(0,255,255,0.35); }
+    .act-btn.requeue:hover:not(:disabled) { background: rgba(0,255,255,0.08); box-shadow: 0 0 6px rgba(0,255,255,0.2); }
+    .act-btn.discard { color: var(--error); border-color: rgba(255,0,85,0.35); }
+    .act-btn.discard:hover:not(:disabled) { background: rgba(255,0,85,0.08); }
+
+    /* Spinning icon */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spin { display: inline-block; animation: spin 0.7s linear infinite; }
+
+    /* Error column truncation */
+    .err-cell { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* Toast */
+    #dl-toast-container {
+        position: fixed; bottom: 1.5rem; right: 1.5rem;
+        display: flex; flex-direction: column-reverse; gap: 0.5rem; z-index: 9999;
+    }
+    .dl-toast {
+        padding: 0.65rem 1rem; border-radius: var(--radius); font-size: 0.8rem;
+        min-width: 220px; display: flex; align-items: center; gap: 0.5rem;
+        box-shadow: 0 4px 18px rgba(0,0,0,0.45); border: 1px solid;
+        animation: toastIn 0.2s ease, toastOut 0.3s ease 3.2s forwards;
+    }
+    .dl-toast.ok  { background: rgba(57,255,20,0.1);  border-color: var(--neon-green); color: var(--neon-green); }
+    .dl-toast.err { background: rgba(255,0,85,0.1);   border-color: var(--error);      color: var(--error); }
+    .dl-toast.inf { background: rgba(0,255,255,0.1);  border-color: var(--neon-cyan);  color: var(--neon-cyan); }
+    @keyframes toastIn  { from { transform: translateX(110%); opacity: 0; } to { transform: none; opacity: 1; } }
+    @keyframes toastOut { from { opacity: 1; } to { opacity: 0; pointer-events: none; } }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="page-header">
     <h1 class="page-title">Dead Letter Queue</h1>
@@ -42,31 +84,47 @@
     <div class="card-header">
         <h2 class="card-title">Failed Messages</h2>
         <div class="flex gap-2">
-            <button class="btn btn-primary" onclick="retryAll()">Retry All</button>
+            <button id="requeue-all-btn" class="btn btn-primary" onclick="requeueAll()">
+                ♻ Requeue All
+            </button>
             <button class="btn btn-secondary btn-danger" onclick="discardAll()">Discard All</button>
             <button class="btn btn-secondary" onclick="loadDeadLetters()">Refresh</button>
         </div>
     </div>
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Recipient</th>
-                <th>Subject</th>
-                <th>Error</th>
-                <th>Attempts</th>
-                <th>Failed At</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody id="dead-letter-table">
-            <tr>
-                <td colspan="6" class="text-muted">Loading...</td>
-            </tr>
-        </tbody>
-    </table>
+    <div style="overflow-x: auto;">
+        <table class="table" style="min-width: 680px;">
+            <thead>
+                <tr>
+                    <th>Recipient</th>
+                    <th>Subject</th>
+                    <th>Error</th>
+                    <th>Attempts</th>
+                    <th>Failed At</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="dead-letter-table">
+                <tr>
+                    <td colspan="6" class="text-muted">Loading...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
 </div>
 
+<div id="dl-toast-container"></div>
+
 <script>
+    /* ── Toast ──────────────────────────────────────────────────────────── */
+    function dlToast(msg, type) {
+        var t = document.createElement('div');
+        t.className = 'dl-toast ' + (type || 'inf');
+        t.textContent = msg;
+        document.getElementById('dl-toast-container').appendChild(t);
+        setTimeout(function() { t.remove(); }, 3800);
+    }
+
+    /* ── Load table + stats ─────────────────────────────────────────────── */
     async function loadDeadLetters() {
         try {
             const [itemsResp, statsResp] = await Promise.all([
@@ -77,16 +135,16 @@
             const itemsData = await itemsResp.json();
             const statsData = await statsResp.json();
 
-            document.getElementById('pending-count').textContent = statsData.pending || 0;
-            document.getElementById('processed-count').textContent = statsData.total_processed || 0;
-            document.getElementById('retried-count').textContent = statsData.retried || 0;
-            document.getElementById('discarded-count').textContent = statsData.discarded || 0;
-            
+            document.getElementById('pending-count').textContent    = statsData.pending           || 0;
+            document.getElementById('processed-count').textContent  = statsData.total_processed   || 0;
+            document.getElementById('retried-count').textContent    = statsData.retried           || 0;
+            document.getElementById('discarded-count').textContent  = statsData.discarded         || 0;
+
             const errorList = document.getElementById('error-breakdown-list');
             if (statsData.by_error_type && Object.keys(statsData.by_error_type).length > 0) {
                 errorList.innerHTML = Object.entries(statsData.by_error_type)
                     .sort((a, b) => b[1] - a[1])
-                    .map(([errorType, count]) => `<li><strong>${count}</strong> - ${errorType}</li>`)
+                    .map(([t, c]) => `<li><strong>${c}</strong> — ${t}</li>`)
                     .join('');
             } else {
                 errorList.innerHTML = '<li class="text-muted">No errors recorded</li>';
@@ -101,20 +159,22 @@
             }
 
             tbody.innerHTML = items.map(item => `
-                <tr>
-                    <td class="font-mono">${item.recipient || '-'}</td>
-                    <td>${item.subject || '-'}</td>
-                    <td>
-                        <span title="${item.error || ''}" style="cursor: help;">
-                            ${(item.error || 'Unknown error').substring(0, 50)}${item.error && item.error.length > 50 ? '...' : ''}
-                        </span>
+                <tr id="dl-row-${item.id}">
+                    <td class="font-mono" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(item.recipient || '')}">${esc(item.recipient || '-')}</td>
+                    <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(item.subject || '')}">${esc(item.subject || '-')}</td>
+                    <td class="err-cell" title="${esc(item.error_message || item.error || '')}">
+                        ${esc((item.error_message || item.error || 'Unknown error').substring(0, 60))}${(item.error_message || item.error || '').length > 60 ? '…' : ''}
                     </td>
-                    <td>${item.attempts || 0}</td>
-                    <td>${item.failed_at ? new Date(item.failed_at).toLocaleString() : '-'}</td>
+                    <td>${item.retry_count !== undefined ? item.retry_count : (item.attempts || 0)}</td>
+                    <td style="white-space:nowrap">${item.failed_at ? new Date(item.failed_at).toLocaleString() : '-'}</td>
                     <td>
                         <div class="flex gap-2">
-                            <button class="btn btn-primary" onclick="retryItem('${item.id}')" style="padding: 0.25rem 0.75rem;">Retry</button>
-                            <button class="btn btn-secondary" onclick="discardItem('${item.id}')" style="padding: 0.25rem 0.75rem; color: var(--error);">Discard</button>
+                            <button id="requeue-btn-${item.id}" class="act-btn requeue" onclick="requeueItem(${item.id})" title="Re-send via SMTP and mark resolved">
+                                ♻ Requeue
+                            </button>
+                            <button class="act-btn discard" onclick="discardItem(${item.id})" title="Mark resolved without sending">
+                                ✕ Discard
+                            </button>
                         </div>
                     </td>
                 </tr>
@@ -124,82 +184,111 @@
         }
     }
 
-    async function retryItem(itemId) {
-        try {
-            const resp = await fetch(`/api/dead-letter/${itemId}/retry`, { method: 'POST' });
-            const result = await resp.json();
+    function esc(s) {
+        var d = document.createElement('span');
+        d.textContent = String(s);
+        return d.innerHTML;
+    }
 
+    /* ── Requeue single ─────────────────────────────────────────────────── */
+    async function requeueItem(itemId) {
+        const btn = document.getElementById('requeue-btn-' + itemId);
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spin">↻</span> Sending…';
+        }
+        try {
+            const resp = await fetch(`/api/dead-letter/${itemId}/requeue`, { method: 'POST' });
+            const result = await resp.json();
             if (result.success) {
+                dlToast('✅ Requeued — delivered via ' + (result.smtp_server || 'SMTP'), 'ok');
+                // Remove the row from the table.
+                const row = document.getElementById('dl-row-' + itemId);
+                if (row) row.remove();
+                // Refresh stats.
                 loadDeadLetters();
             } else {
-                alert('Retry failed');
+                dlToast('❌ Requeue failed: ' + (result.error || 'unknown error'), 'err');
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '♻ Requeue';
+                }
             }
         } catch (e) {
-            alert('Error: ' + e.message);
+            dlToast('❌ Error: ' + e.message, 'err');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '♻ Requeue';
+            }
         }
     }
 
-    async function discardItem(itemId) {
-        if (!confirm('Discard this message permanently?')) return;
-
-        try {
-            await fetch(`/api/dead-letter/${itemId}`, { method: 'DELETE' });
-            loadDeadLetters();
-        } catch (e) {
-            alert('Error: ' + e.message);
-        }
-    }
-
-    async function discardAll() {
-        // We *always* hit the endpoint even if the visible pending count is 0,
-        // because the count comes from a stats endpoint that lags the actual
-        // table state (computed at last loadDeadLetters() call). Trusting
-        // the displayed count would make the button "not work" right after
-        // another tab/user added a pending item. Server-side is authoritative.
-        const pendingTextContent = document.getElementById('pending-count').textContent;
-        const pending = parseInt(pendingTextContent, 10) || 0;
-
+    /* ── Requeue all ────────────────────────────────────────────────────── */
+    async function requeueAll() {
+        const pending = parseInt(document.getElementById('pending-count').textContent, 10) || 0;
         const msg = pending > 0
-            ? 'Discard all ' + pending + ' pending message(s)?\n\nThey will be marked resolved and removed from this view. The payloads stay in the database for later investigation.'
-            : 'Discard all pending messages?\n\n(The visible count says 0, but the server is authoritative — proceed if you want to confirm.)';
-
+            ? `Re-send all ${pending} pending message(s) by creating a new recovery campaign?`
+            : 'Re-send all pending messages by creating a new recovery campaign? (server is authoritative on count)';
         if (!confirm(msg)) return;
 
-        console.log('[discard-all] POST /api/dead-letter/discard-all');
+        const btn = document.getElementById('requeue-all-btn');
+        if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin">↻</span> Creating Campaign…'; }
+
         try {
-            const resp = await fetch('/api/dead-letter/discard-all', { method: 'POST' });
-            console.log('[discard-all] status:', resp.status);
+            const resp = await fetch('/api/dead-letter/requeue-all', { method: 'POST' });
             const data = await resp.json();
-            console.log('[discard-all] body:', data);
             if (!resp.ok || !data.success) {
-                alert('Discard failed (HTTP ' + resp.status + '): ' + (data.error || 'unknown error'));
-                return;
+                dlToast('❌ ' + (data.error || 'Failed to create recovery campaign (HTTP ' + resp.status + ')'), 'err');
+                if (btn) { btn.disabled = false; btn.innerHTML = '♻ Requeue All'; }
+            } else {
+                dlToast('✅ ' + data.message + '. Redirecting...', 'ok');
+                setTimeout(() => {
+                    window.location.href = data.redirect_url;
+                }, 1000);
             }
-            alert('Discarded ' + (data.discarded || 0) + ' message(s).');
+        } catch (e) {
+            dlToast('❌ Error: ' + e.message, 'err');
+            if (btn) { btn.disabled = false; btn.innerHTML = '♻ Requeue All'; }
+        }
+    }
+
+    /* ── Discard single ─────────────────────────────────────────────────── */
+    async function discardItem(itemId) {
+        if (!confirm('Discard this message permanently?')) return;
+        try {
+            await fetch(`/api/dead-letter/${itemId}`, { method: 'DELETE' });
+            const row = document.getElementById('dl-row-' + itemId);
+            if (row) row.remove();
             loadDeadLetters();
         } catch (e) {
-            console.error('[discard-all] fetch failed:', e);
-            alert('Error: ' + e.message);
+            dlToast('❌ Error: ' + e.message, 'err');
         }
     }
 
-    async function retryAll() {
-        if (!confirm('Retry all failed messages?')) return;
+    /* ── Discard all ────────────────────────────────────────────────────── */
+    async function discardAll() {
+        const pendingText = document.getElementById('pending-count').textContent;
+        const pending = parseInt(pendingText, 10) || 0;
+        const msg = pending > 0
+            ? `Discard all ${pending} pending message(s)?\n\nThey will be marked resolved. Payloads remain in the DB.`
+            : 'Discard all pending messages? (server is authoritative on count)';
+        if (!confirm(msg)) return;
 
-        const tbody = document.getElementById('dead-letter-table');
-        const rows = tbody.querySelectorAll('tr');
-
-        for (const row of rows) {
-            const retryBtn = row.querySelector('button');
-            if (retryBtn && retryBtn.textContent === 'Retry') {
-                retryBtn.click();
+        try {
+            const resp = await fetch('/api/dead-letter/discard-all', { method: 'POST' });
+            const data = await resp.json();
+            if (!resp.ok || !data.success) {
+                dlToast('❌ Discard failed (HTTP ' + resp.status + ')', 'err');
+                return;
             }
+            dlToast('🗑 Discarded ' + (data.discarded || 0) + ' message(s)', 'inf');
+            loadDeadLetters();
+        } catch (e) {
+            dlToast('❌ Error: ' + e.message, 'err');
         }
-
-        setTimeout(loadDeadLetters, 1000);
     }
 
-    // Load data on page load
+    // Load on page load
     loadDeadLetters();
 </script>
 {% endblock %}

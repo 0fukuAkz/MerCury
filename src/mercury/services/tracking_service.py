@@ -104,7 +104,22 @@ class TrackingService:
         Returns:
             Recipient email address or None if not found
         """
-        return _email_id_registry.get(email_id)
+        val = _email_id_registry.get(email_id)
+        if val:
+            return val
+        try:
+            from ..data.database import session_scope
+            from ..data.models import EmailLog
+            with session_scope() as session:
+                log = session.query(EmailLog).filter(
+                    EmailLog.correlation_id == email_id
+                ).first()
+                if log:
+                    _email_id_registry[email_id] = log.recipient_email
+                    return log.recipient_email
+        except Exception:
+            pass
+        return None
     
     def generate_tracking_pixel(self, email_id: str) -> str:
         """

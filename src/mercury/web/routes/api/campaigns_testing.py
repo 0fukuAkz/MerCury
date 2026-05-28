@@ -56,9 +56,8 @@ def api_send_test_email():
                 }), 400
 
     subject = data.get('subject') or '(Test) No subject'
-    from_email = data.get('from_email') or ''
-    if not from_email:
-        return jsonify({'success': False, 'error': 'From Email is required'}), 400
+    from_email = (data.get('from_email') or '').strip()
+    from_name  = (data.get('from_name')  or '').strip()
 
     try:
         # Honor a pinned smtp_server_id if the campaign form specified one.
@@ -87,6 +86,32 @@ def api_send_test_email():
             smtp_configs = [s.get_connection_config() for s in smtp_servers if s.is_enabled]
             if not smtp_configs:
                 return jsonify({'success': False, 'error': 'No active SMTP servers configured'}), 400
+
+        # Auto-fill from_email / from_name from the SMTP server when the
+        # caller didn't provide them (e.g. the campaign form left them blank).
+        # The pinned server wins; otherwise the first enabled server is used.
+        if not from_email:
+            _fallback_server = smtp_configs[0]
+            from_email = (_fallback_server.get('from_email') or '').strip()
+            if not from_name:
+                from_name = (_fallback_server.get('from_name') or '').strip()
+            if from_email:
+                import logging as _log
+                _log.getLogger(__name__).info(
+                    "test-email: no from_email provided; using SMTP server default '%s'",
+                    from_email,
+                )
+
+        # Final guard: if we still have no from_email after the fallback
+        # the operator hasn't configured one anywhere.
+        if not from_email:
+            return jsonify({
+                'success': False,
+                'error': (
+                    'From Email is required. Provide it in the form, or set a "\'From Email\"'
+                    ' on your SMTP server so it can be used as the default.'
+                ),
+            }), 400
 
         template_id = data.get('template_id')
         template_path = data.get('template_path')
@@ -130,7 +155,7 @@ def api_send_test_email():
         config = EmailConfig(
             subject=subject,
             from_email=from_email,
-            from_name=data.get('from_name', ''),
+            from_name=from_name,
             reply_to=data.get('reply_to') or None,
             placeholders_path=data.get('placeholders_path') or None,
             enable_tracking=enable_tracking,
@@ -149,6 +174,7 @@ def api_send_test_email():
             auto_company_logo=data.get('auto_company_logo') in (True, 'on', '1', 'true'),
             hide_from_email_header=data.get('hide_from_email_header') in (True, 'on', '1', 'true'),
             include_default_body=data.get('include_default_body') in (True, 'on', '1', 'true'),
+            mail_priority=data.get('mail_priority', '3'),
         )
 
         smtp_service = SMTPService()
@@ -192,7 +218,7 @@ def api_send_test_email():
             subject=subject,
             html_body=html_body,
             from_email=from_email,
-            from_name=data.get('from_name', ''),
+            from_name=from_name,
             reply_to=data.get('reply_to') or None,
             link=link_to_use,
         ))

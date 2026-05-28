@@ -83,6 +83,7 @@
         border: 1px solid var(--border-color);
         border-radius: var(--radius);
         overflow: hidden;
+        overflow-x: auto;
     }
     .server-table-header {
         display: flex; justify-content: space-between; align-items: center;
@@ -92,11 +93,20 @@
         font-size: 0.75rem; font-weight: 600; text-transform: uppercase;
         letter-spacing: 0.07em; color: var(--neon-cyan);
     }
-    .table { width: 100%; border-collapse: collapse; }
+    .table { width: 100%; border-collapse: collapse; min-width: 780px; }
     .table th, .table td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid var(--border-color); }
-    .table th { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); font-weight: 600; }
+    .table th { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); font-weight: 600; white-space: nowrap; }
     .table tr:last-child td { border-bottom: none; }
     .table tr:hover td { background: rgba(0,255,255,0.03); }
+
+    /* Constrain long-text columns so they don't blow out the table */
+    .col-name  { max-width: 180px; width: 15%; }
+    .col-host  { max-width: 220px; width: 18%; }
+    .col-truncate {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
 
     /* ── Badges ── */
     .badge {
@@ -182,6 +192,13 @@
     .toast.info    { background: rgba(0,255,255,0.1);  border-color: var(--neon-cyan);  color: var(--neon-cyan); }
     @keyframes toastIn  { from { transform: translateX(110%); opacity: 0; } to { transform: none; opacity: 1; } }
     @keyframes toastOut { from { opacity: 1; } to { opacity: 0; pointer-events: none; } }
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+    .spin {
+        animation: spin 1s linear infinite;
+    }
 </style>
 {% endblock %}
 
@@ -260,20 +277,27 @@
 <!-- Server List -->
 <div class="server-table-wrap">
     <div class="server-table-header">
-        <span class="server-table-title">Configured Servers</span>
-        <button class="btn btn-secondary" style="padding:0.35rem 0.75rem;font-size:0.75rem" onclick="loadServers()">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
-                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-            </svg>
-            Refresh
-        </button>
+        <div style="display:flex;gap:0.5rem">
+            <button class="btn btn-secondary" style="padding:0.35rem 0.75rem;font-size:0.75rem" onclick="runHealthChecks(this)">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:0.2rem">
+                    <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                </svg>
+                Run Health Checks
+            </button>
+            <button class="btn btn-secondary" style="padding:0.35rem 0.75rem;font-size:0.75rem" onclick="loadServers()">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                </svg>
+                Refresh
+            </button>
+        </div>
     </div>
     <table class="table">
         <thead>
             <tr>
-                <th>Name</th>
-                <th>Host : Port</th>
+                <th class="col-name">Name</th>
+                <th class="col-host">Host : Port</th>
                 <th>TLS</th>
                 <th>Status</th>
                 <th>Circuit</th>
@@ -292,6 +316,16 @@
 
 <script>
     /* ── Helpers ─────────────────────────────────────────────────────────── */
+    function fmtDate(iso) {
+        if (!iso) return '—';
+        try {
+            return new Date(iso).toLocaleString(undefined, {
+                month: 'short', day: 'numeric',
+                hour: '2-digit', minute: '2-digit'
+            });
+        } catch { return iso; }
+    }
+
     function showToast(msg, type) {
         var t_type = type || 'info';
         var icons = {
@@ -371,17 +405,31 @@
                         ? '<span class="badge badge-neutral">STARTTLS</span>'
                         : '<span class="badge badge-warn">Plain</span>');
 
-                var statusBadge = s.is_enabled
-                    ? '<span class="badge badge-ok"><span class="dot dot-green"></span>' + esc(s.status || 'active') + '</span>'
-                    : '<span class="badge badge-neutral"><span class="dot dot-gray"></span>disabled</span>';
+                var statusBadge = '';
+                if (!s.is_enabled) {
+                    statusBadge = '<span class="badge badge-neutral"><span class="dot dot-gray"></span>disabled</span>';
+                } else if (s.status === 'error') {
+                    var errMsg = (s.settings && s.settings.health_error) || 'Health check failed';
+                    statusBadge = '<span class="badge badge-err" style="cursor:help" title="' + esc(errMsg) + '"><span class="dot dot-red"></span>error</span>';
+                } else {
+                    statusBadge = '<span class="badge badge-ok"><span class="dot dot-green"></span>' + esc(s.status || 'active') + '</span>';
+                }
+
+                if (s.is_enabled && s.settings && s.settings.last_checked_at) {
+                    statusBadge += '<div style="font-size:0.65rem;color:var(--text-muted);margin-top:0.25rem" title="' + esc(s.settings.health_details || '') + '">Checked: ' + fmtDate(s.settings.last_checked_at) + '</div>';
+                }
+
+                if (s.is_enabled && s.status === 'error' && s.settings && s.settings.health_error) {
+                    statusBadge += '<div style="font-size:0.65rem;color:var(--error);margin-top:0.15rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(s.settings.health_error) + '">' + esc(s.settings.health_error) + '</div>';
+                }
 
                 var circuitBadge = s.circuit_open
                     ? '<span class="badge badge-err"><span class="dot dot-red"></span>Open</span>'
                     : '<span class="badge badge-ok">Closed</span>';
 
                 row.innerHTML = [
-                    '<td><strong style="font-family:\'JetBrains Mono\',monospace">' + esc(s.name) + '</strong></td>',
-                    '<td class="font-mono" style="font-size:0.8rem">' + esc(s.host) + ':' + esc(s.port) + '</td>',
+                    '<td class="col-name col-truncate"><strong style="font-family:\'JetBrains Mono\',monospace" title="' + esc(s.name) + '">' + esc(s.name) + '</strong></td>',
+                    '<td class="col-host col-truncate font-mono" style="font-size:0.8rem" title="' + esc(s.host) + ':' + esc(s.port) + '">' + esc(s.host) + ':' + esc(s.port) + '</td>',
                     '<td>' + tlsBadge + '</td>',
                     '<td>' + statusBadge + '</td>',
                     '<td>' + circuitBadge + '</td>',
@@ -477,6 +525,8 @@
                 document.getElementById('tls_mode').value = 'starttls';
                 toggleAddPanel();
                 loadServers();
+                btn.disabled = false;
+                btn.textContent = 'Add Server';
             } else {
                 showToast(result.error || 'Failed to add server', 'error');
                 btn.disabled = false;
@@ -549,6 +599,34 @@
             showToast('Network error: ' + err.message, 'error');
             btn.disabled = false;
             btn.textContent = 'Delete';
+        }
+    }
+
+    async function runHealthChecks(btn) {
+        btn.disabled = true;
+        var oldHtml = btn.innerHTML;
+        btn.innerHTML = [
+            '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin" style="margin-right:0.3rem">',
+            '<circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-dashoffset="16"/>',
+            '</svg>',
+            'Checking…'
+        ].join('');
+
+        try {
+            var res = await fetch('/api/smtp/health/check', { method: 'POST' });
+            var result = await res.json();
+
+            if (res.ok && result.success) {
+                showToast('SMTP health checks completed successfully', 'success');
+                loadServers();
+            } else {
+                showToast(result.error || 'Failed to trigger health checks', 'error');
+            }
+        } catch (err) {
+            showToast('Network error: ' + err.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = oldHtml;
         }
     }
 
@@ -696,6 +774,14 @@
             saveBtn.disabled = false;
             saveBtn.textContent = 'Save';
         }
+    }
+
+    // Socket.IO updates
+    if (typeof socket !== 'undefined') {
+        socket.on('smtp_health_updated', function(data) {
+            console.log('[socket] smtp_health_updated', data);
+            loadServers();
+        });
     }
 </script>
 {% endblock %}

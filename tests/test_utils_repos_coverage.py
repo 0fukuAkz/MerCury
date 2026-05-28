@@ -583,6 +583,14 @@ class TestRecipientRepositoryCoverage:
 class TestLogRepositoryCoverage:
     """Cover missing lines in data/repositories/logs.py."""
 
+    def _create_campaign(self, session, name="TestCampaign"):
+        from mercury.data.models import Campaign
+        campaign = Campaign(name=name)
+        session.add(campaign)
+        session.commit()
+        session.refresh(campaign)
+        return campaign
+
     def _create_log(self, session, status="sent", campaign_id=None):
         from mercury.data.models import EmailLog
         log = EmailLog(
@@ -602,12 +610,15 @@ class TestLogRepositoryCoverage:
         from mercury.data.repositories.logs import LogRepository
         repo = LogRepository(db_session)
 
-        self._create_log(db_session, campaign_id=1)
-        self._create_log(db_session, campaign_id=2)
+        c1 = self._create_campaign(db_session, name="Camp 1")
+        c2 = self._create_campaign(db_session, name="Camp 2")
 
-        results = repo.get_by_campaign(1)
+        self._create_log(db_session, campaign_id=c1.id)
+        self._create_log(db_session, campaign_id=c2.id)
+
+        results = repo.get_by_campaign(c1.id)
         assert len(results) == 1
-        assert results[0].campaign_id == 1
+        assert results[0].campaign_id == c1.id
 
 
 # ---------------------------------------------------------------------------

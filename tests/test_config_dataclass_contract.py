@@ -46,11 +46,13 @@ CAMPAIGN_CONFIG_FIELDS = frozenset({
     'links',
     'placeholders', 'placeholders_path',
     'enable_tracking', 'track_opens', 'track_clicks', 'tracking_base_url',
+    'mail_priority',
 })
 
 EMAIL_CONFIG_FIELDS = frozenset({
     'subject', 'from_email', 'from_name', 'from_emails', 'reply_to',
     'template_path', 'placeholders_path', 'html_content',
+    'campaign_id',
     'attachment_ids', 'attachment_convert_to',
     'logo_attachment_id', 'auto_company_logo',
     'hide_from_email_header', 'include_default_body',
@@ -58,6 +60,7 @@ EMAIL_CONFIG_FIELDS = frozenset({
     'enable_tracking', 'track_opens', 'track_clicks', 'tracking_base_url',
     'dry_run', 'concurrency', 'rate_per_minute', 'rate_per_hour',
     'subjects', 'from_names', 'templates', 'links', 'rotation_strategy',
+    'mail_priority',
 })
 
 SMTP_SERVER_CONFIG_FIELDS = frozenset({
@@ -148,6 +151,7 @@ def test_email_config_from_campaign_config_round_trip():
         links=['https://x'],
         enable_tracking=False, track_opens=False, track_clicks=False,
         tracking_base_url='https://t.example',
+        mail_priority='1',
     )
     ec = EmailConfig.from_campaign_config(cc)
 
@@ -181,6 +185,7 @@ def test_email_config_from_campaign_config_round_trip():
     assert ec.track_opens == cc.track_opens
     assert ec.track_clicks == cc.track_clicks
     assert ec.tracking_base_url == cc.tracking_base_url
+    assert ec.mail_priority == cc.mail_priority
 
     # Renamed field
     assert ec.rotation_strategy == cc.smtp_rotation
