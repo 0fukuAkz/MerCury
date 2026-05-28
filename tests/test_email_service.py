@@ -60,10 +60,38 @@ class TestEmailService:
             recipient="user@test.com",
             placeholders={"first_name": "John"}
         )
-        
+
         assert result.success is True
         assert result.recipient == "user@test.com"
-    
+
+    async def test_send_single_invalid_recipient_no_at(self):
+        """A recipient without '@' fails cleanly as invalid_recipient.
+
+        Regression guard: a malformed address used to crash deep in a
+        domain-parsing helper as 'list index out of range', which the bulk
+        gather path then logged with recipient='unknown'. send_single now
+        rejects it at the boundary before any helper parses it.
+        """
+        smtp_service = Mock(spec=SMTPService)
+        smtp_service.get_connection_pool = Mock()
+
+        service = EmailService(smtp_service)
+        service.configure(EmailConfig(
+            from_email="sender@test.com",
+            subject="Test",
+            html_content="<p>Hi</p>",
+        ))
+        # A sender that would explode if it were ever reached — proves the
+        # guard short-circuits before any rendering/parsing.
+        service._sender = Mock()
+        service._sender.send_email = AsyncMock(side_effect=AssertionError("should not send"))
+
+        result = await service.send_single(recipient="not-an-email")
+
+        assert result.success is False
+        assert result.error_type == "invalid_recipient"
+        assert result.recipient == "not-an-email"
+
     async def test_send_single_with_rotation(self):
         """Test sending with subject rotation."""
         smtp_service = Mock(spec=SMTPService)

@@ -192,6 +192,24 @@ class EmailService:
         placeholders = placeholders or {}
         placeholders['email'] = recipient
 
+        # Validate the recipient at the boundary. An address without '@' is
+        # invalid by definition, and several downstream helpers (branding,
+        # domain-derived placeholders, logo auto-fetch) parse it by splitting
+        # on '@' — a malformed value used to surface as an opaque
+        # "list index out of range" IndexError deep in a parser, which the
+        # bulk gather() path then logged with recipient='unknown'. Failing
+        # fast here turns a cryptic crash into a clear, per-recipient result.
+        if not recipient or '@' not in recipient:
+            return EmailResult(
+                success=False,
+                recipient=recipient or 'unknown',
+                correlation_id=None,
+                timestamp=datetime.now(UTC),
+                error=f"Invalid recipient address: {recipient!r}",
+                error_type="invalid_recipient",
+                is_transient=False,
+            )
+
         # Resolve rotating header values (caller wins if explicit).
         subject = self._resolve_rotated('subjects', subject, self.config.subject)
         from_name = self._resolve_rotated('from_names', from_name, self.config.from_name)
@@ -565,11 +583,16 @@ class EmailService:
         processed_results = []
         success_count = 0
 
-        for r in results:
+        for recipient_data, r in zip(recipients, results):
             if isinstance(r, Exception):
+                # Pair the exception with its originating recipient by index
+                # (gather preserves order) so an unexpected error that escapes
+                # send_single still records who failed. The previous
+                # recipient='unknown' made it impossible to retry the email or
+                # even identify which input row triggered the crash.
                 processed_results.append(EmailResult(
                     success=False,
-                    recipient="unknown",
+                    recipient=(recipient_data or {}).get('email', 'unknown'),
                     correlation_id=None,
                     timestamp=datetime.now(UTC),
                     error=str(r),
