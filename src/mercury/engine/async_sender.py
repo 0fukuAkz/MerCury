@@ -16,6 +16,7 @@ import aiosmtplib
 from .connection_pool import SMTPConnectionPool, SMTPServerConfig, AsyncConnectionPool
 from .rate_limiter import RateLimiter, RateLimiterConfig
 from .retry_queue import RetryQueue
+from ..features.placeholders import PlaceholderProcessor
 from ..exceptions import (
     SMTPConnectionError,
     SMTPAuthenticationError,
@@ -468,23 +469,28 @@ class AsyncEmailSender:
         semaphore = asyncio.Semaphore(concurrency)
         results: List[EmailResult] = []
         start_time = datetime.now(UTC)
-        
+
+        # Render through the project's PlaceholderProcessor — the single
+        # source of truth for {{var}} semantics — instead of a naive
+        # str.replace loop. This gives the convenience path the same
+        # behavior as the web/service path: case/format-tolerant field
+        # aliases ({{first_name}} matches a "First Name" column), the
+        # 50+ built-in placeholders (date, domain, uuid, …), and unknown
+        # placeholders left intact rather than partially mangled. One
+        # processor instance for the whole batch; process() is pure given
+        # its args, so it's safe to share across the concurrent sends.
+        processor = PlaceholderProcessor()
+
         async def send_with_semaphore(
-            recipient_data: Dict[str, Any], 
+            recipient_data: Dict[str, Any],
             index: int
         ) -> EmailResult:
             async with semaphore:
                 recipient_email = recipient_data.get('email')
-                
-                # Replace placeholders
-                subject = subject_template
-                body = html_template
-                
-                for key, value in recipient_data.items():
-                    placeholder = f"{{{{{key}}}}}"
-                    subject = subject.replace(placeholder, str(value))
-                    body = body.replace(placeholder, str(value))
-                
+
+                subject = processor.process(subject_template, recipient_data, {})
+                body = processor.process(html_template, recipient_data, {})
+
                 result = await self.send_email(
                     recipient=recipient_email,
                     subject=subject,
