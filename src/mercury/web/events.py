@@ -6,7 +6,7 @@ from datetime import datetime, UTC
 from flask_socketio import SocketIO, emit
 from flask_login import current_user
 from ..app_context import get_app_context
-from ..data.database import get_session_direct
+from ..data.database import session_scope
 from ..data.repositories import CampaignRepository
 from ..data.models import CampaignStatus
 from ..services.campaign_service import CampaignService, CampaignConfig
@@ -39,7 +39,7 @@ def _build_config_from_campaign(campaign) -> CampaignConfig:
 
     # Fallback: custom template path stored in settings
     if not template_path and not html_content:
-        template_path = settings.get('template_path', '')
+        template_path = settings.get("template_path", "")
 
     return CampaignConfig(
         name=campaign.name,
@@ -48,13 +48,13 @@ def _build_config_from_campaign(campaign) -> CampaignConfig:
         subjects=subjects,
         from_email=campaign.from_email or "",
         from_name=campaign.from_name or "",
-        from_emails=settings.get('from_emails') or None,
-        from_names=settings.get('from_names') or None,
+        from_emails=settings.get("from_emails") or None,
+        from_names=settings.get("from_names") or None,
         reply_to=campaign.reply_to or "",
         template_id=campaign.template_id,
         template_path=template_path,
         html_content=html_content,
-        templates=settings.get('templates') or None,
+        templates=settings.get("templates") or None,
         recipients_path=campaign.settings.get("recipients_path", "") if settings else "",
         manual_recipients=settings.get("manual_recipients"),
         links=settings.get("links"),
@@ -66,8 +66,7 @@ def _build_config_from_campaign(campaign) -> CampaignConfig:
         enable_qr_code=campaign.enable_qr_code or False,
         send_as_image=campaign.convert_to_image or False,
         attachment_ids=[
-            int(x) for x in (settings.get("attachment_ids") or [])
-            if str(x).strip().isdigit()
+            int(x) for x in (settings.get("attachment_ids") or []) if str(x).strip().isdigit()
         ],
         convert_attachment=bool(settings.get("convert_attachment", False)),
         attachment_convert_to=settings.get("attachment_convert_to") or None,
@@ -114,7 +113,10 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
                 repo = CampaignRepository(session)
                 campaign = repo.get(campaign_id)
                 if not campaign:
-                    _emit('campaign_error', {'campaign_id': campaign_id, 'error': 'Campaign not found'})
+                    _emit(
+                        "campaign_error",
+                        {"campaign_id": campaign_id, "error": "Campaign not found"},
+                    )
                     return
 
                 config = _build_config_from_campaign(campaign)
@@ -139,11 +141,13 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
 
         # Notify webhooks
         try:
-            run_async(_webhook_service.notify_campaign_started(
-                campaign_id=str(campaign_id),
-                campaign_name=config.name,
-                total_recipients=0  # Will be updated once recipients are loaded
-            ))
+            run_async(
+                _webhook_service.notify_campaign_started(
+                    campaign_id=str(campaign_id),
+                    campaign_name=config.name,
+                    total_recipients=0,  # Will be updated once recipients are loaded
+                )
+            )
         except Exception:
             pass  # Best-effort
 
@@ -171,7 +175,7 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
         # list even when chosen."
         recipients = []
         if config_snap.manual_recipients:
-            recipients = [{'email': e} for e in config_snap.manual_recipients]
+            recipients = [{"email": e} for e in config_snap.manual_recipients]
         else:
             linked_list_path = None
             with app.app_context():
@@ -190,20 +194,26 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
                         "Campaign %s has both a linked recipient_list (%s) AND a "
                         "stale recipients_path (%s); using the linked list. Clean "
                         "up the settings.recipients_path to silence this.",
-                        campaign_id, linked_list_path, config_snap.recipients_path,
+                        campaign_id,
+                        linked_list_path,
+                        config_snap.recipients_path,
                     )
-                recipients = list(service.load_recipients_from_csv(
-                    linked_list_path,
-                    validate=True,
-                    deduplicate=True,
-                ))
+                recipients = list(
+                    service.load_recipients_from_csv(
+                        linked_list_path,
+                        validate=True,
+                        deduplicate=True,
+                    )
+                )
             elif config_snap.recipients_path:
-                recipients = list(service.load_recipients_from_csv(
-                    config_snap.recipients_path,
-                    email_column=config_snap.email_column,
-                    validate=config_snap.validate_emails,
-                    deduplicate=config_snap.deduplicate,
-                ))
+                recipients = list(
+                    service.load_recipients_from_csv(
+                        config_snap.recipients_path,
+                        email_column=config_snap.email_column,
+                        validate=config_snap.validate_emails,
+                        deduplicate=config_snap.deduplicate,
+                    )
+                )
 
         if not recipients:
             with app.app_context():
@@ -215,23 +225,33 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
                     repo.update(campaign)
                 finally:
                     session.close()
-            _emit('campaign_error', {'campaign_id': campaign_id, 'error': 'No recipients found'})
+            _emit("campaign_error", {"campaign_id": campaign_id, "error": "No recipients found"})
             _active_services.pop(campaign_id, None)
             return
 
-        _emit('campaign_progress', {
-            'campaign_id': campaign_id,
-            'total': len(recipients),
-            'sent': 0,
-            'failed': 0,
-            'status': 'sending',
-        })
+        _emit(
+            "campaign_progress",
+            {
+                "campaign_id": campaign_id,
+                "total": len(recipients),
+                "sent": 0,
+                "failed": 0,
+                "status": "sending",
+            },
+        )
 
         # Counter so we can rate-limit log noise — log first 3, then every
         # 25th, then the last one. Keeps the log readable while still
         # confirming the chain is alive.
         import time
-        _progress_count = {'n': 0, 'sent': 0, 'failed': 0, 'errors': {}, 'start_time': time.monotonic()}
+
+        _progress_count = {
+            "n": 0,
+            "sent": 0,
+            "failed": 0,
+            "errors": {},
+            "start_time": time.monotonic(),
+        }
         _progress_total = len(recipients)
         # Wall-clock-based heartbeat (in addition to the per-25-event log).
         # Some campaigns are rate-limited to e.g. 30 emails/hour — at that
@@ -241,7 +261,8 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
         # so the operator has unambiguous proof the engine is running even
         # during deep throttle windows.
         from time import monotonic
-        _last_heartbeat = {'t': monotonic()}
+
+        _last_heartbeat = {"t": monotonic()}
         HEARTBEAT_INTERVAL = 30.0
         # DB-flush throttle: persist sent/failed counts every N events.
         # Previously the row's sent_count stayed at 0 in the DB for the
@@ -264,8 +285,8 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
                         c = repo.get(campaign_id)
                         if c is None:
                             return
-                        c.sent_count = _progress_count['sent']
-                        c.failed_count = _progress_count['failed']
+                        c.sent_count = _progress_count["sent"]
+                        c.failed_count = _progress_count["failed"]
                         c.total_recipients = _progress_total
                         repo.update(c)
                     finally:
@@ -274,24 +295,25 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
                 logger.warning(
                     "Mid-run count persistence failed for campaign %s: %s "
                     "(send continues; counts will catch up at completion).",
-                    campaign_id, ex,
+                    campaign_id,
+                    ex,
                 )
 
         async def _progress_cb(progress: dict):
-            _progress_count['n'] += 1
-            n = _progress_count['n']
+            _progress_count["n"] += 1
+            n = _progress_count["n"]
             # Maintain cumulative tallies locally so we can both (a) include
             # them in the emitted payload (so the frontend SETS instead of
             # increments — eliminates the "counts don't match exactly" drift
             # caused by missed events while the tab was inactive), and
             # (b) periodically flush them to the DB so a user joining mid-
             # send (or returning after navigating away) sees real progress.
-            if progress.get('success'):
-                _progress_count['sent'] += 1
+            if progress.get("success"):
+                _progress_count["sent"] += 1
             else:
-                _progress_count['failed'] += 1
-                err_type = progress.get('error_type') or 'unknown'
-                _progress_count['errors'][err_type] = _progress_count['errors'].get(err_type, 0) + 1
+                _progress_count["failed"] += 1
+                err_type = progress.get("error_type") or "unknown"
+                _progress_count["errors"][err_type] = _progress_count["errors"].get(err_type, 0) + 1
 
             if n <= 3 or n % 25 == 0 or n == _progress_total:
                 logger.info(
@@ -303,37 +325,47 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
             # Wall-clock heartbeat for rate-limited / slow campaigns where
             # the per-event log might not fire for many minutes.
             now = monotonic()
-            if now - _last_heartbeat['t'] >= HEARTBEAT_INTERVAL:
+            if now - _last_heartbeat["t"] >= HEARTBEAT_INTERVAL:
                 logger.info(
                     "[heartbeat] campaign %s alive — sent=%d failed=%d "
                     "total=%d (%.1f%%); thread=%s",
-                    campaign_id, _progress_count['sent'],
-                    _progress_count['failed'], _progress_total,
-                    100.0 * (_progress_count['sent'] + _progress_count['failed'])
-                        / max(_progress_total, 1),
+                    campaign_id,
+                    _progress_count["sent"],
+                    _progress_count["failed"],
+                    _progress_total,
+                    100.0
+                    * (_progress_count["sent"] + _progress_count["failed"])
+                    / max(_progress_total, 1),
                     threading.current_thread().name,
                 )
-                _last_heartbeat['t'] = now
+                _last_heartbeat["t"] = now
 
             if n % DB_FLUSH_EVERY == 0 or n == _progress_total:
                 _persist_counts()
 
-            _emit('campaign_progress', {
-                'campaign_id': campaign_id,
-                # Authoritative cumulative counts — frontend uses these
-                # to SET sent_count/failed_count (not increment), so the
-                # displayed value always matches what the engine has
-                # actually processed, even if some events were dropped
-                # in transit or the page just loaded.
-                'sent': _progress_count['sent'],
-                'failed': _progress_count['failed'],
-                'total': _progress_total,
-                'errors': _progress_count['errors'],
-                'velocity': round((_progress_count['sent'] + _progress_count['failed']) / max((monotonic() - _progress_count['start_time']) / 60.0, 0.01), 1),
-                # Per-recipient context (filtered to remove non-serializable objects
-                # and colliding keys like 'total' which is chunk-scoped)
-                **{k: v for k, v in progress.items() if k not in ('result', 'total')},
-            })
+            _emit(
+                "campaign_progress",
+                {
+                    "campaign_id": campaign_id,
+                    # Authoritative cumulative counts — frontend uses these
+                    # to SET sent_count/failed_count (not increment), so the
+                    # displayed value always matches what the engine has
+                    # actually processed, even if some events were dropped
+                    # in transit or the page just loaded.
+                    "sent": _progress_count["sent"],
+                    "failed": _progress_count["failed"],
+                    "total": _progress_total,
+                    "errors": _progress_count["errors"],
+                    "velocity": round(
+                        (_progress_count["sent"] + _progress_count["failed"])
+                        / max((monotonic() - _progress_count["start_time"]) / 60.0, 0.01),
+                        1,
+                    ),
+                    # Per-recipient context (filtered to remove non-serializable objects
+                    # and colliding keys like 'total' which is chunk-scoped)
+                    **{k: v for k, v in progress.items() if k not in ("result", "total")},
+                },
+            )
 
         stats = run_async(service.run_campaign(recipients, progress_callback=_progress_cb))
 
@@ -350,39 +382,47 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
                 if campaign is not None:
                     campaign.status = final_status
                     campaign.completed_at = datetime.now(UTC)
-                    campaign.sent_count = stats.get('sent', 0)
-                    campaign.failed_count = stats.get('failed', 0)
-                    campaign.total_recipients = stats.get('total', len(recipients))
+                    campaign.sent_count = stats.get("sent", 0)
+                    campaign.failed_count = stats.get("failed", 0)
+                    campaign.total_recipients = stats.get("total", len(recipients))
                     repo.update(campaign)
             finally:
                 session.close()
 
-        _emit('campaign_complete', {
-            'campaign_id': campaign_id,
-            'status': final_status.value,
-            'stats': stats,
-        })
+        _emit(
+            "campaign_complete",
+            {
+                "campaign_id": campaign_id,
+                "status": final_status.value,
+                "stats": stats,
+            },
+        )
         logger.info(f"Campaign {campaign_id} finished: {stats}")
 
         # Notify webhooks of completion
         try:
-            start_ts = stats.get('start_time', '')
-            end_ts = stats.get('end_time', '')
+            start_ts = stats.get("start_time", "")
+            end_ts = stats.get("end_time", "")
             duration = 0.0
             if start_ts and end_ts:
                 from datetime import datetime as _dt
+
                 try:
-                    duration = (_dt.fromisoformat(end_ts) - _dt.fromisoformat(start_ts)).total_seconds()
+                    duration = (
+                        _dt.fromisoformat(end_ts) - _dt.fromisoformat(start_ts)
+                    ).total_seconds()
                 except Exception:
                     pass
-            run_async(_webhook_service.notify_campaign_completed(
-                campaign_id=str(campaign_id),
-                campaign_name=config.name,
-                total=stats.get('total', 0),
-                success=stats.get('sent', 0),
-                failed=stats.get('failed', 0),
-                duration_seconds=duration
-            ))
+            run_async(
+                _webhook_service.notify_campaign_completed(
+                    campaign_id=str(campaign_id),
+                    campaign_name=config.name,
+                    total=stats.get("total", 0),
+                    success=stats.get("sent", 0),
+                    failed=stats.get("failed", 0),
+                    duration_seconds=duration,
+                )
+            )
         except Exception:
             pass  # Best-effort
 
@@ -410,7 +450,7 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
                 "the row will stay at 'sending' until manually reset.",
                 campaign_id,
             )
-        _emit('campaign_error', {'campaign_id': campaign_id, 'error': str(exc)})
+        _emit("campaign_error", {"campaign_id": campaign_id, "error": str(exc)})
     finally:
         _active_services.pop(campaign_id, None)
 
@@ -420,7 +460,7 @@ def register_socketio_events(sio: SocketIO):
 
     from flask import current_app
 
-    @sio.on('connect')
+    @sio.on("connect")
     def handle_connect():
         """Handle client connection.
 
@@ -433,10 +473,10 @@ def register_socketio_events(sio: SocketIO):
             logger.info("SocketIO connect REJECTED: current_user not authenticated")
             return False  # Reject unauthenticated connections
 
-        emit('connected', {'status': 'connected'})
+        emit("connected", {"status": "connected"})
         logger.info(f"SocketIO connect OK: user={current_user.username}")
 
-    @sio.on('disconnect')
+    @sio.on("disconnect")
     def handle_disconnect():
         """Handle client disconnection.
 
@@ -457,10 +497,11 @@ def register_socketio_events(sio: SocketIO):
         logger.info(
             "SocketIO disconnect — %d campaign(s) still running on the "
             "server (%s). Disconnects do NOT stop running campaigns.",
-            len(active), active or '[]',
+            len(active),
+            active or "[]",
         )
 
-    @sio.on('start_campaign')
+    @sio.on("start_campaign")
     def handle_start_campaign(data):
         """Start campaign via WebSocket.
 
@@ -478,28 +519,36 @@ def register_socketio_events(sio: SocketIO):
         if not current_user.is_authenticated:
             # Emit an error rather than silently returning — otherwise the
             # client toast says "Starting…" and nothing else happens.
-            emit('campaign_error', {
-                'campaign_id': (data or {}).get('campaign_id'),
-                'error': 'Not authenticated. Please reload the page and sign in.',
-            })
+            emit(
+                "campaign_error",
+                {
+                    "campaign_id": (data or {}).get("campaign_id"),
+                    "error": "Not authenticated. Please reload the page and sign in.",
+                },
+            )
             return
 
-        campaign_id = data.get('campaign_id')
+        campaign_id = data.get("campaign_id")
         if not campaign_id:
-            emit('campaign_error', {'error': 'campaign_id required'})
+            emit("campaign_error", {"error": "campaign_id required"})
             return
 
         if campaign_id in _active_services:
-            emit('campaign_error', {'campaign_id': campaign_id, 'error': 'Campaign already running'})
+            emit(
+                "campaign_error", {"campaign_id": campaign_id, "error": "Campaign already running"}
+            )
             return
 
         # Acknowledge synchronously so the test client / UI sees the event
         # without racing the background thread's DB load.
-        sio.emit('campaign_started', {
-            'campaign_id': campaign_id,
-            'status': 'sending',
-            'timestamp': datetime.now(UTC).isoformat(),
-        })
+        sio.emit(
+            "campaign_started",
+            {
+                "campaign_id": campaign_id,
+                "status": "sending",
+                "timestamp": datetime.now(UTC).isoformat(),
+            },
+        )
 
         app = current_app._get_current_object()
         # daemon=False so the thread is NOT silently reaped when the
@@ -519,13 +568,13 @@ def register_socketio_events(sio: SocketIO):
         t.start()
         logger.info(f"Campaign {campaign_id} started via WebSocket by {current_user.username}")
 
-    @sio.on('pause_campaign')
+    @sio.on("pause_campaign")
     def handle_pause_campaign(data):
         """Pause campaign."""
         if not current_user.is_authenticated:
             return
 
-        campaign_id = data.get('campaign_id')
+        campaign_id = data.get("campaign_id")
         svc = _active_services.get(campaign_id)
         if svc:
             svc.pause()
@@ -543,19 +592,22 @@ def register_socketio_events(sio: SocketIO):
                 finally:
                     session.close()
 
-        sio.emit('campaign_paused', {
-            'campaign_id': campaign_id,
-            'status': 'paused',
-            'timestamp': datetime.now(UTC).isoformat()
-        })
+        sio.emit(
+            "campaign_paused",
+            {
+                "campaign_id": campaign_id,
+                "status": "paused",
+                "timestamp": datetime.now(UTC).isoformat(),
+            },
+        )
 
-    @sio.on('resume_campaign')
+    @sio.on("resume_campaign")
     def handle_resume_campaign(data):
         """Resume campaign."""
         if not current_user.is_authenticated:
             return
 
-        campaign_id = data.get('campaign_id')
+        campaign_id = data.get("campaign_id")
         svc = _active_services.get(campaign_id)
         if svc:
             svc.resume()
@@ -573,19 +625,22 @@ def register_socketio_events(sio: SocketIO):
                 finally:
                     session.close()
 
-        sio.emit('campaign_resumed', {
-            'campaign_id': campaign_id,
-            'status': 'sending',
-            'timestamp': datetime.now(UTC).isoformat()
-        })
+        sio.emit(
+            "campaign_resumed",
+            {
+                "campaign_id": campaign_id,
+                "status": "sending",
+                "timestamp": datetime.now(UTC).isoformat(),
+            },
+        )
 
-    @sio.on('stop_campaign')
+    @sio.on("stop_campaign")
     def handle_stop_campaign(data):
         """Stop campaign."""
         if not current_user.is_authenticated:
             return
 
-        campaign_id = data.get('campaign_id')
+        campaign_id = data.get("campaign_id")
         svc = _active_services.get(campaign_id)
         if svc:
             svc.stop()
@@ -593,27 +648,29 @@ def register_socketio_events(sio: SocketIO):
         # Update DB status to CANCELLED immediately so it persists across page refreshes
         app = current_app._get_current_object()
         with app.app_context():
-            session = get_session_direct()
-            try:
+            with session_scope() as session:
                 repo = CampaignRepository(session)
                 campaign = repo.get(campaign_id)
                 if campaign:
                     campaign.status = CampaignStatus.CANCELLED
                     campaign.completed_at = datetime.now(UTC)
                     repo.update(campaign)
-            finally:
-                session.close()
 
-        sio.emit('campaign_stopped', {
-            'campaign_id': campaign_id,
-            'status': 'cancelled',
-            'timestamp': datetime.now(UTC).isoformat()
-        })
+        sio.emit(
+            "campaign_stopped",
+            {
+                "campaign_id": campaign_id,
+                "status": "cancelled",
+                "timestamp": datetime.now(UTC).isoformat(),
+            },
+        )
+
 
 def emit_progress(data):
     """Emit progress update to connected clients."""
     ctx = get_app_context()
     ctx.emit_progress(data)
+
 
 def emit_complete(data):
     """Emit campaign complete event."""
