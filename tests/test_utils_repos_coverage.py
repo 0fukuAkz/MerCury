@@ -620,6 +620,120 @@ class TestLogRepositoryCoverage:
         assert len(results) == 1
         assert results[0].campaign_id == c1.id
 
+    def test_get_campaign_engagement_stats(self, db_session):
+        """Test get_campaign_engagement_stats returns correct aggregation."""
+        from mercury.data.repositories.logs import LogRepository
+        repo = LogRepository(db_session)
+        c1 = self._create_campaign(db_session)
+        
+        # Create some logs with opens and clicks
+        l1 = self._create_log(db_session, campaign_id=c1.id, status="delivered")
+        l1.open_count = 2
+        l1.click_count = 1
+        l2 = self._create_log(db_session, campaign_id=c1.id, status="delivered")
+        l2.open_count = 1
+        l2.click_count = 0
+        l3 = self._create_log(db_session, campaign_id=c1.id, status="bounced")
+        
+        db_session.commit()
+        
+        stats = repo.get_campaign_engagement_stats(c1.id)
+        assert stats['total_delivered'] == 2
+        assert stats['unique_opens'] == 2
+        assert stats['total_opens'] == 3
+        assert stats['unique_clicks'] == 1
+        assert stats['bounces'] == 1
+        assert stats['open_rate'] == 100.0
+        assert stats['click_rate'] == 50.0
+
+    def test_get_smtp_performance_stats(self, db_session):
+        """Test get_smtp_performance_stats groups by smtp_server."""
+        from mercury.data.repositories.logs import LogRepository
+        repo = LogRepository(db_session)
+        c1 = self._create_campaign(db_session)
+        
+        l1 = self._create_log(db_session, campaign_id=c1.id, status="delivered")
+        l1.smtp_server_name = "server1"
+        l2 = self._create_log(db_session, campaign_id=c1.id, status="failed")
+        l2.smtp_server_name = "server1"
+        l3 = self._create_log(db_session, campaign_id=c1.id, status="sent")
+        l3.smtp_server_name = "server2"
+        
+        db_session.commit()
+        
+        stats = repo.get_smtp_performance_stats(c1.id)
+        assert len(stats) == 2
+        s1 = next(s for s in stats if s['smtp_server'] == 'server1')
+        assert s1['total'] == 2
+        assert s1['success'] == 1
+        assert s1['failed'] == 1
+        assert s1['success_rate'] == 50.0
+
+    def test_get_campaign_geo_stats(self, db_session):
+        """Test get_campaign_geo_stats processes extra_data correctly."""
+        from mercury.data.repositories.logs import LogRepository
+        repo = LogRepository(db_session)
+        c1 = self._create_campaign(db_session)
+        
+        l1 = self._create_log(db_session, campaign_id=c1.id, status="opened")
+        l1.open_count = 1
+        l1.extra_data = {'geo': {'country_name': 'US'}}
+        l2 = self._create_log(db_session, campaign_id=c1.id, status="opened")
+        l2.open_count = 1
+        l2.extra_data = {'geo': {'country_name': 'US'}}
+        l3 = self._create_log(db_session, campaign_id=c1.id, status="opened")
+        l3.open_count = 1
+        l3.extra_data = {'geo': {'country_name': 'UK'}}
+        
+        db_session.commit()
+        
+        stats = repo.get_campaign_geo_stats(c1.id)
+        assert len(stats) == 2
+        assert stats[0]['country'] == 'US'
+        assert stats[0]['opens'] == 2
+        assert stats[1]['country'] == 'UK'
+        assert stats[1]['opens'] == 1
+
+    def test_get_campaign_timeline_stats(self, db_session):
+        """Test get_campaign_timeline_stats groups events by minute."""
+        from mercury.data.repositories.logs import LogRepository
+        from datetime import datetime, timezone, timedelta
+        repo = LogRepository(db_session)
+        c1 = self._create_campaign(db_session)
+        
+        now = datetime.now(timezone.utc)
+        
+        l1 = self._create_log(db_session, campaign_id=c1.id, status="sent")
+        l1.created_at = now
+        l1.updated_at = now
+        
+        l2 = self._create_log(db_session, campaign_id=c1.id, status="opened")
+        l2.created_at = now
+        l2.updated_at = now
+        
+        l3 = self._create_log(db_session, campaign_id=c1.id, status="failed")
+        l3.created_at = now - timedelta(minutes=1)
+        l3.updated_at = now - timedelta(minutes=1)
+        
+        db_session.commit()
+        
+        stats = repo.get_campaign_timeline_stats(c1.id)
+        assert len(stats['labels']) == 2
+        
+        now_key = now.strftime('%Y-%m-%d %H:%M')
+        past_key = (now - timedelta(minutes=1)).strftime('%Y-%m-%d %H:%M')
+        
+        assert past_key in stats['labels']
+        assert now_key in stats['labels']
+        
+        past_idx = stats['labels'].index(past_key)
+        now_idx = stats['labels'].index(now_key)
+        
+        assert stats['datasets']['failed'][past_idx] == 1
+        assert stats['datasets']['sent'][now_idx] == 1
+        assert stats['datasets']['opened'][now_idx] == 1
+
+
 
 # ---------------------------------------------------------------------------
 # data/repositories/smtp.py - lines 19-20

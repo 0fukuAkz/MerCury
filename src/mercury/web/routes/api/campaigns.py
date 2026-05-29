@@ -389,3 +389,52 @@ def api_clone_campaign(campaign_id):
         )
         clone = repo.create(clone)
         return jsonify({'success': True, 'campaign': clone.to_dict()})
+
+
+@api_bp.route('/campaigns/<int:campaign_id>/stats/engagement', methods=['GET'])
+@api_key_or_login_required
+@limiter.limit("60/minute")
+def api_campaign_engagement_stats(campaign_id):
+    """Get advanced engagement stats for a campaign."""
+    from ....data.repositories import LogRepository
+    with session_scope() as session:
+        repo = LogRepository(session)
+        stats = repo.get_campaign_engagement_stats(campaign_id)
+        return jsonify(stats)
+
+
+@api_bp.route('/campaigns/<int:campaign_id>/stats/smtp', methods=['GET'])
+@api_key_or_login_required
+@limiter.limit("60/minute")
+def api_campaign_smtp_stats(campaign_id):
+    """Get SMTP performance stats for a campaign."""
+    from ....data.repositories import LogRepository
+    with session_scope() as session:
+        repo = LogRepository(session)
+        stats = repo.get_smtp_performance_stats(campaign_id)
+        return jsonify({'servers': stats})
+
+
+@api_bp.route('/campaigns/<int:campaign_id>/stats/geo', methods=['GET'])
+@api_key_or_login_required
+@limiter.limit("60/minute")
+def api_campaign_geo_stats(campaign_id):
+    """Get geo engagement stats for a campaign."""
+    from ....data.repositories import LogRepository
+    with session_scope() as session:
+        repo = LogRepository(session)
+        stats = repo.get_campaign_geo_stats(campaign_id)
+        return jsonify({'geo': stats})
+
+
+@api_bp.route('/campaigns/<int:campaign_id>/stats/timeline', methods=['GET'])
+@api_key_or_login_required
+@limiter.limit("60/minute")
+def api_campaign_timeline_stats(campaign_id):
+    """Get timeline delivery stats for a campaign."""
+    from ....data.repositories import LogRepository
+    with session_scope() as session:
+        repo = LogRepository(session)
+        stats = repo.get_campaign_timeline_stats(campaign_id)
+        return jsonify(stats)
+

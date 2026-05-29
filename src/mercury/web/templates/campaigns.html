@@ -191,6 +191,46 @@
     .d-red    { color: var(--error); }
     .d-muted  { color: var(--text-secondary); }
 
+    /* ── Glassmorphic Metric Cards ── */
+    .metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-top: 1.5rem;
+    }
+    .glass-card {
+        background: rgba(255, 255, 255, 0.03);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 16px;
+        padding: 1.5rem;
+        position: relative;
+        overflow: hidden;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .glass-card:hover {
+        transform: translateY(-4px);
+        border-color: rgba(0, 255, 255, 0.25);
+        box-shadow: 0 12px 30px rgba(0, 255, 255, 0.1);
+    }
+    .card-glow {
+        position: absolute;
+        width: 150px;
+        height: 150px;
+        background: radial-gradient(circle, rgba(0,255,255,0.06) 0%, transparent 70%);
+        top: -50px;
+        right: -50px;
+        pointer-events: none;
+    }
+    .metric-icon { font-size: 1.8rem; margin-bottom: 0.8rem; }
+    .metric-info .metric-lbl { display: block; font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.3rem; }
+    .metric-info .metric-val { font-size: 1.8rem; font-weight: 700; margin: 0 0 0.4rem 0; color: var(--text-primary); font-family: 'JetBrains Mono', monospace; }
+    .metric-info .metric-trend { font-size: 0.8rem; color: var(--neon-cyan); }
+    
+    .smtp-perf-table { width: 100%; border-collapse: collapse; margin-top: 1.5rem; font-size: 0.85rem; }
+    .smtp-perf-table th, .smtp-perf-table td { text-align: left; padding: 0.6rem; border-bottom: 1px solid var(--border-color); }
+    .smtp-perf-table th { color: var(--text-muted); font-weight: normal; text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.05em; }
+    
     .detail-timing {
         display: flex;
         flex-direction: column;
@@ -397,6 +437,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
     let allCampaigns = [];
     // track which detail rows are open by campaign id
@@ -550,8 +591,10 @@
             rightHtml += `<div class="detail-cfg-row"><span class="detail-cfg-key">SMTP Rotation</span><span class="detail-cfg-val">${rotTag}</span></div>`;
         }
         rightHtml += `</div>`;
+        
+        var analyticsHtml = `<div id="analytics-${c.id}" style="grid-column: 1 / -1;"></div>`;
 
-        return `<div class="detail-panel"><div>${leftHtml}</div><div>${rightHtml}</div></div>`;
+        return `<div class="detail-panel"><div>${leftHtml}</div><div>${rightHtml}</div>${analyticsHtml}</div>`;
     }
 
     function buildDetailRow(c) {
@@ -574,13 +617,162 @@
         dr.style.display = open ? 'none' : '';
         if (chevron) chevron.classList.toggle('open', !open);
         _openDetails[id] = !open;
+        if (!open) {
+            loadAnalytics(id);
+        }
+    }
+    
+    async function loadAnalytics(id) {
+        const container = document.getElementById('analytics-' + id);
+        if (!container || container.dataset.loaded) return;
+        container.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;padding:1rem 0;">Loading analytics...</div>';
+        
+        try {
+            const [engRes, smtpRes, timelineRes] = await Promise.all([
+                fetch('/api/campaigns/' + id + '/stats/engagement').then(r => r.json()),
+                fetch('/api/campaigns/' + id + '/stats/smtp').then(r => r.json()),
+                fetch('/api/campaigns/' + id + '/stats/timeline').then(r => r.json())
+            ]);
+            
+            let html = '<p class="detail-sec-title" style="margin-top:0.5rem;border-top:1px solid var(--border-color);padding-top:1.5rem;">Advanced Analytics</p>';
+            
+            html += '<div class="metrics-grid">';
+            // Opens
+            html += `
+              <div class="glass-card metric-card open-card">
+                <div class="card-glow"></div>
+                <div class="metric-icon">👁️</div>
+                <div class="metric-info">
+                  <span class="metric-lbl">Unique Opens</span>
+                  <h3 class="metric-val">${(engRes.unique_opens||0).toLocaleString()}</h3>
+                  <span class="metric-trend trend-up">📈 ${engRes.open_rate}% Open Rate</span>
+                </div>
+              </div>`;
+            // Clicks
+            html += `
+              <div class="glass-card metric-card click-card">
+                <div class="card-glow"></div>
+                <div class="metric-icon">🖱️</div>
+                <div class="metric-info">
+                  <span class="metric-lbl">Unique Clicks</span>
+                  <h3 class="metric-val">${(engRes.unique_clicks||0).toLocaleString()}</h3>
+                  <span class="metric-trend trend-up">📊 ${engRes.click_rate}% Click Rate</span>
+                </div>
+              </div>`;
+            // CTR
+            html += `
+              <div class="glass-card metric-card ctr-card">
+                <div class="card-glow"></div>
+                <div class="metric-icon">🎯</div>
+                <div class="metric-info">
+                  <span class="metric-lbl">Click-Through (CTR)</span>
+                  <h3 class="metric-val">${engRes.ctr}%</h3>
+                  <span class="metric-trend trend-up">Clicks per open</span>
+                </div>
+              </div>`;
+            // Bounces
+            html += `
+              <div class="glass-card metric-card bounce-card">
+                <div class="card-glow" style="background: radial-gradient(circle, rgba(255,0,85,0.06) 0%, transparent 70%);"></div>
+                <div class="metric-icon">⚠️</div>
+                <div class="metric-info">
+                  <span class="metric-lbl">Bounces</span>
+                  <h3 class="metric-val" style="color:var(--error);">${(engRes.bounces||0).toLocaleString()}</h3>
+                  <span class="metric-trend" style="color:var(--error);">Delivery failures</span>
+                </div>
+              </div>`;
+            html += '</div>';
+            
+            // Timeline Chart
+            if (timelineRes && timelineRes.labels && timelineRes.labels.length > 0) {
+                html += '<p class="detail-sec-title" style="margin-top:2rem;">Delivery Velocity</p>';
+                html += '<div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: var(--radius); padding: 1.5rem; margin-top: 1rem;"><canvas id="timeline-chart-' + id + '" height="60"></canvas></div>';
+            }
+
+            // SMTP Perf
+            if (smtpRes.servers && smtpRes.servers.length > 0) {
+                html += '<p class="detail-sec-title" style="margin-top:2rem;">SMTP Server Performance</p>';
+                html += '<table class="smtp-perf-table">';
+                html += '<tr><th>Server</th><th>Total Sent</th><th>Success</th><th>Failed</th><th>Success Rate</th></tr>';
+                smtpRes.servers.forEach(s => {
+                    html += `<tr>
+                        <td>${s.smtp_server || 'Unknown'}</td>
+                        <td style="font-family:'JetBrains Mono',monospace;">${s.total.toLocaleString()}</td>
+                        <td style="font-family:'JetBrains Mono',monospace;color:var(--neon-green);">${s.success.toLocaleString()}</td>
+                        <td style="font-family:'JetBrains Mono',monospace;color:var(--error);">${s.failed.toLocaleString()}</td>
+                        <td style="font-family:'JetBrains Mono',monospace;">${s.success_rate}%</td>
+                    </tr>`;
+                });
+                html += '</table>';
+            }
+            
+            container.innerHTML = html;
+            container.dataset.loaded = 'true';
+
+            // Init Chart
+            if (timelineRes && timelineRes.labels && timelineRes.labels.length > 0) {
+                const ctx = document.getElementById('timeline-chart-' + id).getContext('2d');
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: timelineRes.labels,
+                        datasets: [
+                            {
+                                label: 'Sent',
+                                data: timelineRes.datasets.sent,
+                                borderColor: 'rgba(57,255,20,0.8)',
+                                backgroundColor: 'rgba(57,255,20,0.1)',
+                                fill: true,
+                                tension: 0.4
+                            },
+                            {
+                                label: 'Opened',
+                                data: timelineRes.datasets.opened,
+                                borderColor: 'rgba(0,255,255,0.8)',
+                                backgroundColor: 'transparent',
+                                tension: 0.4
+                            },
+                            {
+                                label: 'Failed',
+                                data: timelineRes.datasets.failed,
+                                borderColor: 'rgba(255,0,85,0.8)',
+                                backgroundColor: 'transparent',
+                                tension: 0.4
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                labels: { color: 'rgba(255, 255, 255, 0.7)' }
+                            }
+                        },
+                        scales: {
+                            x: { ticks: { color: 'rgba(255, 255, 255, 0.5)' }, grid: { color: 'rgba(255, 255, 255, 0.1)' } },
+                            y: { ticks: { color: 'rgba(255, 255, 255, 0.5)' }, grid: { color: 'rgba(255, 255, 255, 0.1)' } }
+                        }
+                    }
+                });
+            }
+        } catch(e) {
+            container.innerHTML = '<div style="color:var(--error);font-size:0.85rem;padding:1rem 0;">Failed to load analytics data.</div>';
+            console.error('Analytics load error:', e);
+        }
     }
 
     function refreshDetailRow(c) {
         var dr = document.getElementById('detail-' + c.id);
         if (!dr || dr.style.display === 'none') return;
         var td = dr.querySelector('td');
+        // Preserve analytics if already loaded
+        var wasLoaded = false;
+        var analyticsDiv = document.getElementById('analytics-' + c.id);
+        if (analyticsDiv && analyticsDiv.dataset.loaded) {
+            wasLoaded = true;
+        }
         if (td) td.innerHTML = buildDetailPanel(c);
+        if (wasLoaded) loadAnalytics(c.id); // Reload analytics to reflect any updates
     }
 
     /* ── Row builder (XSS-safe: server values set via textContent) ─────── */

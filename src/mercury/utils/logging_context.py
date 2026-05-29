@@ -227,7 +227,7 @@ def log_error_with_context(
         Structured error data
     """
     error_data = {
-        'message': msg,
+        'error_context_msg': msg,
         'error_type': error.__class__.__name__,
         'error_msg': str(error),
         'timestamp': datetime.now(UTC).isoformat(),
