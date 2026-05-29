@@ -352,36 +352,21 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
             logger.error(f"Failed to initialize database: {e}")
 
 
-        # --- Start DeadLetterWorker background thread ---
+        # --- Start DeadLetterWorker on background loop ---
         if not app.config.get("TESTING"):
             _is_reloader = os.environ.get("WERKZEUG_RUN_MAIN")
             if not app.config.get("DEBUG") or _is_reloader == "true":
-                def _run_dead_letter_worker(flask_app):
-                    import asyncio
-                    from ..engine.dead_letter_worker import DeadLetterWorker
+                import asyncio
+                from ..engine.dead_letter_worker import DeadLetterWorker
+                
+                async def _start_worker():
+                    worker = DeadLetterWorker()
+                    await worker.start()
+                    # The bound method process_loop holds reference to worker
                     
-                    async def _main():
-                        worker = DeadLetterWorker()
-                        await worker.start()
-                        try:
-                            while True:
-                                await asyncio.sleep(3600)
-                        except asyncio.CancelledError:
-                            await worker.stop()
-                    
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    loop.run_until_complete(_main())
-                    
-                import threading
-                dl_thread = threading.Thread(
-                    target=_run_dead_letter_worker,
-                    args=(app,),
-                    daemon=True,
-                    name="DeadLetterWorker"
-                )
-                dl_thread.start()
-                logger.info("DeadLetterWorker daemon thread started")
+                loop = start_background_loop()
+                asyncio.run_coroutine_threadsafe(_start_worker(), loop)
+                logger.info("DeadLetterWorker scheduled on background loop")
 
     logger.info("Application initialized successfully")
     return app
