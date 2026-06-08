@@ -20,7 +20,7 @@ from . import (
 )
 
 
-@api_bp.route('/campaigns', methods=['GET'])
+@api_bp.route("/campaigns", methods=["GET"])
 @api_key_or_login_required
 @limiter.limit("30/minute")
 def api_list_campaigns():
@@ -28,55 +28,62 @@ def api_list_campaigns():
     with session_scope() as session:
         repo = CampaignRepository(session)
         campaigns = repo.get_recent(200)
-        return jsonify({'campaigns': [c.to_dict() for c in campaigns]})
+        return jsonify({"campaigns": [c.to_dict() for c in campaigns]})
 
 
-@api_bp.route('/campaigns', methods=['POST'])
+@api_bp.route("/campaigns", methods=["POST"])
 @api_key_or_login_required
 @limiter.limit("10/minute")
 def api_create_campaign():
     """Create a new email campaign."""
     data = request.get_json(silent=True) or {}
 
-    if not data.get('name'):
-        return jsonify({'error': 'Campaign name required'}), 400
+    if not data.get("name"):
+        return jsonify({"error": "Campaign name required"}), 400
 
     # Reject non-image logo picks at the API boundary. Inlining a
     # text/html or PDF as if it were an image causes mail clients to
     # render the file's source (or its alt text) inline instead of a
     # picture. Operators should only pin actual image files as logos.
-    _logo_raw = data.get('logo_attachment_id')
-    if str(_logo_raw or '').strip().isdigit():
+    _logo_raw = data.get("logo_attachment_id")
+    if str(_logo_raw or "").strip().isdigit():
         from ....data.repositories import AttachmentRepository as _AR
         from ....data.database import session_scope as _ss
+
         with _ss() as _session:
             _logo_row = _AR(_session).get(int(_logo_raw))
             if _logo_row is None or not _logo_row.is_active:
-                return jsonify({
-                    'error': f'logo_attachment_id={_logo_raw} not found in library',
-                }), 400
-            if not (_logo_row.content_type or '').lower().startswith('image/'):
-                return jsonify({
-                    'error': (
-                        f"Logo must be an image file (got content_type="
-                        f"{_logo_row.content_type!r}). Upload an image to the "
-                        f"Attachments library and pick it from the dropdown."
-                    ),
-                }), 400
+                return jsonify(
+                    {
+                        "error": f"logo_attachment_id={_logo_raw} not found in library",
+                    }
+                ), 400
+            if not (_logo_row.content_type or "").lower().startswith("image/"):
+                return jsonify(
+                    {
+                        "error": (
+                            f"Logo must be an image file (got content_type="
+                            f"{_logo_row.content_type!r}). Upload an image to the "
+                            f"Attachments library and pick it from the dropdown."
+                        ),
+                    }
+                ), 400
 
     # Handle rotation arrays (from newline-separated frontend or direct arrays)
-    subjects_raw = data.get('subjects') if isinstance(data.get('subjects'), list) else None
+    subjects_raw = data.get("subjects") if isinstance(data.get("subjects"), list) else None
     subjects = [s for s in subjects_raw if s and s.strip()] if subjects_raw is not None else None
-    from_names = data.get('from_names') if isinstance(data.get('from_names'), list) else None
-    from_emails = data.get('from_emails') if isinstance(data.get('from_emails'), list) else None
-    templates = data.get('templates') if isinstance(data.get('templates'), list) else None
-    links = data.get('links') if isinstance(data.get('links'), list) else None
-    manual_recipients = data.get('manual_recipients') if isinstance(data.get('manual_recipients'), list) else None
+    from_names = data.get("from_names") if isinstance(data.get("from_names"), list) else None
+    from_emails = data.get("from_emails") if isinstance(data.get("from_emails"), list) else None
+    templates = data.get("templates") if isinstance(data.get("templates"), list) else None
+    links = data.get("links") if isinstance(data.get("links"), list) else None
+    manual_recipients = (
+        data.get("manual_recipients") if isinstance(data.get("manual_recipients"), list) else None
+    )
 
     # Optional pinned SMTP server (dropdown in campaign form). Empty string
     # / 0 / 'null' / None all collapse to "no pin" (use all enabled servers).
-    _smtp_pin_raw = data.get('smtp_server_id')
-    if _smtp_pin_raw in (None, '', 0, '0', 'null'):
+    _smtp_pin_raw = data.get("smtp_server_id")
+    if _smtp_pin_raw in (None, "", 0, "0", "null"):
         smtp_server_id = None
     else:
         try:
@@ -85,71 +92,60 @@ def api_create_campaign():
             smtp_server_id = None
 
     config = CampaignConfig(
-        name=data.get('name'),
-        description=data.get('description', ''),
-
+        name=data.get("name"),
+        description=data.get("description", ""),
         # Email content
-        subject=data.get('subject', ''),
+        subject=data.get("subject", ""),
         subjects=subjects,
-        from_email=data.get('from_email', ''),
-        from_name=data.get('from_name', ''),
+        from_email=data.get("from_email", ""),
+        from_name=data.get("from_name", ""),
         from_names=from_names,
         from_emails=from_emails,
-        reply_to=data.get('reply_to', ''),
-
+        reply_to=data.get("reply_to", ""),
         # Templates
-        template_id=int(data['template_id']) if data.get('template_id') else None,
-        template_path=data.get('template_path', ''),
+        template_id=int(data["template_id"]) if data.get("template_id") else None,
+        template_path=data.get("template_path", ""),
         templates=templates,
-
         # Recipients
-        recipients_path=data.get('recipients_path', ''),
+        recipients_path=data.get("recipients_path", ""),
         manual_recipients=manual_recipients,
-        validate_emails=data.get('validate_emails', True),
-        deduplicate=data.get('deduplicate', True),
-
+        validate_emails=data.get("validate_emails", True),
+        deduplicate=data.get("deduplicate", True),
         # Sending options
-        dry_run=data.get('dry_run', True),
-        concurrency=int(data.get('concurrency') or 0),
-        rate_per_minute=int(data.get('rate_per_minute', 0)),
-        rate_per_hour=int(data.get('rate_per_hour', 0)),
-        chunk_size=int(data.get('chunk_size', 0)),
-        pause_between_chunks=int(data.get('pause_between_chunks', 0)),
-        smtp_rotation=data.get('rotation_strategy', 'weighted'),
-
+        dry_run=data.get("dry_run", True),
+        concurrency=int(data.get("concurrency") or 0),
+        rate_per_minute=int(data.get("rate_per_minute", 0)),
+        rate_per_hour=int(data.get("rate_per_hour", 0)),
+        chunk_size=int(data.get("chunk_size", 0)),
+        pause_between_chunks=int(data.get("pause_between_chunks", 0)),
+        smtp_rotation=data.get("rotation_strategy", "weighted"),
         # Features
-        enable_qr_code=data.get('enable_qr_code', False),
-        send_as_image=data.get('send_as_image', False),
+        enable_qr_code=data.get("enable_qr_code", False),
+        send_as_image=data.get("send_as_image", False),
         attachment_ids=[
-            int(x) for x in (data.get('attachment_ids') or [])
-            if str(x).strip().isdigit()
+            int(x) for x in (data.get("attachment_ids") or []) if str(x).strip().isdigit()
         ],
-        convert_attachment=bool(data.get('convert_attachment', False)),
-        attachment_convert_to=(data.get('attachment_convert_to') or None),
+        convert_attachment=bool(data.get("convert_attachment", False)),
+        attachment_convert_to=(data.get("attachment_convert_to") or None),
         logo_attachment_id=(
-            int(data['logo_attachment_id'])
-            if str(data.get('logo_attachment_id') or '').strip().isdigit()
+            int(data["logo_attachment_id"])
+            if str(data.get("logo_attachment_id") or "").strip().isdigit()
             else None
         ),
-        auto_company_logo=bool(data.get('auto_company_logo', False)),
-        hide_from_email_header=bool(data.get('hide_from_email_header', False)),
-        include_default_body=bool(data.get('include_default_body', False)),
-
+        auto_company_logo=bool(data.get("auto_company_logo", False)),
+        hide_from_email_header=bool(data.get("hide_from_email_header", False)),
+        include_default_body=bool(data.get("include_default_body", False)),
         # Links rotation
         links=links,
-
         # Placeholders
-        placeholders_path=data.get('placeholders_path', ''),
-
+        placeholders_path=data.get("placeholders_path", ""),
         # Tracking
-        enable_tracking=data.get('enable_tracking', True),
-        track_opens=data.get('track_opens', True),
-        track_clicks=data.get('track_clicks', True),
-        tracking_base_url=data.get('tracking_base_url', ''),
-
+        enable_tracking=data.get("enable_tracking", True),
+        track_opens=data.get("track_opens", True),
+        track_clicks=data.get("track_clicks", True),
+        tracking_base_url=data.get("tracking_base_url", ""),
         # Mail priority
-        mail_priority=data.get('mail_priority', '3'),
-
+        mail_priority=data.get("mail_priority", "3"),
         # Pinned SMTP server
         smtp_server_id=smtp_server_id,
     )
@@ -163,13 +159,15 @@ def api_create_campaign():
         fresh = repo.get(campaign.id)
         campaign_dict = fresh.to_dict() if fresh else campaign.to_dict()
 
-    return jsonify({
-        'success': True,
-        'campaign': campaign_dict,
-    })
+    return jsonify(
+        {
+            "success": True,
+            "campaign": campaign_dict,
+        }
+    )
 
 
-@api_bp.route('/campaigns/<int:campaign_id>', methods=['GET'])
+@api_bp.route("/campaigns/<int:campaign_id>", methods=["GET"])
 @api_key_or_login_required
 @limiter.limit("60/minute")
 def api_get_campaign(campaign_id):
@@ -178,11 +176,11 @@ def api_get_campaign(campaign_id):
         repo = CampaignRepository(session)
         campaign = repo.get(campaign_id)
         if not campaign:
-            return jsonify({'error': 'Campaign not found'}), 404
-        return jsonify({'campaign': campaign.to_dict()})
+            return jsonify({"error": "Campaign not found"}), 404
+        return jsonify({"campaign": campaign.to_dict()})
 
 
-@api_bp.route('/campaigns/<int:campaign_id>', methods=['PUT'])
+@api_bp.route("/campaigns/<int:campaign_id>", methods=["PUT"])
 @api_key_or_login_required
 @limiter.limit("20/minute")
 def api_update_campaign(campaign_id):
@@ -191,113 +189,126 @@ def api_update_campaign(campaign_id):
         repo = CampaignRepository(session)
         campaign = repo.get(campaign_id)
         if not campaign:
-            return jsonify({'error': 'Campaign not found'}), 404
-        if campaign.status not in ('draft', 'scheduled'):
-            return jsonify({'error': 'Only draft or scheduled campaigns can be edited'}), 400
+            return jsonify({"error": "Campaign not found"}), 404
+        if campaign.status not in ("draft", "scheduled"):
+            return jsonify({"error": "Only draft or scheduled campaigns can be edited"}), 400
 
         data = request.get_json(silent=True) or {}
 
         editable = [
-            'name', 'description', 'type',
-            'from_email', 'from_name', 'reply_to',
-            'template_id', 'enable_qr_code', 'convert_to_image',
-            'smtp_rotation_strategy', 'auto_failover',
-            'chunk_size', 'concurrency', 'rate_per_minute', 'rate_per_hour',
-            'pause_between_chunks',
+            "name",
+            "description",
+            "type",
+            "from_email",
+            "from_name",
+            "reply_to",
+            "template_id",
+            "enable_qr_code",
+            "convert_to_image",
+            "smtp_rotation_strategy",
+            "auto_failover",
+            "chunk_size",
+            "concurrency",
+            "rate_per_minute",
+            "rate_per_hour",
+            "pause_between_chunks",
         ]
-        int_or_null_fields = {'template_id', 'recipient_list_id'}
+        int_or_null_fields = {"template_id", "recipient_list_id"}
         for field in editable:
             if field in data:
                 val = data[field]
                 # Coerce empty-string to None for integer FK fields
                 if field in int_or_null_fields:
-                    val = int(val) if val not in (None, '', 'null') else None
+                    val = int(val) if val not in (None, "", "null") else None
                 setattr(campaign, field, val)
 
         # Map send_as_image (form field name) → convert_to_image (column name)
-        if 'send_as_image' in data:
-            campaign.convert_to_image = bool(data['send_as_image'])
+        if "send_as_image" in data:
+            campaign.convert_to_image = bool(data["send_as_image"])
 
         # subjects list — strip empty entries
-        if 'subjects' in data and isinstance(data['subjects'], list):
-            campaign.subjects = [s for s in data['subjects'] if s and s.strip()]
-        elif 'subject' in data and data['subject'].strip():
-            campaign.subjects = [data['subject']]
+        if "subjects" in data and isinstance(data["subjects"], list):
+            campaign.subjects = [s for s in data["subjects"] if s and s.strip()]
+        elif "subject" in data and data["subject"].strip():
+            campaign.subjects = [data["subject"]]
 
         # merge settings blob — includes non-column fields like recipients_path, dry_run
         extra = {}
-        if 'manual_recipients' in data:
-            val = data['manual_recipients']
-            extra['manual_recipients'] = val if isinstance(val, list) else []
+        if "manual_recipients" in data:
+            val = data["manual_recipients"]
+            extra["manual_recipients"] = val if isinstance(val, list) else []
         # Always write links so an empty list clears previous value
-        if 'links' in data and isinstance(data['links'], list):
-            extra['links'] = data['links']
-        if 'recipients_path' in data:
-            extra['recipients_path'] = data.get('recipients_path', '')
-        if 'dry_run' in data:
-            extra['dry_run'] = bool(data['dry_run'])
-        if isinstance(data.get('from_emails'), list):
-            extra['from_emails'] = data['from_emails']
-        if isinstance(data.get('from_names'), list):
-            extra['from_names'] = data['from_names']
-        if 'template_path' in data:
-            extra['template_path'] = data.get('template_path', '')
-        if 'templates' in data and isinstance(data['templates'], list):
-            extra['templates'] = data['templates']
-        for _tracking_field in ('enable_tracking', 'track_opens', 'track_clicks'):
+        if "links" in data and isinstance(data["links"], list):
+            extra["links"] = data["links"]
+        if "recipients_path" in data:
+            extra["recipients_path"] = data.get("recipients_path", "")
+        if "dry_run" in data:
+            extra["dry_run"] = bool(data["dry_run"])
+        if isinstance(data.get("from_emails"), list):
+            extra["from_emails"] = data["from_emails"]
+        if isinstance(data.get("from_names"), list):
+            extra["from_names"] = data["from_names"]
+        if "template_path" in data:
+            extra["template_path"] = data.get("template_path", "")
+        if "templates" in data and isinstance(data["templates"], list):
+            extra["templates"] = data["templates"]
+        for _tracking_field in ("enable_tracking", "track_opens", "track_clicks"):
             if _tracking_field in data:
                 extra[_tracking_field] = bool(data[_tracking_field])
-        if 'tracking_base_url' in data:
-            extra['tracking_base_url'] = data.get('tracking_base_url', '')
-        if 'smtp_server_id' in data:
-            _v = data.get('smtp_server_id')
-            if _v in (None, '', 0, '0', 'null'):
-                extra['smtp_server_id'] = None
+        if "tracking_base_url" in data:
+            extra["tracking_base_url"] = data.get("tracking_base_url", "")
+        if "smtp_server_id" in data:
+            _v = data.get("smtp_server_id")
+            if _v in (None, "", 0, "0", "null"):
+                extra["smtp_server_id"] = None
             else:
                 try:
-                    extra['smtp_server_id'] = int(_v)
+                    extra["smtp_server_id"] = int(_v)
                 except (TypeError, ValueError):
-                    extra['smtp_server_id'] = None
-        
+                    extra["smtp_server_id"] = None
+
         # Additional feature flags and processing fields
         for _bool_field in (
-            'convert_attachment', 'auto_company_logo', 'hide_from_email_header', 
-            'include_default_body', 'validate_emails', 'deduplicate'
+            "convert_attachment",
+            "auto_company_logo",
+            "hide_from_email_header",
+            "include_default_body",
+            "validate_emails",
+            "deduplicate",
         ):
             if _bool_field in data:
                 extra[_bool_field] = bool(data[_bool_field])
 
-        for _str_field in ('attachment_convert_to', 'placeholders_path', 'mail_priority'):
+        for _str_field in ("attachment_convert_to", "placeholders_path", "mail_priority"):
             if _str_field in data:
-                extra[_str_field] = data.get(_str_field, '')
+                extra[_str_field] = data.get(_str_field, "")
 
-        if 'attachment_ids' in data:
-            extra['attachment_ids'] = [
-                int(x) for x in (data['attachment_ids'] or []) 
-                if str(x).strip().isdigit()
+        if "attachment_ids" in data:
+            extra["attachment_ids"] = [
+                int(x) for x in (data["attachment_ids"] or []) if str(x).strip().isdigit()
             ]
 
-        if 'logo_attachment_id' in data:
-            _v = data.get('logo_attachment_id')
-            if _v in (None, '', 0, '0', 'null'):
-                extra['logo_attachment_id'] = None
+        if "logo_attachment_id" in data:
+            _v = data.get("logo_attachment_id")
+            if _v in (None, "", 0, "0", "null"):
+                extra["logo_attachment_id"] = None
             else:
                 try:
-                    extra['logo_attachment_id'] = int(_v)
+                    extra["logo_attachment_id"] = int(_v)
                 except (TypeError, ValueError):
-                    extra['logo_attachment_id'] = None
+                    extra["logo_attachment_id"] = None
         # Always merge into settings so rotation fields are persisted every save
         merged = dict(campaign.settings or {})
         merged.update(extra)
         campaign.settings = merged
         # flag_modified ensures SQLAlchemy tracks JSON column changes
-        flag_modified(campaign, 'settings')
+        flag_modified(campaign, "settings")
 
         repo.update(campaign)
-        return jsonify({'success': True, 'campaign': campaign.to_dict()})
+        return jsonify({"success": True, "campaign": campaign.to_dict()})
 
 
-@api_bp.route('/campaigns/<int:campaign_id>', methods=['DELETE'])
+@api_bp.route("/campaigns/<int:campaign_id>", methods=["DELETE"])
 @api_key_or_login_required
 @limiter.limit("20/minute")
 def api_delete_campaign(campaign_id):
@@ -313,16 +324,16 @@ def api_delete_campaign(campaign_id):
         repo = CampaignRepository(session)
         campaign = repo.get(campaign_id)
         if not campaign:
-            return jsonify({'error': 'Campaign not found'}), 404
+            return jsonify({"error": "Campaign not found"}), 404
         # If it was running/paused, mark cancelled before deleting
-        if campaign.status in ('sending', 'paused'):
-            campaign.status = 'cancelled'
+        if campaign.status in ("sending", "paused"):
+            campaign.status = "cancelled"
             repo.update(campaign)
         repo.delete(campaign)
-        return jsonify({'success': True})
+        return jsonify({"success": True})
 
 
-@api_bp.route('/campaigns/bulk-delete', methods=['POST'])
+@api_bp.route("/campaigns/bulk-delete", methods=["POST"])
 @api_key_or_login_required
 @limiter.limit("10/minute")
 def api_bulk_delete_campaigns():
@@ -330,9 +341,9 @@ def api_bulk_delete_campaigns():
     from ...events import _active_services
 
     data = request.get_json(silent=True) or {}
-    ids = data.get('ids', [])
+    ids = data.get("ids", [])
     if not ids or not isinstance(ids, list):
-        return jsonify({'error': 'List of campaign IDs required'}), 400
+        return jsonify({"error": "List of campaign IDs required"}), 400
 
     # Stop any active campaigns
     for cid in ids:
@@ -349,27 +360,28 @@ def api_bulk_delete_campaigns():
             if not campaign:
                 not_found.append(cid)
                 continue
-            if campaign.status in ('sending', 'paused'):
-                campaign.status = 'cancelled'
+            if campaign.status in ("sending", "paused"):
+                campaign.status = "cancelled"
                 repo.update(campaign)
             repo.delete(campaign)
             deleted += 1
-        return jsonify({'success': True, 'deleted': deleted, 'not_found': not_found})
+        return jsonify({"success": True, "deleted": deleted, "not_found": not_found})
 
 
-@api_bp.route('/campaigns/<int:campaign_id>/clone', methods=['POST'])
+@api_bp.route("/campaigns/<int:campaign_id>/clone", methods=["POST"])
 @api_key_or_login_required
 @limiter.limit("10/minute")
 def api_clone_campaign(campaign_id):
     """Clone an existing campaign as a new draft."""
     from ....data.models.campaign import Campaign, CampaignStatus
+
     with session_scope() as session:
         repo = CampaignRepository(session)
         src = repo.get(campaign_id)
         if not src:
-            return jsonify({'error': 'Campaign not found'}), 404
+            return jsonify({"error": "Campaign not found"}), 404
         clone = Campaign(
-            name=src.name + ' (Copy)',
+            name=src.name + " (Copy)",
             description=src.description,
             type=src.type,
             status=CampaignStatus.DRAFT,
@@ -388,53 +400,56 @@ def api_clone_campaign(campaign_id):
             settings=dict(src.settings or {}),
         )
         clone = repo.create(clone)
-        return jsonify({'success': True, 'campaign': clone.to_dict()})
+        return jsonify({"success": True, "campaign": clone.to_dict()})
 
 
-@api_bp.route('/campaigns/<int:campaign_id>/stats/engagement', methods=['GET'])
+@api_bp.route("/campaigns/<int:campaign_id>/stats/engagement", methods=["GET"])
 @api_key_or_login_required
 @limiter.limit("60/minute")
 def api_campaign_engagement_stats(campaign_id):
     """Get advanced engagement stats for a campaign."""
     from ....data.repositories import LogRepository
+
     with session_scope() as session:
         repo = LogRepository(session)
         stats = repo.get_campaign_engagement_stats(campaign_id)
         return jsonify(stats)
 
 
-@api_bp.route('/campaigns/<int:campaign_id>/stats/smtp', methods=['GET'])
+@api_bp.route("/campaigns/<int:campaign_id>/stats/smtp", methods=["GET"])
 @api_key_or_login_required
 @limiter.limit("60/minute")
 def api_campaign_smtp_stats(campaign_id):
     """Get SMTP performance stats for a campaign."""
     from ....data.repositories import LogRepository
+
     with session_scope() as session:
         repo = LogRepository(session)
         stats = repo.get_smtp_performance_stats(campaign_id)
-        return jsonify({'servers': stats})
+        return jsonify({"servers": stats})
 
 
-@api_bp.route('/campaigns/<int:campaign_id>/stats/geo', methods=['GET'])
+@api_bp.route("/campaigns/<int:campaign_id>/stats/geo", methods=["GET"])
 @api_key_or_login_required
 @limiter.limit("60/minute")
 def api_campaign_geo_stats(campaign_id):
     """Get geo engagement stats for a campaign."""
     from ....data.repositories import LogRepository
+
     with session_scope() as session:
         repo = LogRepository(session)
         stats = repo.get_campaign_geo_stats(campaign_id)
-        return jsonify({'geo': stats})
+        return jsonify({"geo": stats})
 
 
-@api_bp.route('/campaigns/<int:campaign_id>/stats/timeline', methods=['GET'])
+@api_bp.route("/campaigns/<int:campaign_id>/stats/timeline", methods=["GET"])
 @api_key_or_login_required
 @limiter.limit("60/minute")
 def api_campaign_timeline_stats(campaign_id):
     """Get timeline delivery stats for a campaign."""
     from ....data.repositories import LogRepository
+
     with session_scope() as session:
         repo = LogRepository(session)
         stats = repo.get_campaign_timeline_stats(campaign_id)
         return jsonify(stats)
-

@@ -48,9 +48,7 @@ _WINDOWS_NT_MAP = {
 
 _MOBILE_HINT = re.compile(r"Mobile|Android|iPhone|iPod|Opera Mini|IEMobile", re.IGNORECASE)
 _TABLET_HINT = re.compile(r"iPad|Tablet", re.IGNORECASE)
-_BOT_HINT = re.compile(
-    r"bot|crawler|spider|slurp|curl|wget|python-requests|httpie", re.IGNORECASE
-)
+_BOT_HINT = re.compile(r"bot|crawler|spider|slurp|curl|wget|python-requests|httpie", re.IGNORECASE)
 
 
 def _classify_device(ua: str) -> str:

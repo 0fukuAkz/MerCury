@@ -27,7 +27,7 @@
 <div class="card" id="bounces-panel">
     <div class="card-header">
         <h2 class="card-title">Recent Bounces</h2>
-        <button class="btn btn-secondary" onclick="loadBounces()">Refresh</button>
+        <button type="button" class="btn btn-secondary" onclick="loadBounces()">Refresh</button>
     </div>
     <table class="table">
         <thead>
@@ -47,7 +47,7 @@
     </table>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
     async function loadBounces() {
         try {
             const [bouncesResp, statsResp] = await Promise.all([

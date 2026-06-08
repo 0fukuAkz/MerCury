@@ -115,6 +115,7 @@
         font-size: 0.8125rem;
         color: var(--text-secondary);
         transition: all 0.2s;
+        -webkit-user-select: none;
         user-select: none;
         white-space: nowrap;
     }
@@ -361,7 +362,7 @@
     </div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
     let _qrBlob = null;
     let _docBlob = null;
     let _docFilename = 'document.pdf';

@@ -10,7 +10,7 @@ from . import (
 from ....services.bounce_service import BounceService
 
 
-@api_bp.route('/bounces', methods=['GET'])
+@api_bp.route("/bounces", methods=["GET"])
 @api_key_or_login_required
 @limiter.limit("30/minute")
 def api_list_bounces():
@@ -19,10 +19,10 @@ def api_list_bounces():
     # Get bounce records (stored in service._bounces list)
     bounces = list(service._bounces)[-100:]  # Last 100
 
-    return jsonify({'bounces': [b.to_dict() for b in bounces]})
+    return jsonify({"bounces": [b.to_dict() for b in bounces]})
 
 
-@api_bp.route('/bounces/stats', methods=['GET'])
+@api_bp.route("/bounces/stats", methods=["GET"])
 @api_key_or_login_required
 @limiter.limit("30/minute")
 def api_bounce_stats():

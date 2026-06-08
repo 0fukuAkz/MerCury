@@ -38,6 +38,7 @@ from mercury.data.models import (
 # Template model (template.py lines 47-60)
 # ---------------------------------------------------------------------------
 
+
 class TestTemplateModel:
     """Tests for Template model methods."""
 
@@ -84,6 +85,7 @@ class TestTemplateModel:
 # ---------------------------------------------------------------------------
 # SMTPServer model (smtp.py lines 68-138)
 # ---------------------------------------------------------------------------
+
 
 class TestSMTPServerModel:
     """Tests for SMTPServer model properties and methods."""
@@ -205,7 +207,7 @@ class TestSMTPServerModel:
         server.port = 587
         server.username = "user@example.com"
         server._password = None
-        server.tls_mode = 'starttls'
+        server.tls_mode = "starttls"
         server.use_auth = True
         server.timeout = 30
         server.from_email = "from@example.com"
@@ -214,7 +216,7 @@ class TestSMTPServerModel:
         config = server.get_connection_config()
         assert config["host"] == "smtp.example.com"
         assert config["port"] == 587
-        assert config["tls_mode"] == 'starttls'
+        assert config["tls_mode"] == "starttls"
         assert "password" in config
         assert "from_email" in config
 
@@ -234,6 +236,7 @@ class TestSMTPServerModel:
 # ---------------------------------------------------------------------------
 # RecipientList and Recipient models (recipient.py)
 # ---------------------------------------------------------------------------
+
 
 class TestRecipientListModel:
     """Tests for RecipientList __repr__ (line 54)."""
@@ -342,6 +345,7 @@ class TestRecipientModel:
 # Campaign model (campaign.py lines 100-118)
 # ---------------------------------------------------------------------------
 
+
 class TestCampaignModel:
     """Tests for Campaign model properties."""
 
@@ -406,6 +410,7 @@ class TestCampaignModel:
 # BaseModel (base.py lines 16, 38)
 # ---------------------------------------------------------------------------
 
+
 class TestBaseModel:
     """Tests for BaseModel mixin."""
 
@@ -444,6 +449,7 @@ class TestBaseModel:
 # ---------------------------------------------------------------------------
 # User model (user.py lines 47, 51)
 # ---------------------------------------------------------------------------
+
 
 class TestUserModel:
     """Tests for User model."""
@@ -500,6 +506,7 @@ class TestUserModel:
 # ---------------------------------------------------------------------------
 # EmailLog model (email_log.py lines 77, 87, 93)
 # ---------------------------------------------------------------------------
+
 
 class TestEmailLogModel:
     """Tests for EmailLog properties."""
@@ -582,6 +589,7 @@ class TestEmailLogModel:
 # DeadLetter model (dead_letter.py lines 54, 61)
 # ---------------------------------------------------------------------------
 
+
 class TestDeadLetterModel:
     """Tests for DeadLetter __repr__ and to_dict."""
 
@@ -628,6 +636,7 @@ class TestDeadLetterModel:
 # Identity models – FromEmail and SenderName (identity.py lines 21, 37)
 # ---------------------------------------------------------------------------
 
+
 class TestIdentityModels:
     """Tests for FromEmail and SenderName __repr__."""
 
@@ -651,6 +660,7 @@ class TestIdentityModels:
 # ---------------------------------------------------------------------------
 # GlobalSetting model (settings.py line 52)
 # ---------------------------------------------------------------------------
+
 
 class TestGlobalSettingModel:
     """Tests for GlobalSetting __repr__."""

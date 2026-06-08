@@ -29,11 +29,16 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy project files
-COPY . .
+# Copy specific project files and directories
+COPY src/ src/
+COPY run.py .
+COPY pyproject.toml .
+COPY README.md .
+COPY alembic.ini .
+COPY migrations/ migrations/
 
-# Install the application in editable mode
-RUN pip install -e .
+# Install the application
+RUN pip install .
 
 # Expose the Flask port
 EXPOSE 5000

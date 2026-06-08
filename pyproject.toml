@@ -173,6 +173,38 @@ extend-select = ["T201"]
 # migrations/env.py is alembic-generated; don't fight upstream.
 "migrations/**/*.py" = ["T201"]
 
+[tool.mypy]
+python_version = "3.12"
+# SQLAlchemy ORM models are still written in the legacy ``Column(X)``
+# style (the codebase runs on SA 2.0 but predates the ``Mapped[X]``
+# migration). The ext.mypy plugin teaches mypy how to read those
+# declarations as `X` rather than `Column[X]`, which eliminates ~200
+# false-positive [assignment]/[arg-type]/[valid-type] errors on model
+# assignments and queries. The plugin is deprecated upstream; replace
+# with ``Mapped[...]`` model annotations when the codebase migrates.
+plugins = ["sqlalchemy.ext.mypy.plugin"]
+
+# Quiet the [import-untyped] noise for third-party libraries that ship
+# no type stubs. These are runtime-only deps that mypy can't introspect,
+# and complaining about every import buries the real diagnostics under
+# 40+ stub-missing errors. Adding `# type: ignore[import-untyped]` at
+# every call site would be louder than a single config block.
+[[tool.mypy.overrides]]
+module = [
+    "apscheduler.*",
+    "docx",
+    "eventlet",
+    "eventlet.*",
+    "flask_login",
+    "flask_wtf.*",
+    "qrcode",
+    "qrcode.*",
+    "reportlab.*",
+    "tqdm",
+    "weasyprint",
+]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

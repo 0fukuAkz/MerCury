@@ -15,7 +15,7 @@ from .base import BaseModel
 class Attachment(Base, BaseModel):
     """Reusable email attachment metadata."""
 
-    __tablename__ = 'attachments'
+    __tablename__ = "attachments"
 
     # User-facing filename — what the recipient sees in the email.
     filename = Column(String(255), nullable=False, index=True)

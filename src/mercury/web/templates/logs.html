@@ -2,6 +2,47 @@
 
 {% block title %}Logs - MerCury{% endblock %}
 
+{% block extra_css %}
+<style>
+    .logs-split {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.5rem;
+    }
+    .card-title-success {
+        color: var(--success);
+    }
+    .card-title-error {
+        color: var(--error);
+    }
+    .btn-log-refresh {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.75rem;
+    }
+    .logs-scroll-box {
+        max-height: 400px;
+        overflow-y: auto;
+    }
+    .log-item-mono {
+        padding: 0.5rem;
+        border-bottom: 1px solid var(--border-color);
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.875rem;
+    }
+    .log-item-pkg {
+        padding: 0.5rem;
+        border-bottom: 1px solid var(--border-color);
+    }
+    .log-item-pkg-meta {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.875rem;
+    }
+    .log-item-pkg-err {
+        font-size: 0.75rem;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="page-header">
     <h1 class="page-title">Sending Logs</h1>
@@ -24,15 +65,15 @@
     </div>
 </div>
 
-<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+<div class="logs-split">
     <!-- Success Logs -->
     <div class="card">
         <div class="card-header">
-            <h2 class="card-title" style="color: var(--success);">✅ Successful Sends</h2>
-            <button class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;"
+            <h2 class="card-title card-title-success">✅ Successful Sends</h2>
+            <button type="button" class="btn btn-secondary btn-log-refresh"
                 onclick="loadSuccessLogs()">Refresh</button>
         </div>
-        <div id="success-logs" style="max-height: 400px; overflow-y: auto;">
+        <div id="success-logs" class="logs-scroll-box">
             <p class="text-muted">Loading...</p>
         </div>
     </div>
@@ -40,17 +81,17 @@
     <!-- Failed Logs -->
     <div class="card">
         <div class="card-header">
-            <h2 class="card-title" style="color: var(--error);">❌ Failed Sends</h2>
-            <button class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;"
+            <h2 class="card-title card-title-error">❌ Failed Sends</h2>
+            <button type="button" class="btn btn-secondary btn-log-refresh"
                 onclick="loadFailedLogs()">Refresh</button>
         </div>
-        <div id="failed-logs" style="max-height: 400px; overflow-y: auto;">
+        <div id="failed-logs" class="logs-scroll-box">
             <p class="text-muted">Loading...</p>
         </div>
     </div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
     async function loadStats() {
         try {
             const response = await fetch('/api/stats');
@@ -77,7 +118,7 @@
             }
 
             container.innerHTML = data.emails.map(email => `
-                <div style="padding: 0.5rem; border-bottom: 1px solid var(--border-color); font-family: 'JetBrains Mono', monospace; font-size: 0.875rem;">
+                <div class="log-item-mono">
                     ${email}
                 </div>
             `).join('');
@@ -102,9 +143,9 @@
                 const [email, ...errorParts] = line.split('|');
                 const error = errorParts.join('|') || 'Unknown error';
                 return `
-                    <div style="padding: 0.5rem; border-bottom: 1px solid var(--border-color);">
-                        <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.875rem;">${email}</div>
-                        <div class="text-muted" style="font-size: 0.75rem;">${error}</div>
+                    <div class="log-item-pkg">
+                        <div class="log-item-pkg-meta">${email}</div>
+                        <div class="text-muted log-item-pkg-err">${error}</div>
                     </div>
                 `;
             }).join('');
@@ -123,7 +164,7 @@
     // backend in real time. Debounced (1.5s) so a fast send loop doesn't
     // hammer /api/logs/* on every per-recipient tick.
     //
-    // Registered inside DOMContentLoaded because this <script> is in
+    // Registered inside DOMContentLoaded because this <script nonce="{{ csp_nonce }}"> is in
     // the "content" template block, which renders before base.html's
     // `var socket = io()` — same reasoning as index.html.
     window.addEventListener('DOMContentLoaded', function () {

@@ -23,7 +23,7 @@ from .base import BaseModel
 class CustomPlaceholder(Base, BaseModel):
     """Global custom placeholder."""
 
-    __tablename__ = 'custom_placeholders'
+    __tablename__ = "custom_placeholders"
 
     # Substitution key — `{{<name>}}` in templates. Lowercase + `_` only;
     # the API layer enforces the character set. Unique because two rows
@@ -34,7 +34,7 @@ class CustomPlaceholder(Base, BaseModel):
     # The literal text substituted. Stored as Text rather than String
     # because operators sometimes paste multi-line HTML snippets here
     # (e.g. a signature block) and a 255-cap would silently truncate.
-    value = Column(Text, nullable=False, default='')
+    value = Column(Text, nullable=False, default="")
 
     # Free-form description shown next to the row in the admin UI so the
     # operator who wrote the placeholder six months ago can remember why.

@@ -15,6 +15,12 @@ import atexit
 import threading
 from pathlib import Path
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 # Constants
 ROOT_DIR = Path(__file__).parent.absolute()
 VENV_DIR = ROOT_DIR / "venv"
@@ -299,7 +305,7 @@ def main():
             gunicorn_path,
             "--worker-class", "eventlet",
             "-w", "1",
-            "--bind", "0.0.0.0:5000",
+            "--bind", f"127.0.0.1:{os.environ.get('PORT', 5050)}",
             *log_args,
             "mercury.web.app:create_app()",
         ]

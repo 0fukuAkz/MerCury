@@ -27,6 +27,7 @@ from mercury.features.rotation import (
 # template_engine.py
 # ---------------------------------------------------------------------------
 
+
 class TestTemplateEngineConfig:
     """Test TemplateEngine initialisation branches."""
 
@@ -240,6 +241,7 @@ class TestStandaloneLoadTemplate:
 # placeholders.py
 # ---------------------------------------------------------------------------
 
+
 class TestRegisterGenerator:
     """Test register_generator and custom generator invocation."""
 
@@ -372,6 +374,7 @@ class TestApplyPlaceholders:
 # ---------------------------------------------------------------------------
 # rotation.py
 # ---------------------------------------------------------------------------
+
 
 class TestGetCurrent:
     """Test get_current method."""

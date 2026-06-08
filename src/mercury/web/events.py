@@ -6,7 +6,7 @@ from datetime import datetime, UTC
 from flask_socketio import SocketIO, emit
 from flask_login import current_user
 from ..app_context import get_app_context
-from ..data.database import session_scope
+from ..data.database import session_scope, get_session_direct
 from ..data.repositories import CampaignRepository
 from ..data.models import CampaignStatus
 from ..services.campaign_service import CampaignService, CampaignConfig
@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 # Running service instances keyed by campaign_id so pause/stop can reach them
 _active_services: dict[int, CampaignService] = {}
+_active_services_lock = threading.Lock()
 
 # Shared webhook service instance (loads from env vars once)
 _webhook_service = WebhookService()
@@ -108,8 +109,8 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
 
     try:
         with app.app_context():
-            session = get_session_direct()
-            try:
+            with session_scope() as session:
+
                 repo = CampaignRepository(session)
                 campaign = repo.get(campaign_id)
                 if not campaign:
@@ -125,14 +126,13 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
                 service.initialize()
                 service.load_config(config)
                 service._current_campaign = campaign
-                _active_services[campaign_id] = service
+                with _active_services_lock:
+                    _active_services[campaign_id] = service
 
                 # Mark as sending
                 campaign.status = CampaignStatus.SENDING
                 campaign.started_at = datetime.now(UTC)
                 repo.update(campaign)
-            finally:
-                session.close()
 
         # Note: 'campaign_started' was already emitted synchronously by the
         # WebSocket handler as a request-acknowledgment; the thread continues
@@ -153,13 +153,11 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
 
         # Load recipients
         with app.app_context():
-            session = get_session_direct()
-            try:
+            with session_scope() as session:
+
                 repo = CampaignRepository(session)
                 campaign = repo.get(campaign_id)
                 config_snap = _build_config_from_campaign(campaign)
-            finally:
-                session.close()
 
         # Resolution precedence:
         #   1. manual_recipients          (UI textarea / API explicit list)
@@ -179,14 +177,12 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
         else:
             linked_list_path = None
             with app.app_context():
-                session = get_session_direct()
-                try:
+                with session_scope() as session:
+
                     repo = CampaignRepository(session)
                     campaign = repo.get(campaign_id)
                     if campaign and campaign.recipient_list and campaign.recipient_list.file_path:
                         linked_list_path = campaign.recipient_list.file_path
-                finally:
-                    session.close()
 
             if linked_list_path:
                 if config_snap.recipients_path and config_snap.recipients_path != linked_list_path:
@@ -217,16 +213,15 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
 
         if not recipients:
             with app.app_context():
-                session = get_session_direct()
-                try:
+                with session_scope() as session:
+
                     repo = CampaignRepository(session)
                     campaign = repo.get(campaign_id)
                     campaign.status = CampaignStatus.FAILED
                     repo.update(campaign)
-                finally:
-                    session.close()
             _emit("campaign_error", {"campaign_id": campaign_id, "error": "No recipients found"})
-            _active_services.pop(campaign_id, None)
+            with _active_services_lock:
+                _active_services.pop(campaign_id, None)
             return
 
         _emit(
@@ -279,8 +274,8 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
             """Flush current sent/failed counts to the DB row."""
             try:
                 with app.app_context():
-                    session = get_session_direct()
-                    try:
+                    with session_scope() as session:
+
                         repo = CampaignRepository(session)
                         c = repo.get(campaign_id)
                         if c is None:
@@ -288,9 +283,16 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
                         c.sent_count = _progress_count["sent"]
                         c.failed_count = _progress_count["failed"]
                         c.total_recipients = _progress_total
+                        # Persist error breakdown so it survives page reloads
+                        errors = _progress_count.get("errors")
+                        if errors:
+                            from sqlalchemy.orm.attributes import flag_modified
+
+                            settings = dict(c.settings or {})
+                            settings["error_breakdown"] = dict(errors)
+                            c.settings = settings
+                            flag_modified(c, "settings")
                         repo.update(c)
-                    finally:
-                        session.close()
             except Exception as ex:
                 logger.warning(
                     "Mid-run count persistence failed for campaign %s: %s "
@@ -375,8 +377,8 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
             final_status = CampaignStatus.CANCELLED
 
         with app.app_context():
-            session = get_session_direct()
-            try:
+            with session_scope() as session:
+
                 repo = CampaignRepository(session)
                 campaign = repo.get(campaign_id)
                 if campaign is not None:
@@ -386,8 +388,6 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
                     campaign.failed_count = stats.get("failed", 0)
                     campaign.total_recipients = stats.get("total", len(recipients))
                     repo.update(campaign)
-            finally:
-                session.close()
 
         _emit(
             "campaign_complete",
@@ -430,8 +430,8 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
         logger.exception(f"Campaign {campaign_id} crashed: {exc}")
         try:
             with app.app_context():
-                session = get_session_direct()
-                try:
+                with session_scope() as session:
+
                     repo = CampaignRepository(session)
                     campaign = repo.get(campaign_id)
                     # Guard against the campaign being deleted mid-run —
@@ -442,8 +442,6 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
                         campaign.status = CampaignStatus.FAILED
                         campaign.completed_at = datetime.now(UTC)
                         repo.update(campaign)
-                finally:
-                    session.close()
         except Exception:
             logger.exception(
                 "Couldn't even mark campaign %s as FAILED after a crash — "
@@ -452,7 +450,8 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
             )
         _emit("campaign_error", {"campaign_id": campaign_id, "error": str(exc)})
     finally:
-        _active_services.pop(campaign_id, None)
+        with _active_services_lock:
+                _active_services.pop(campaign_id, None)
 
 
 def register_socketio_events(sio: SocketIO):
@@ -493,7 +492,8 @@ def register_socketio_events(sio: SocketIO):
         died (real bug); progress events continuing proves the
         engine is fine and the symptom is a UI staleness issue.
         """
-        active = list(_active_services.keys())
+        with _active_services_lock:
+            active = list(_active_services.keys())
         logger.info(
             "SocketIO disconnect — %d campaign(s) still running on the "
             "server (%s). Disconnects do NOT stop running campaigns.",
@@ -533,7 +533,9 @@ def register_socketio_events(sio: SocketIO):
             emit("campaign_error", {"error": "campaign_id required"})
             return
 
-        if campaign_id in _active_services:
+        with _active_services_lock:
+            is_active = campaign_id in _active_services
+        if is_active:
             emit(
                 "campaign_error", {"campaign_id": campaign_id, "error": "Campaign already running"}
             )
@@ -575,22 +577,21 @@ def register_socketio_events(sio: SocketIO):
             return
 
         campaign_id = data.get("campaign_id")
-        svc = _active_services.get(campaign_id)
+        with _active_services_lock:
+            svc = _active_services.get(campaign_id)
         if svc:
             svc.pause()
 
             # Update DB status
             app = current_app._get_current_object()
             with app.app_context():
-                session = get_session_direct()
-                try:
+                with session_scope() as session:
+
                     repo = CampaignRepository(session)
                     campaign = repo.get(campaign_id)
                     if campaign:
                         campaign.status = CampaignStatus.PAUSED
                         repo.update(campaign)
-                finally:
-                    session.close()
 
         sio.emit(
             "campaign_paused",
@@ -608,22 +609,21 @@ def register_socketio_events(sio: SocketIO):
             return
 
         campaign_id = data.get("campaign_id")
-        svc = _active_services.get(campaign_id)
+        with _active_services_lock:
+            svc = _active_services.get(campaign_id)
         if svc:
             svc.resume()
 
             # Update DB status back to sending
             app = current_app._get_current_object()
             with app.app_context():
-                session = get_session_direct()
-                try:
+                with session_scope() as session:
+
                     repo = CampaignRepository(session)
                     campaign = repo.get(campaign_id)
                     if campaign:
                         campaign.status = CampaignStatus.SENDING
                         repo.update(campaign)
-                finally:
-                    session.close()
 
         sio.emit(
             "campaign_resumed",
@@ -641,7 +641,8 @@ def register_socketio_events(sio: SocketIO):
             return
 
         campaign_id = data.get("campaign_id")
-        svc = _active_services.get(campaign_id)
+        with _active_services_lock:
+            svc = _active_services.get(campaign_id)
         if svc:
             svc.stop()
 

@@ -10,35 +10,31 @@ from ..models import Campaign, CampaignStatus
 
 class CampaignRepository(BaseRepository[Campaign]):
     """Repository for Campaign entities."""
-    
+
     def __init__(self, session: Session):
         super().__init__(session, Campaign)
-    
+
     def get_by_name(self, name: str) -> Optional[Campaign]:
         """Get campaign by name."""
         stmt = select(Campaign).where(Campaign.name == name)
         return self.session.execute(stmt).scalar_one_or_none()
-    
+
     def get_by_status(self, status: CampaignStatus, limit: int = 100) -> List[Campaign]:
         """Get campaigns by status."""
         stmt = select(Campaign).where(Campaign.status == status).limit(limit)
         return list(self.session.execute(stmt).scalars())
-    
+
     def get_active(self) -> List[Campaign]:
         """Get all active (sending) campaigns."""
         return self.get_by_status(CampaignStatus.SENDING)
-    
+
     def get_scheduled(self) -> List[Campaign]:
         """Get all scheduled campaigns."""
         return self.get_by_status(CampaignStatus.SCHEDULED)
-    
+
     def get(self, id: int) -> Campaign | None:
         """Get campaign by ID with template eagerly loaded."""
-        stmt = (
-            select(Campaign)
-            .where(Campaign.id == id)
-            .options(joinedload(Campaign.template))
-        )
+        stmt = select(Campaign).where(Campaign.id == id).options(joinedload(Campaign.template))
         return self.session.execute(stmt).scalar_one_or_none()
 
     def get_recent(self, limit: int = 10) -> List[Campaign]:
@@ -50,7 +46,7 @@ class CampaignRepository(BaseRepository[Campaign]):
             .limit(limit)
         )
         return list(self.session.execute(stmt).scalars())
-    
+
     def update_status(self, campaign_id: int, status: CampaignStatus) -> Optional[Campaign]:
         """Update campaign status."""
         campaign = self.get(campaign_id)
@@ -58,13 +54,9 @@ class CampaignRepository(BaseRepository[Campaign]):
             campaign.status = status
             self.session.commit()
         return campaign
-    
+
     def increment_counters(
-        self, 
-        campaign_id: int, 
-        sent: int = 0, 
-        delivered: int = 0, 
-        failed: int = 0
+        self, campaign_id: int, sent: int = 0, delivered: int = 0, failed: int = 0
     ) -> Optional[Campaign]:
         """Increment campaign counters."""
         campaign = self.get(campaign_id)
@@ -74,16 +66,12 @@ class CampaignRepository(BaseRepository[Campaign]):
             campaign.failed_count += failed
             self.session.commit()
         return campaign
-    
+
     def search(self, query: str, limit: int = 50) -> List[Campaign]:
         """Search campaigns by name or description."""
         stmt = (
             select(Campaign)
-            .where(
-                Campaign.name.ilike(f'%{query}%') | 
-                Campaign.description.ilike(f'%{query}%')
-            )
+            .where(Campaign.name.ilike(f"%{query}%") | Campaign.description.ilike(f"%{query}%"))
             .limit(limit)
         )
         return list(self.session.execute(stmt).scalars())
-

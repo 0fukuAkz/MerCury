@@ -23,6 +23,7 @@ from mercury.engine.retry_queue import (
 # RetryItem.to_dict  (line 47)
 # ---------------------------------------------------------------------------
 
+
 class TestRetryItemToDict:
     def test_to_dict_returns_expected_keys(self):
         """Line 47: to_dict must serialise every field."""
@@ -58,15 +59,14 @@ class TestRetryItemToDict:
 # RetryQueue with persist_path  (lines 107, 271-329)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 class TestRetryQueuePersistence:
     """Tests for _write_state_to_disk, _load_state and _persist_state."""
 
     async def test_persist_path_triggers_load_on_init(self):
         """Line 107: when persist_path is given, _load_state is called."""
-        with tempfile.NamedTemporaryFile(
-            suffix=".json", delete=False, mode="w"
-        ) as f:
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w") as f:
             # Write an empty-but-valid state file
             json.dump({"items": {}, "stats": {}}, f)
             path = f.name
@@ -124,9 +124,7 @@ class TestRetryQueuePersistence:
             },
         }
 
-        with tempfile.NamedTemporaryFile(
-            suffix=".json", delete=False, mode="w"
-        ) as f:
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w") as f:
             json.dump(state, f)
             path = f.name
 
@@ -150,9 +148,7 @@ class TestRetryQueuePersistence:
 
         state = {"items": items_data, "stats": {}}
 
-        with tempfile.NamedTemporaryFile(
-            suffix=".json", delete=False, mode="w"
-        ) as f:
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w") as f:
             json.dump(state, f)
             path = f.name
 
@@ -190,9 +186,7 @@ class TestRetryQueuePersistence:
 
     async def test_load_state_handles_corrupt_file(self):
         """Lines 328-329: corrupt JSON logs error but does not raise."""
-        with tempfile.NamedTemporaryFile(
-            suffix=".json", delete=False, mode="w"
-        ) as f:
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w") as f:
             f.write("THIS IS NOT JSON {{{")
             path = f.name
 
@@ -208,6 +202,7 @@ class TestRetryQueuePersistence:
 # get_ready: skips items not in _items  (line 175)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 class TestGetReady:
     async def test_get_ready_skips_stale_heap_entries(self):
@@ -217,6 +212,7 @@ class TestGetReady:
 
         # Manually craft a stale heap entry with a past next_retry_at
         import heapq
+
         stale = RetryItem(id="ghost", data={})
         stale.next_retry_at = datetime.now(UTC) - timedelta(seconds=10)
         heapq.heappush(queue._queue, stale)
@@ -231,6 +227,7 @@ class TestGetReady:
         queue = RetryQueue(config=config)
 
         import heapq
+
         exhausted = RetryItem(id="ex1", data={}, status=RetryStatus.EXHAUSTED)
         exhausted.next_retry_at = datetime.now(UTC) - timedelta(seconds=10)
         # Add to both _items and the heap so it passes the id check
@@ -244,6 +241,7 @@ class TestGetReady:
 # ---------------------------------------------------------------------------
 # mark_failed with non-existent id  (line 201)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 class TestMarkFailed:
@@ -259,6 +257,7 @@ class TestMarkFailed:
 # ---------------------------------------------------------------------------
 # start when already running  (line 214)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 class TestStart:
@@ -282,6 +281,7 @@ class TestStart:
 # ---------------------------------------------------------------------------
 # _process_loop: handler returns True  (lines 250-251)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 class TestProcessLoopHandlerSuccess:

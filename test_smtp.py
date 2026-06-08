@@ -14,10 +14,10 @@ async def run():
         # We don't even need to connect if extract_sender throws it immediately
         try:
             await smtp.send_message(msg)
-        except Exception as e:
+        except Exception:
             import traceback
             traceback.print_exc()
-    except Exception as e:
+    except Exception:
         import traceback
         traceback.print_exc()
 

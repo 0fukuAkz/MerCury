@@ -7,6 +7,12 @@
   // skips. The .venv symlink still works for shell users; the IDE
   // just uses the canonical path.
   "python.defaultInterpreterPath": "${workspaceFolder}/venv/bin/python",
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}/src"
+  ],
+  "python.autoComplete.extraPaths": [
+    "${workspaceFolder}/src"
+  ],
 
   // ── Terminal auto-activation (legacy mode) ──────────────────────────
   // Sources venv/bin/activate when you open a new integrated terminal.

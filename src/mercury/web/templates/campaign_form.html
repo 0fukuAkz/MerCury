@@ -126,6 +126,7 @@
         align-items: center;
         gap: 0.75rem;
         cursor: pointer;
+        -webkit-user-select: none;
         user-select: none;
     }
     .toggle input[type="checkbox"] { position: absolute; opacity: 0; width: 0; height: 0; }
@@ -204,6 +205,7 @@
         color: var(--neon-cyan);
         cursor: pointer;
         transition: all 0.15s;
+        -webkit-user-select: none;
         user-select: none;
     }
     .ph-token:hover {
@@ -448,7 +450,7 @@
 
             <!-- A/B Rotation (collapsible) -->
             <details class="form-section" style="margin-top:1rem">
-                <summary style="cursor:pointer;font-weight:600;font-size:0.82rem;color:var(--neon-cyan);padding:0.5rem 0;user-select:none">
+                <summary style="cursor:pointer;font-weight:600;font-size:0.82rem;color:var(--neon-cyan);padding:0.5rem 0;-webkit-user-select:none;user-select:none">
                     ▸ A/B Rotation <span style="font-weight:400;color:var(--text-secondary);font-size:0.75rem">(optional)</span>
                 </summary>
                 <div style="margin-top:0.75rem">
@@ -752,7 +754,7 @@
                     <div style="display:flex;align-items:center;justify-content:space-between;margin-top:0.4rem;gap:0.6rem">
                         <div class="form-hint" style="margin:0">
                             Click items to toggle. <span id="attachmentSelectedCount">0</span> selected ·
-                            Manage files at <a href="/attachments" target="_blank">Attachments</a>.
+                            Manage files at <a rel="noopener noreferrer" href="/attachments" target="_blank">Attachments</a>.
                         </div>
                         <button type="button" class="btn btn-secondary" id="clearAttachmentsBtn"
                                 style="padding:0.3rem 0.7rem;font-size:0.75rem"
@@ -915,7 +917,7 @@
 
 <div id="toast-container"></div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
     /* ── Edit-mode seed data ─────────────────────────────────────────────── */
     var EDIT_CAMPAIGN = {{ campaign | tojson if campaign else 'null' }};
     var EDIT_MODE = !!EDIT_CAMPAIGN;

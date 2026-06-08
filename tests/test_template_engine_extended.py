@@ -1,6 +1,6 @@
-
 from unittest.mock import Mock, patch, mock_open
-from mercury.features.template_engine import TemplateEngine
+from mercury.features.template_engine import TemplateEngine, TemplateConfig
+
 
 class TestTemplateEngineExtended:
     """Extended tests for TemplateEngine."""
@@ -25,7 +25,7 @@ class TestTemplateEngineExtended:
     def test_process_includes(self):
         main_html = "Header {{include:footer.html}}"
         footer_html = "Footer"
-        
+
         with patch("os.path.exists", return_value=True):
             with patch("builtins.open", mock_open(read_data=footer_html)):
                 engine = TemplateEngine(html_content=main_html)
@@ -38,13 +38,13 @@ class TestTemplateEngineExtended:
         {{if:false_flag}}Hidden{{endif}}
         """
         engine = TemplateEngine(html_content=html)
-        
+
         # Test True
         rendered = engine.render(extra_placeholders={"show_promo": "true", "false_flag": "false"})
         assert "Promo!" in rendered
         assert "No Promo" not in rendered
         assert "Hidden" not in rendered
-        
+
         # Test False
         rendered = engine.render(extra_placeholders={"show_promo": "false"})
         assert "No Promo" in rendered
@@ -53,8 +53,8 @@ class TestTemplateEngineExtended:
         html = "Hello {{name}}"
         engine = TemplateEngine(html_content=html)
         report = engine.validate()
-        assert report['valid'] is True
-        assert 'name' in report['used']  # 'placeholders' was wrong key
+        assert report["valid"] is True
+        assert "name" in report["used"]  # 'placeholders' was wrong key
 
     def test_preview(self):
         engine = TemplateEngine(html_content="Hi {{email}}")
@@ -64,10 +64,10 @@ class TestTemplateEngineExtended:
     def test_qr_code_rendering(self):
         engine = TemplateEngine(html_content="Scan {{qr_code}}")
         engine.config.enable_qr_code = True
-        
+
         # Patch the instance method directly since engine is already initialized
         engine.qr_generator.generate_data_url = Mock(return_value="data:img")
-        
+
         rendered = engine.render(link="http://link")
         assert 'src="data:img"' in rendered
 
@@ -76,3 +76,18 @@ class TestTemplateEngineExtended:
         engine = TemplateEngine(html_content=html)
         rendered = engine.render(extra_placeholders={"outer": "true", "inner": "true"})
         assert "Inner" in rendered
+
+    def test_spintax_basic(self):
+        engine = TemplateEngine(TemplateConfig(html_content="Hello {World|Universe}!"))
+        rendered = engine.render()
+        assert rendered in ["Hello World!", "Hello Universe!"]
+
+    def test_spintax_nested(self):
+        engine = TemplateEngine(TemplateConfig(html_content="{nested {a|b}|{c|d}}"))
+        rendered = engine.render()
+        assert rendered in ["nested a", "nested b", "c", "d"]
+
+    def test_spintax_with_placeholder(self):
+        engine = TemplateEngine(TemplateConfig(html_content="{Hello|Hi} {{name}}!"))
+        rendered = engine.render(recipient_data={"name": "Alice"})
+        assert rendered in ["Hello Alice!", "Hi Alice!"]

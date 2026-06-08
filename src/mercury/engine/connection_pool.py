@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import threading
+import time
 from typing import Optional, Dict, Any, List, Tuple
 from datetime import datetime, UTC
 from dataclasses import dataclass, field
@@ -16,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 class ConnectionPoolException(Exception):
     """Errors related to connection pool operations."""
+
     pass
 
 
@@ -56,6 +58,7 @@ class SMTPServerRuntime:
     dropped in migration ``d7a2f8e4b9c1`` because each worker maintains its
     own independent counter and persisting one-of-many is meaningless.
     """
+
     circuit_breaker: CircuitBreaker
     current_minute_count: int = 0
     current_hour_count: int = 0
@@ -64,6 +67,42 @@ class SMTPServerRuntime:
     consecutive_failures: int = 0
     last_minute_reset: datetime = field(default_factory=lambda: datetime.now(UTC))
     last_hour_reset: datetime = field(default_factory=lambda: datetime.now(UTC))
+    handshake_latencies: List[float] = field(default_factory=list)
+    send_latencies: List[float] = field(default_factory=list)
+
+    @property
+    def avg_handshake_latency(self) -> Optional[float]:
+        """Get average connection handshake latency in seconds."""
+        if not self.handshake_latencies:
+            return None
+        return sum(self.handshake_latencies) / len(self.handshake_latencies)
+
+    @property
+    def avg_send_latency(self) -> Optional[float]:
+        """Get average mail sending latency in seconds."""
+        if not self.send_latencies:
+            return None
+        return sum(self.send_latencies) / len(self.send_latencies)
+
+    def record_handshake(self, seconds: float) -> None:
+        """Record a connection handshake latency measurement."""
+        self.handshake_latencies.append(seconds)
+        if len(self.handshake_latencies) > 50:
+            self.handshake_latencies.pop(0)
+
+    def record_handshake_latency(self, seconds: float) -> None:
+        """Record a connection handshake latency measurement."""
+        self.record_handshake(seconds)
+
+    def record_send(self, seconds: float) -> None:
+        """Record a mail sending latency measurement."""
+        self.send_latencies.append(seconds)
+        if len(self.send_latencies) > 50:
+            self.send_latencies.pop(0)
+
+    def record_send_latency(self, seconds: float) -> None:
+        """Record a mail sending latency measurement."""
+        self.record_send(seconds)
 
 
 @dataclass
@@ -74,13 +113,14 @@ class SMTPServerConfig:
     circuit-breaker tuning. Mutable per-process counters live on the
     ``runtime`` companion (see ``SMTPServerRuntime``).
     """
+
     name: str
     host: str
     port: int = 587
     username: str = ""
     password: str = ""
     # 'none' | 'starttls' | 'ssl' — single source of truth for TLS.
-    tls_mode: str = 'starttls'
+    tls_mode: str = "starttls"
     use_auth: bool = True
     timeout: int = 30
     from_email: str = ""
@@ -89,6 +129,10 @@ class SMTPServerConfig:
     priority: int = 0
     max_per_minute: int = 30
     max_per_hour: int = 500
+
+    # IP Warmup
+    total_sent_historical: int = 0
+    created_at_timestamp: float = 0.0
 
     # Circuit breaker tuning (per-server overrides; None = use defaults).
     cb_failure_threshold: Optional[int] = None
@@ -105,77 +149,100 @@ class SMTPServerConfig:
         if self.runtime is None:
             cb_kwargs = {}
             if self.cb_failure_threshold is not None:
-                cb_kwargs['failure_threshold'] = self.cb_failure_threshold
+                cb_kwargs["failure_threshold"] = self.cb_failure_threshold
             if self.cb_success_threshold is not None:
-                cb_kwargs['success_threshold'] = self.cb_success_threshold
+                cb_kwargs["success_threshold"] = self.cb_success_threshold
             if self.cb_timeout_seconds is not None:
-                cb_kwargs['timeout_seconds'] = self.cb_timeout_seconds
+                cb_kwargs["timeout_seconds"] = self.cb_timeout_seconds
             if self.cb_monitor_window_seconds is not None:
-                cb_kwargs['monitor_window_seconds'] = self.cb_monitor_window_seconds
+                cb_kwargs["monitor_window_seconds"] = self.cb_monitor_window_seconds
             self.runtime = SMTPServerRuntime(
                 circuit_breaker=_create_circuit_breaker(self.name, **cb_kwargs),
             )
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'SMTPServerConfig':
+    def from_dict(cls, data: Dict[str, Any]) -> "SMTPServerConfig":
         """Create config from dictionary."""
         # tls_mode is the single TLS field. Missing → defaults to 'starttls'
         # (the product default for port 587). Legacy use_tls / use_ssl
         # booleans are no longer derived from; a config that supplied them
         # without tls_mode used to be honored and is now treated as defaulted.
-        raw = data.get('tls_mode')
+        raw = data.get("tls_mode")
         if raw is None:
-            tls_mode = 'starttls'
+            tls_mode = "starttls"
         else:
             tls_mode = str(raw).strip().lower()
-            if tls_mode not in ('none', 'starttls', 'ssl'):
+            if tls_mode not in ("none", "starttls", "ssl"):
                 raise ValueError(
                     f"SMTPServerConfig.from_dict: 'tls_mode' must be one of "
                     f"'none', 'starttls', 'ssl' (got: {raw!r})"
                 )
         return cls(
-            name=data.get('name', data.get('host', 'default')),
-            host=data['host'],
-            port=data.get('port', 587),
-            username=data.get('username', ''),
-            password=data.get('password', ''),
+            name=data.get("name", data.get("host", "default")),
+            host=data["host"],
+            port=data.get("port", 587),
+            username=data.get("username", ""),
+            password=data.get("password", ""),
             tls_mode=tls_mode,
-            use_auth=data.get('use_auth', True),
-            timeout=data.get('timeout', 30),
-            from_email=data.get('from_email', ''),
-            from_name=data.get('from_name', ''),
-            weight=data.get('weight', 1.0),
-            priority=data.get('priority', 0),
-            max_per_minute=data.get('max_per_minute', 30),
-            max_per_hour=data.get('max_per_hour', 500),
-            cb_failure_threshold=data.get('cb_failure_threshold'),
-            cb_success_threshold=data.get('cb_success_threshold'),
-            cb_timeout_seconds=data.get('cb_timeout_seconds'),
-            cb_monitor_window_seconds=data.get('cb_monitor_window_seconds'),
+            use_auth=data.get("use_auth", True),
+            timeout=data.get("timeout", 30),
+            from_email=data.get("from_email", ""),
+            from_name=data.get("from_name", ""),
+            weight=data.get("weight", 1.0),
+            priority=data.get("priority", 0),
+            max_per_minute=data.get("max_per_minute", 30),
+            max_per_hour=data.get("max_per_hour", 500),
+            total_sent_historical=data.get("total_sent_historical", 0),
+            created_at_timestamp=data.get("created_at_timestamp", 0.0),
+            cb_failure_threshold=data.get("cb_failure_threshold"),
+            cb_success_threshold=data.get("cb_success_threshold"),
+            cb_timeout_seconds=data.get("cb_timeout_seconds"),
+            cb_monitor_window_seconds=data.get("cb_monitor_window_seconds"),
         )
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert config to dictionary."""
         return {
-            'name': self.name,
-            'host': self.host,
-            'port': self.port,
-            'username': self.username,
-            'tls_mode': self.tls_mode,
-            'use_auth': self.use_auth,
-            'timeout': self.timeout,
-            'from_email': self.from_email,
-            'from_name': self.from_name,
-            'weight': self.weight,
-            'priority': self.priority,
-            'max_per_minute': self.max_per_minute,
-            'max_per_hour': self.max_per_hour,
+            "name": self.name,
+            "host": self.host,
+            "port": self.port,
+            "username": self.username,
+            "tls_mode": self.tls_mode,
+            "use_auth": self.use_auth,
+            "timeout": self.timeout,
+            "from_email": self.from_email,
+            "from_name": self.from_name,
+            "weight": self.weight,
+            "priority": self.priority,
+            "max_per_minute": self.max_per_minute,
+            "max_per_hour": self.max_per_hour,
+            "total_sent_historical": self.total_sent_historical,
+            "created_at_timestamp": self.created_at_timestamp,
         }
 
-    def check_rate_limits(self) -> bool:
+    def check_rate_limits(self, ip_warmup_mode: bool = False) -> bool:
         """Check if within rate limits."""
         now = datetime.now(UTC)
         rt = self.runtime
+
+        effective_max_minute = self.max_per_minute
+        effective_max_hour = self.max_per_hour
+
+        # IP Warm-up pacing dynamically based on domain age / sent quotas
+        if ip_warmup_mode and self.created_at_timestamp > 0:
+            created_at = datetime.fromtimestamp(self.created_at_timestamp, tz=UTC)
+            age_days = (now - created_at).days
+            total = self.total_sent_historical + rt.total_sent
+
+            if age_days <= 1 or total <= 50:
+                effective_max_minute = min(effective_max_minute, 2)
+                effective_max_hour = min(effective_max_hour, 10)
+            elif age_days <= 3 or total <= 200:
+                effective_max_minute = min(effective_max_minute, 5)
+                effective_max_hour = min(effective_max_hour, 50)
+            elif age_days <= 7 or total <= 1000:
+                effective_max_minute = min(effective_max_minute, 10)
+                effective_max_hour = min(effective_max_hour, 200)
 
         # Reset minute counter
         if (now - rt.last_minute_reset).total_seconds() >= 60:
@@ -188,8 +255,8 @@ class SMTPServerConfig:
             rt.last_hour_reset = now
 
         return (
-            rt.current_minute_count < self.max_per_minute and
-            rt.current_hour_count < self.max_per_hour
+            rt.current_minute_count < effective_max_minute
+            and rt.current_hour_count < effective_max_hour
         )
 
     def increment_counters(self):
@@ -198,14 +265,16 @@ class SMTPServerConfig:
         rt.current_minute_count += 1
         rt.current_hour_count += 1
 
-    def can_execute(self) -> bool:
+    def can_execute(self, ip_warmup_mode: bool = False) -> bool:
         """Check if server can accept requests (circuit breaker + rate limits)."""
-        return self.runtime.circuit_breaker.is_available() and self.check_rate_limits()
+        return self.runtime.circuit_breaker.is_available() and self.check_rate_limits(
+            ip_warmup_mode
+        )
 
 
 class AsyncSMTPConnection:
     """Async SMTP connection wrapper."""
-    
+
     def __init__(self, config: SMTPServerConfig):
         self.config = config
         self.client: Optional[aiosmtplib.SMTP] = None
@@ -213,7 +282,7 @@ class AsyncSMTPConnection:
         self.created_at = datetime.now(UTC)
         self.last_used = datetime.now(UTC)
         self.messages_sent = 0
-    
+
     # Ports where plaintext SMTP is almost always misconfiguration: 587 is
     # submission (RFC 4409 — STARTTLS expected), 465 is implicit-TLS
     # submission, 2525 is the unofficial-but-conventional alt-submission.
@@ -229,55 +298,66 @@ class AsyncSMTPConnection:
 
     async def connect(self) -> None:
         """Establish async SMTP connection. Dispatches on ``tls_mode``."""
+        _start = time.monotonic()
         mode = self.config.tls_mode
-        implicit_tls = (mode == 'ssl')
+        implicit_tls = mode == "ssl"
 
-        if mode == 'none' and self.config.port in self._TLS_EXPECTED_PORTS:
+        if mode == "none" and self.config.port in self._TLS_EXPECTED_PORTS:
             logger.warning(
                 "⚠️  SMTP server %s configured with tls_mode='none' on port %d "
                 "(submission port — STARTTLS or implicit TLS is expected). "
                 "Plaintext AUTH will likely be rejected and any mail that DOES "
                 "go out is unencrypted. Set tls_mode='starttls' (587/2525) or "
                 "'ssl' (465) in the SMTP form to fix.",
-                self.config.name, self.config.port,
+                self.config.name,
+                self.config.port,
             )
 
         self.client = aiosmtplib.SMTP(
             hostname=self.config.host,
             port=self.config.port,
             use_tls=implicit_tls,
-            timeout=self.config.timeout
+            timeout=self.config.timeout,
         )
 
         await self.client.connect()
 
-        if mode == 'starttls':
+        if mode == "starttls":
             await self.client.starttls()
 
         if self.config.use_auth and self.config.username:
             await self.client.login(self.config.username, self.config.password)
 
         self.is_connected = True
+        _duration = time.monotonic() - _start
+        if self.config.runtime is not None:
+            self.config.runtime.record_handshake(_duration)
+
         logger.debug(
             f"Connected to {self.config.name} "
-            f"({self.config.host}:{self.config.port}, tls_mode={mode})"
+            f"({self.config.host}:{self.config.port}, tls_mode={mode}) in {_duration:.3f}s"
         )
-    
+
     async def send_message(self, msg) -> Dict[str, Any]:
         """Send email message."""
         if not self.is_connected or not self.client:
             await self.connect()
-        
+
+        _start = time.monotonic()
         try:
             response = await self.client.send_message(msg)
+            _duration = time.monotonic() - _start
+            if self.config.runtime is not None:
+                self.config.runtime.record_send(_duration)
+
             self.last_used = datetime.now(UTC)
             self.messages_sent += 1
             self.config.increment_counters()
-            return {'success': True, 'response': str(response)}
+            return {"success": True, "response": str(response)}
         except Exception:
             self.is_connected = False
             raise
-    
+
     async def close(self) -> None:
         """Close SMTP connection."""
         if self.client and self.is_connected:
@@ -286,12 +366,12 @@ class AsyncSMTPConnection:
             except Exception:
                 pass
         self.is_connected = False
-    
+
     @property
     def age_seconds(self) -> float:
         """Get connection age in seconds."""
         return (datetime.now(UTC) - self.created_at).total_seconds()
-    
+
     @property
     def idle_seconds(self) -> float:
         """Get idle time in seconds."""
@@ -300,19 +380,19 @@ class AsyncSMTPConnection:
 
 class AsyncConnectionPool:
     """Async connection pool for single SMTP server."""
-    
+
     def __init__(
-        self, 
-        config: SMTPServerConfig, 
+        self,
+        config: SMTPServerConfig,
         pool_size: int = 5,
         max_connection_age: float = 300.0,
-        max_idle_time: float = 60.0
+        max_idle_time: float = 60.0,
     ):
         self.config = config
         self.pool_size = pool_size
         self.max_connection_age = max_connection_age
         self.max_idle_time = max_idle_time
-        
+
         self.connections: List[AsyncSMTPConnection] = []
         self.available: asyncio.Queue = asyncio.Queue()
         self.lock = asyncio.Lock()
@@ -322,16 +402,16 @@ class AsyncConnectionPool:
         # will happily GC a still-pending task — producing "Task was destroyed
         # but it is pending!" warnings and silently dropping the replenish.
         self._background_tasks: "set[asyncio.Task]" = set()
-    
+
     async def initialize(self):
         """Initialize the pool with connections."""
         if self._initialized:
             return
-        
+
         async with self.lock:
             if self._initialized:
                 return
-            
+
             last_exc: Optional[Exception] = None
             # Seed the full pool. The previous min(2, pool_size) cap meant
             # a campaign with concurrency=50 and pool_size_per_server=10
@@ -349,7 +429,7 @@ class AsyncConnectionPool:
                 except Exception as e:
                     last_exc = e
                     logger.warning(f"Failed to create initial connection: {e}")
-            
+
             self._initialized = True
 
             # All warm connections failed — fail fast so the caller (campaign runner)
@@ -358,12 +438,12 @@ class AsyncConnectionPool:
             if last_exc is not None and not self.connections:
                 self._initialized = False  # allow retry once credentials are fixed
                 raise last_exc
-    
+
     async def _replenish_one(self):
         """
         Proactively create a new connection if under pool limits.
-        
-        This prevents waiters from blocking on timeout when a stale 
+
+        This prevents waiters from blocking on timeout when a stale
         connection is discarded.
         """
         async with self.lock:
@@ -380,7 +460,6 @@ class AsyncConnectionPool:
                 logger.warning(f"Failed to replenish connection: {e}")
                 # Don't raise, we'll try again later naturally
 
-    
     async def get_connection(self, timeout: float = 10.0) -> AsyncSMTPConnection:
         """Get a connection from the pool.
 
@@ -454,7 +533,7 @@ class AsyncConnectionPool:
                     return conn
             # Pool is full and the queue starved — fall through to retry
             # the queue wait on the remaining budget.
-    
+
     async def release_connection(self, conn: AsyncSMTPConnection):
         """Return connection to pool."""
         if (
@@ -464,17 +543,17 @@ class AsyncConnectionPool:
         ):
             await self.available.put(conn)
             return
-        
+
         await conn.close()
         async with self.lock:
             if conn in self.connections:
                 self.connections.remove(conn)
-        
+
         # FIX: Proactively replenish to wake up waiters
         task = asyncio.create_task(self._replenish_one())
         self._background_tasks.add(task)
         task.add_done_callback(self._background_tasks.discard)
-    
+
     async def close_all(self):
         """Close all connections."""
         async with self.lock:
@@ -514,27 +593,28 @@ class SMTPConnectionPool:
         self,
         configs: List[SMTPServerConfig],
         pool_size_per_server: int = 5,
-        selection_strategy: str = 'round_robin'
+        selection_strategy: str = "round_robin",
+        ip_warmup_mode: bool = False,
     ):
         self.configs = configs
         self.pools: Dict[str, AsyncConnectionPool] = {}
         # Default to round-robin for deterministic selection in tests
-        self.selection_strategy = selection_strategy or 'round_robin'
+        self.selection_strategy = selection_strategy or "round_robin"
+        self.ip_warmup_mode = ip_warmup_mode
         self.lock = asyncio.Lock()
         self._round_robin_index = 0
         self._pool_size_per_server = pool_size_per_server
 
         # Create pools for each server
         for config in configs:
-            self.pools[config.name] = AsyncConnectionPool(
-                config,
-                pool_size=pool_size_per_server
-            )
+            self.pools[config.name] = AsyncConnectionPool(config, pool_size=pool_size_per_server)
 
         with _ACTIVE_POOLS_LOCK:
             _ACTIVE_POOLS.append(self)
 
-    async def invalidate_server(self, name: str, new_config: Optional[SMTPServerConfig] = None) -> bool:
+    async def invalidate_server(
+        self, name: str, new_config: Optional[SMTPServerConfig] = None
+    ) -> bool:
         """Refresh a single server's connections after a config update.
 
         Closes the existing pool (which forces all subsequent acquires to
@@ -558,9 +638,7 @@ class SMTPConnectionPool:
         old_pool: Optional[AsyncConnectionPool] = self.pools.get(name)
 
         if new_config is not None:
-            self.configs = [
-                (new_config if c.name == name else c) for c in self.configs
-            ]
+            self.configs = [(new_config if c.name == name else c) for c in self.configs]
             target_name = new_config.name
             self.pools[target_name] = AsyncConnectionPool(
                 new_config,
@@ -583,7 +661,7 @@ class SMTPConnectionPool:
 
         logger.info(f"Invalidated pool for SMTP server '{name}'")
         return True
-    
+
     def _candidate_configs(
         self, candidates: Optional[List[SMTPServerConfig]] = None
     ) -> List[SMTPServerConfig]:
@@ -605,7 +683,9 @@ class SMTPConnectionPool:
         """Select server using weighted random selection."""
         import random
 
-        available = [c for c in self._candidate_configs(candidates) if c.can_execute()]
+        available = [
+            c for c in self._candidate_configs(candidates) if c.can_execute(self.ip_warmup_mode)
+        ]
 
         if not available:
             return None
@@ -627,7 +707,9 @@ class SMTPConnectionPool:
         self, candidates: Optional[List[SMTPServerConfig]] = None
     ) -> Optional[SMTPServerConfig]:
         """Select server using round-robin."""
-        available = [c for c in self._candidate_configs(candidates) if c.can_execute()]
+        available = [
+            c for c in self._candidate_configs(candidates) if c.can_execute(self.ip_warmup_mode)
+        ]
 
         if not available:
             return None
@@ -640,7 +722,9 @@ class SMTPConnectionPool:
         self, candidates: Optional[List[SMTPServerConfig]] = None
     ) -> Optional[SMTPServerConfig]:
         """Select server by priority."""
-        available = [c for c in self._candidate_configs(candidates) if c.can_execute()]
+        available = [
+            c for c in self._candidate_configs(candidates) if c.can_execute(self.ip_warmup_mode)
+        ]
 
         if not available:
             return None
@@ -659,11 +743,11 @@ class SMTPConnectionPool:
         From address) without the previous self.configs swap-and-restore
         hack, which was racy under concurrent invalidate_server().
         """
-        if self.selection_strategy == 'weighted':
+        if self.selection_strategy == "weighted":
             return self._select_server_weighted(candidates)
-        elif self.selection_strategy == 'round_robin':
+        elif self.selection_strategy == "round_robin":
             return self._select_server_round_robin(candidates)
-        elif self.selection_strategy == 'priority':
+        elif self.selection_strategy == "priority":
             return self._select_server_priority(candidates)
         else:
             return self._select_server_weighted(candidates)
@@ -694,8 +778,9 @@ class SMTPConnectionPool:
         # Snapshot self.configs once — see _candidate_configs for why the
         # live reference is unsafe under concurrent invalidate_server.
         owners = [
-            c for c in list(self.configs)
-            if c.can_execute() and (c.from_email or '').strip().lower() == target
+            c
+            for c in list(self.configs)
+            if c.can_execute(self.ip_warmup_mode) and (c.from_email or "").strip().lower() == target
         ]
         if not owners:
             return None
@@ -704,11 +789,9 @@ class SMTPConnectionPool:
         # Multiple owners — apply normal strategy among them via the
         # candidates parameter instead of swapping self.configs in place.
         return self.select_server(candidates=owners)
-    
+
     async def acquire(
-        self,
-        preferred_server: str = None,
-        timeout: float = 10.0
+        self, preferred_server: str = None, timeout: float = 10.0
     ) -> Tuple[AsyncSMTPConnection, SMTPServerConfig]:
         """Acquire connection from pool.
 
@@ -722,15 +805,11 @@ class SMTPConnectionPool:
         """
         if preferred_server:
             if preferred_server not in self.pools:
-                raise RuntimeError(
-                    f"Preferred SMTP server '{preferred_server}' is not configured"
-                )
+                raise RuntimeError(f"Preferred SMTP server '{preferred_server}' is not configured")
             config = next((c for c in self.configs if c.name == preferred_server), None)
             if not config:
-                raise RuntimeError(
-                    f"Preferred SMTP server '{preferred_server}' has no config"
-                )
-            if not config.can_execute():
+                raise RuntimeError(f"Preferred SMTP server '{preferred_server}' has no config")
+            if not config.can_execute(self.ip_warmup_mode):
                 raise RuntimeError(
                     f"Preferred SMTP server '{preferred_server}' is unavailable "
                     f"(rate-limited or circuit open)"
@@ -752,28 +831,27 @@ class SMTPConnectionPool:
             for c in self.configs:
                 try:
                     cb_stats = c.runtime.circuit_breaker.get_stats()
-                    if cb_stats.get('state') == 'open':
-                        msgs = cb_stats.get('last_error_messages') or []
-                        last = msgs[-1] if msgs else 'unknown'
+                    if cb_stats.get("state") == "open":
+                        msgs = cb_stats.get("last_error_messages") or []
+                        last = msgs[-1] if msgs else "unknown"
                         details.append(f"{c.name}: circuit open — last error: {last}")
                 except Exception:
                     pass
             if details:
                 raise RuntimeError(
-                    "All SMTP servers' circuit breakers are open. "
-                    + " | ".join(details)
+                    "All SMTP servers' circuit breakers are open. " + " | ".join(details)
                 )
             raise RuntimeError("No SMTP servers available")
 
         pool = self.pools[config.name]
         conn = await pool.get_connection(timeout)
         return conn, config
-    
+
     async def release(self, conn: AsyncSMTPConnection, config: SMTPServerConfig):
         """Release connection back to pool."""
         if config.name in self.pools:
             await self.pools[config.name].release_connection(conn)
-    
+
     def record_success(self, config: SMTPServerConfig):
         """Record successful send."""
         rt = config.runtime
@@ -797,7 +875,7 @@ class SMTPConnectionPool:
         # "corporate" → matches "rate". Use the typed exception instead.
         if isinstance(error, SMTPRateLimitError):
             logger.warning(f"Rate limiting detected on {config.name}")
-    
+
     async def close_all(self):
         """Close all pools."""
         for pool in self.pools.values():
@@ -815,14 +893,19 @@ class SMTPConnectionPool:
             rt = c.runtime
             stats = rt.circuit_breaker.get_stats()
             status[c.name] = {
-                'host': c.host,
-                'circuit_state': stats['state'],
-                'minute_count': rt.current_minute_count,
-                'hour_count': rt.current_hour_count,
-                'available': c.can_execute(),
-                'total_sent': rt.total_sent,
-                'consecutive_failures': rt.consecutive_failures,
-                'total_failures': rt.total_failures,
+                "host": c.host,
+                "circuit_state": stats["state"],
+                "minute_count": rt.current_minute_count,
+                "hour_count": rt.current_hour_count,
+                "available": c.can_execute(self.ip_warmup_mode),
+                "total_sent": rt.total_sent,
+                "consecutive_failures": rt.consecutive_failures,
+                "total_failures": rt.total_failures,
+                "avg_handshake_latency": rt.avg_handshake_latency
+                if hasattr(rt, "avg_handshake_latency")
+                else None,
+                "avg_send_latency": rt.avg_send_latency
+                if hasattr(rt, "avg_send_latency")
+                else None,
             }
         return status
-

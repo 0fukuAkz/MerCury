@@ -17,7 +17,7 @@ from ....services.dead_letter_service import DeadLetterService
 logger = logging.getLogger(__name__)
 
 
-@api_bp.route('/dead-letter', methods=['GET'])
+@api_bp.route("/dead-letter", methods=["GET"])
 @api_key_or_login_required
 @limiter.limit("30/minute")
 def api_list_dead_letters():
@@ -26,13 +26,15 @@ def api_list_dead_letters():
         repo = DeadLetterRepository(session)
         service = DeadLetterService(repo)
         items = service.get_unresolved(limit=100)
-        return jsonify({
-            'items': [item.to_dict() for item in items],
-            'count': len(items),
-        })
+        return jsonify(
+            {
+                "items": [item.to_dict() for item in items],
+                "count": len(items),
+            }
+        )
 
 
-@api_bp.route('/dead-letter/<int:item_id>/retry', methods=['POST'])
+@api_bp.route("/dead-letter/<int:item_id>/retry", methods=["POST"])
 @api_key_or_login_required
 @limiter.limit("10/minute")
 def api_retry_dead_letter(item_id):
@@ -41,7 +43,7 @@ def api_retry_dead_letter(item_id):
         repo = DeadLetterRepository(session)
         service = DeadLetterService(repo)
         result = service.retry_dead_letter(item_id)
-        return jsonify({'success': result is not None})
+        return jsonify({"success": result is not None})
 
 
 def _requeue_item(item_id: int, pinned_smtp_id=None):
@@ -57,15 +59,15 @@ def _requeue_item(item_id: int, pinned_smtp_id=None):
         repo = DeadLetterRepository(session)
         item = repo.get(item_id)
         if not item:
-            return {'success': False, 'error': f'Dead letter id={item_id} not found'}
+            return {"success": False, "error": f"Dead letter id={item_id} not found"}
         if item.resolved:
-            return {'success': False, 'error': 'Item is already resolved'}
+            return {"success": False, "error": "Item is already resolved"}
         # Snapshot before session closes.
-        recipient  = item.recipient
-        subject    = item.subject
-        html_body  = item.html_body
-        from_email = item.from_email or ''
-        from_name  = item.from_name or ''
+        recipient = item.recipient
+        subject = item.subject
+        html_body = item.html_body
+        from_email = item.from_email or ""
+        from_name = item.from_name or ""
 
     # Load SMTP servers.
     from ....data.repositories.smtp import SMTPRepository
@@ -80,27 +82,27 @@ def _requeue_item(item_id: int, pinned_smtp_id=None):
             smtp_servers = [one] if (one and one.is_enabled) else []
             if not smtp_servers:
                 return {
-                    'success': False,
-                    'error': f'Pinned SMTP server id={pinned_smtp_id} is missing or disabled',
+                    "success": False,
+                    "error": f"Pinned SMTP server id={pinned_smtp_id} is missing or disabled",
                 }
         else:
             smtp_servers = smtp_repo.get_all()
         smtp_configs = [s.get_connection_config() for s in smtp_servers if s.is_enabled]
 
     if not smtp_configs:
-        return {'success': False, 'error': 'No active SMTP servers configured'}
+        return {"success": False, "error": "No active SMTP servers configured"}
 
     # Auto-fill from_email / from_name from SMTP server when missing.
     if not from_email:
-        from_email = (smtp_configs[0].get('from_email') or '').strip()
+        from_email = (smtp_configs[0].get("from_email") or "").strip()
     if not from_name:
-        from_name = (smtp_configs[0].get('from_name') or '').strip()
+        from_name = (smtp_configs[0].get("from_name") or "").strip()
 
     if not from_email:
         return {
-            'success': False,
-            'error': (
-                'Dead letter has no from_email and no SMTP server default is configured. '
+            "success": False,
+            "error": (
+                "Dead letter has no from_email and no SMTP server default is configured. "
                 'Set a "From Email" on an SMTP server and retry.'
             ),
         }
@@ -111,28 +113,29 @@ def _requeue_item(item_id: int, pinned_smtp_id=None):
     service = EmailService(smtp_service)
     service.configure(config)
 
-    result = run_async(service.send_single(
-        recipient=recipient,
-        subject=subject,
-        html_body=html_body,
-        from_email=from_email,
-        from_name=from_name,
-    ))
+    result = run_async(
+        service.send_single(
+            recipient=recipient,
+            subject=subject,
+            html_body=html_body,
+            from_email=from_email,
+            from_name=from_name,
+        )
+    )
 
     if result.success:
         with session_scope() as session:
             repo2 = DeadLetterRepository(session)
             svc2 = DeadLetterService(repo2)
             svc2.mark_resolved(
-                item_id,
-                f"Requeued and delivered via {result.smtp_server or 'SMTP'}"
+                item_id, f"Requeued and delivered via {result.smtp_server or 'SMTP'}"
             )
             svc2.retry_dead_letter(item_id)
         logger.info("♻️  Dead letter id=%d requeued → %s", item_id, recipient)
         return {
-            'success': True,
-            'smtp_server': result.smtp_server,
-            'smtp_response': result.smtp_response,
+            "success": True,
+            "smtp_server": result.smtp_server,
+            "smtp_response": result.smtp_response,
         }
     else:
         with session_scope() as session:
@@ -141,13 +144,13 @@ def _requeue_item(item_id: int, pinned_smtp_id=None):
             svc2.retry_dead_letter(item_id)
         logger.warning("♻️  Dead letter id=%d requeue failed: %s", item_id, result.error)
         return {
-            'success': False,
-            'error': result.error or 'Send failed',
-            'smtp_server': result.smtp_server,
+            "success": False,
+            "error": result.error or "Send failed",
+            "smtp_server": result.smtp_server,
         }
 
 
-@api_bp.route('/dead-letter/<int:item_id>/requeue', methods=['POST'])
+@api_bp.route("/dead-letter/<int:item_id>/requeue", methods=["POST"])
 @api_key_or_login_required
 @limiter.limit("10/minute")
 def api_requeue_dead_letter(item_id):
@@ -158,8 +161,8 @@ def api_requeue_dead_letter(item_id):
     """
     data = request.get_json(silent=True) or {}
     pinned_smtp_id = None
-    _raw = data.get('smtp_server_id')
-    if _raw not in (None, '', 0, '0'):
+    _raw = data.get("smtp_server_id")
+    if _raw not in (None, "", 0, "0"):
         try:
             pinned_smtp_id = int(_raw)
         except (TypeError, ValueError):
@@ -168,15 +171,15 @@ def api_requeue_dead_letter(item_id):
     try:
         outcome = _requeue_item(item_id, pinned_smtp_id)
         status = 200
-        if not outcome['success'] and 'not found' in outcome.get('error', ''):
+        if not outcome["success"] and "not found" in outcome.get("error", ""):
             status = 404
         return jsonify(outcome), status
     except Exception as e:
         logger.exception("Dead letter requeue error id=%d", item_id)
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
-@api_bp.route('/dead-letter/requeue-all', methods=['POST'])
+@api_bp.route("/dead-letter/requeue-all", methods=["POST"])
 @api_key_or_login_required
 @limiter.limit("2/minute")
 def api_requeue_all_dead_letters():
@@ -194,9 +197,9 @@ def api_requeue_all_dead_letters():
     with session_scope() as session:
         dl_repo = DeadLetterRepository(session)
         items = dl_repo.get_unresolved(limit=10000)
-        
+
         if not items:
-            return jsonify({'success': False, 'error': 'No pending messages to requeue'})
+            return jsonify({"success": False, "error": "No pending messages to requeue"})
 
         # Find the most common campaign_id among the dead letters
         campaign_ids = [item.campaign_id for item in items if item.campaign_id]
@@ -212,8 +215,8 @@ def api_requeue_all_dead_letters():
         if src:
             # Clone the source campaign
             clone = Campaign(
-                name=src.name + ' (Dead Letter Recovery)',
-                description='Recovery campaign for failed messages.',
+                name=src.name + " (Dead Letter Recovery)",
+                description="Recovery campaign for failed messages.",
                 type=src.type,
                 status=CampaignStatus.DRAFT,
                 template_id=src.template_id,
@@ -237,33 +240,33 @@ def api_requeue_all_dead_letters():
             )
             # Store the list of failed emails in filter_emails setting
             # so the recovery campaign only sends to those who failed.
-            clone.settings['filter_emails'] = emails
+            clone.settings["filter_emails"] = emails
         else:
             # Create a blank campaign if no source is available
             clone = Campaign(
-                name='Dead Letter Recovery',
-                description='Recovery campaign for failed messages.',
+                name="Dead Letter Recovery",
+                description="Recovery campaign for failed messages.",
                 status=CampaignStatus.DRAFT,
             )
-            clone.settings = {
-                'manual_recipients': emails
-            }
-        
+            clone.settings = {"manual_recipients": emails}
+
         clone = camp_repo.create(clone)
         new_campaign_id = clone.id
-        
+
         # Mark the dead letters as resolved since they've been moved to a new campaign
         dl_service = DeadLetterService(dl_repo)
         dl_service.discard_all_unresolved(f"Requeued to campaign #{new_campaign_id}")
 
-    return jsonify({
-        'success': True,
-        'redirect_url': f'/campaigns/{new_campaign_id}/edit',
-        'message': f'Created recovery campaign with {len(emails)} recipients'
-    })
+    return jsonify(
+        {
+            "success": True,
+            "redirect_url": f"/campaigns/{new_campaign_id}/edit",
+            "message": f"Created recovery campaign with {len(emails)} recipients",
+        }
+    )
 
 
-@api_bp.route('/dead-letter/<int:item_id>', methods=['DELETE'])
+@api_bp.route("/dead-letter/<int:item_id>", methods=["DELETE"])
 @api_key_or_login_required
 @limiter.limit("10/minute")
 def api_discard_dead_letter(item_id):
@@ -272,10 +275,10 @@ def api_discard_dead_letter(item_id):
         repo = DeadLetterRepository(session)
         service = DeadLetterService(repo)
         result = service.mark_resolved(item_id, "Discarded via UI")
-        return jsonify({'success': result is not None})
+        return jsonify({"success": result is not None})
 
 
-@api_bp.route('/dead-letter/discard-all', methods=['POST'])
+@api_bp.route("/dead-letter/discard-all", methods=["POST"])
 @api_key_or_login_required
 @limiter.limit("5/minute")
 def api_discard_all_dead_letters():
@@ -284,10 +287,10 @@ def api_discard_all_dead_letters():
         repo = DeadLetterRepository(session)
         service = DeadLetterService(repo)
         count = service.discard_all_unresolved("Bulk-discarded via UI")
-        return jsonify({'success': True, 'discarded': count})
+        return jsonify({"success": True, "discarded": count})
 
 
-@api_bp.route('/dead-letter/stats', methods=['GET'])
+@api_bp.route("/dead-letter/stats", methods=["GET"])
 @api_key_or_login_required
 @limiter.limit("30/minute")
 def api_dead_letter_stats():

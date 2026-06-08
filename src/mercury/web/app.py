@@ -228,23 +228,26 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
 
     # Security response headers. Applied to every response. Conservative by
     # default; operators can override via the documented env vars below.
-    _csp = os.environ.get(
+    _csp_template = os.environ.get(
         "CONTENT_SECURITY_POLICY",
-        # default-src 'self' covers scripts/styles/images/fonts. 'unsafe-inline'
-        # is required because the dashboard templates embed inline <script>
-        # blocks for SocketIO bootstrap; tighten later by extracting them.
+        # default-src 'self' covers scripts/styles/images/fonts.
         # cdn.socket.io is whitelisted because base.html loads the socket.io
-        # client from that CDN — without it the script silently 404s under
-        # CSP and the dashboard's lifecycle buttons (Start/Pause/Resume) fail
-        # because `io` is undefined.
+        # client from that CDN. We use a dynamic nonce for scripts.
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' https://cdn.socket.io; "
+        "script-src 'self' 'nonce-{nonce}' https://cdn.socket.io; "
         "style-src 'self' 'unsafe-inline'; "
         "img-src 'self' data: blob:; "
         "connect-src 'self' ws: wss:; "
-        "frame-ancestors 'none'",
+        "frame-ancestors 'none'"
     )
     _hsts_max_age = int(os.environ.get("HSTS_MAX_AGE", "31536000"))  # 1 year
+
+    import secrets
+    from flask import g
+
+    @app.before_request
+    def set_csp_nonce():
+        g.csp_nonce = secrets.token_urlsafe(16)
 
     @app.after_request
     def _set_security_headers(response):
@@ -260,8 +263,9 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
             "Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()"
         )
         # CSP — opt-out by setting CONTENT_SECURITY_POLICY=''.
-        if _csp:
-            response.headers.setdefault("Content-Security-Policy", _csp)
+        if _csp_template:
+            nonce = getattr(g, "csp_nonce", "")
+            response.headers.setdefault("Content-Security-Policy", _csp_template.format(nonce=nonce))
         # HSTS — only over HTTPS, only in production. Browsers ignore the
         # header on plain HTTP, but skipping it here keeps logs clean.
         if _is_production and _hsts_max_age > 0:
@@ -277,9 +281,13 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
     def inject_ui_theme():
         try:
             s = SettingsService.get_settings()
-            return {"ui_theme": s.ui_theme or "dark"}
+            theme = s.ui_theme or "dark"
         except Exception:
-            return {"ui_theme": "dark"}
+            theme = "dark"
+        return {
+            "ui_theme": theme,
+            "csp_nonce": getattr(g, "csp_nonce", "")
+        }
 
     # Initialize Database
     with app.app_context():
@@ -351,19 +359,18 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
         except Exception as e:
             logger.error(f"Failed to initialize database: {e}")
 
-
         # --- Start DeadLetterWorker on background loop ---
         if not app.config.get("TESTING"):
             _is_reloader = os.environ.get("WERKZEUG_RUN_MAIN")
             if not app.config.get("DEBUG") or _is_reloader == "true":
                 import asyncio
                 from ..engine.dead_letter_worker import DeadLetterWorker
-                
+
                 async def _start_worker():
                     worker = DeadLetterWorker()
                     await worker.start()
                     # The bound method process_loop holds reference to worker
-                    
+
                 loop = start_background_loop()
                 asyncio.run_coroutine_threadsafe(_start_worker(), loop)
                 logger.info("DeadLetterWorker scheduled on background loop")

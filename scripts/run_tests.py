@@ -13,10 +13,10 @@ def run_command(cmd: list[str], description: str) -> bool:
     print(f"{'=' * 60}\n")
     
     try:
-        result = subprocess.run(cmd, check=True, capture_output=False)
+        subprocess.run(cmd, check=True, capture_output=False)
         print(f"\n✅ {description} - PASSED")
         return True
-    except subprocess.CalledProcessError as e:
+    except subprocess.CalledProcessError:
         print(f"\n❌ {description} - FAILED")
         return False
 

@@ -10,43 +10,43 @@ from ..models.dead_letter import DeadLetter
 
 class DeadLetterRepository(BaseRepository[DeadLetter]):
     """Repository for dead letter queue operations."""
-    
+
     def __init__(self, session):
         super().__init__(session, DeadLetter)
-    
+
     def get_by_recipient(self, recipient: str) -> List[DeadLetter]:
         """
         Get all dead letters for a recipient.
-        
+
         Args:
             recipient: Email address
-            
+
         Returns:
             List of dead letters
         """
         stmt = select(DeadLetter).where(DeadLetter.recipient == recipient)
         return list(self.session.execute(stmt).scalars())
-    
+
     def get_by_campaign(self, campaign_id: int) -> List[DeadLetter]:
         """
         Get all dead letters for a campaign.
-        
+
         Args:
             campaign_id: Campaign ID
-            
+
         Returns:
             List of dead letters
         """
         stmt = select(DeadLetter).where(DeadLetter.campaign_id == campaign_id)
         return list(self.session.execute(stmt).scalars())
-    
+
     def get_unresolved(self, limit: int = 100) -> List[DeadLetter]:
         """
         Get unresolved dead letters.
-        
+
         Args:
             limit: Maximum number to return
-            
+
         Returns:
             List of unresolved dead letters
         """
@@ -57,15 +57,15 @@ class DeadLetterRepository(BaseRepository[DeadLetter]):
             .limit(limit)
         )
         return list(self.session.execute(stmt).scalars())
-    
+
     def get_by_error_type(self, error_type: str, limit: int = 100) -> List[DeadLetter]:
         """
         Get dead letters by error type.
-        
+
         Args:
             error_type: Error type to filter by
             limit: Maximum number to return
-            
+
         Returns:
             List of matching dead letters
         """
@@ -76,15 +76,15 @@ class DeadLetterRepository(BaseRepository[DeadLetter]):
             .limit(limit)
         )
         return list(self.session.execute(stmt).scalars())
-    
+
     def get_recent(self, hours: int = 24, limit: int = 100) -> List[DeadLetter]:
         """
         Get recent dead letters.
-        
+
         Args:
             hours: Number of hours to look back
             limit: Maximum number to return
-            
+
         Returns:
             List of recent dead letters
         """
@@ -96,19 +96,17 @@ class DeadLetterRepository(BaseRepository[DeadLetter]):
             .limit(limit)
         )
         return list(self.session.execute(stmt).scalars())
-    
+
     def mark_resolved(
-        self,
-        dead_letter_id: int,
-        resolution_notes: Optional[str] = None
+        self, dead_letter_id: int, resolution_notes: Optional[str] = None
     ) -> Optional[DeadLetter]:
         """
         Mark dead letter as resolved.
-        
+
         Args:
             dead_letter_id: Dead letter ID
             resolution_notes: Optional resolution notes
-            
+
         Returns:
             Updated dead letter or None
         """
@@ -119,7 +117,7 @@ class DeadLetterRepository(BaseRepository[DeadLetter]):
             dead_letter.resolution_notes = resolution_notes
             return self.update(dead_letter)
         return None
-    
+
     def mark_all_unresolved_as_resolved(self, resolution_notes: Optional[str] = None) -> int:
         """Bulk-resolve every unresolved row in one statement.
 
@@ -155,10 +153,10 @@ class DeadLetterRepository(BaseRepository[DeadLetter]):
     def increment_retry_count(self, dead_letter_id: int) -> Optional[DeadLetter]:
         """
         Increment retry count for dead letter.
-        
+
         Args:
             dead_letter_id: Dead letter ID
-            
+
         Returns:
             Updated dead letter or None
         """
@@ -168,44 +166,41 @@ class DeadLetterRepository(BaseRepository[DeadLetter]):
             dead_letter.last_retry_at = datetime.now(UTC)
             return self.update(dead_letter)
         return None
-    
+
     def get_statistics(self) -> dict:
         """
         Get dead letter queue statistics.
-        
+
         Returns:
             Statistics dictionary
         """
         from sqlalchemy import func
-        
+
         total = self.count()
-        
+
         unresolved_stmt = select(func.count(DeadLetter.id)).where(DeadLetter.resolved == False)
         unresolved = self.session.execute(unresolved_stmt).scalar() or 0
-        
+
         retried_stmt = select(func.count(DeadLetter.id)).where(DeadLetter.retry_count > 0)
         retried = self.session.execute(retried_stmt).scalar() or 0
-        
+
         discarded_stmt = select(func.count(DeadLetter.id)).where(DeadLetter.resolved == True)
         discarded = self.session.execute(discarded_stmt).scalar() or 0
-        
+
         # Count by error type
-        stmt = (
-            select(DeadLetter.error_type, func.count(DeadLetter.id))
-            .group_by(DeadLetter.error_type)
+        stmt = select(DeadLetter.error_type, func.count(DeadLetter.id)).group_by(
+            DeadLetter.error_type
         )
         error_counts = dict(self.session.execute(stmt).all())
-        
-        return {
-            'total': total,
-            'unresolved': unresolved,
-            'resolved': discarded,
-            'by_error_type': error_counts,
-            
-            # Keys mapped exactly for the UI
-            'pending': unresolved,
-            'total_processed': total,
-            'retried': retried,
-            'discarded': discarded
-        }
 
+        return {
+            "total": total,
+            "unresolved": unresolved,
+            "resolved": discarded,
+            "by_error_type": error_counts,
+            # Keys mapped exactly for the UI
+            "pending": unresolved,
+            "total_processed": total,
+            "retried": retried,
+            "discarded": discarded,
+        }

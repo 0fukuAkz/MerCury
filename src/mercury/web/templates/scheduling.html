@@ -99,7 +99,7 @@
 <div class="card">
     <div class="card-header">
         <h2 class="card-title">Scheduled Jobs</h2>
-        <button class="btn btn-secondary" onclick="loadJobs()">Refresh</button>
+        <button type="button" class="btn btn-secondary" onclick="loadJobs()">Refresh</button>
     </div>
     <table class="table">
         <thead>
@@ -120,7 +120,7 @@
     </table>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
     function toggleScheduleFields() {
         const type = document.getElementById('schedule-type').value;
         document.getElementById('once-fields').style.display = type === 'once' ? 'block' : 'none';
@@ -160,10 +160,10 @@
                     <td>
                         <div class="flex gap-2">
                             ${job.enabled
-                    ? `<button class="btn btn-secondary" onclick="pauseJob('${job.id}')">Pause</button>`
-                    : `<button class="btn btn-primary" onclick="resumeJob('${job.id}')">Resume</button>`
+                    ? `<button type="button" class="btn btn-secondary" onclick="pauseJob('${job.id}')">Pause</button>`
+                    : `<button type="button" class="btn btn-primary" onclick="resumeJob('${job.id}')">Resume</button>`
                 }
-                            <button class="btn btn-secondary" onclick="cancelJob('${job.id}')" style="color: var(--error);">Cancel</button>
+                            <button type="button" class="btn btn-secondary" onclick="cancelJob('${job.id}')" style="color: var(--error);">Cancel</button>
                         </div>
                     </td>
                 </tr>

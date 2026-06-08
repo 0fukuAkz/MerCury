@@ -32,7 +32,7 @@
         </label>
     </div>
 
-    <button class="btn btn-primary" onclick="uploadRecipients()">Upload & Process</button>
+    <button type="button" class="btn btn-primary" onclick="uploadRecipients()">Upload & Process</button>
     <div id="upload-result" class="mt-4" style="display:none;"></div>
 </div>
 
@@ -40,7 +40,7 @@
 <div class="card">
     <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
         <h2 class="card-title" style="margin:0;">Recipient Lists</h2>
-        <button class="btn btn-secondary btn-sm" onclick="loadFiles()">Refresh</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="loadFiles()">Refresh</button>
     </div>
     <div id="files-table-wrap">
         <p class="text-muted">Loading…</p>
@@ -52,7 +52,7 @@
     <div style="background:var(--bg-secondary); margin:4rem auto; max-width:900px; border-radius:12px; padding:1.5rem;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
             <h3 id="preview-title" style="margin:0;"></h3>
-            <button class="btn btn-secondary btn-sm" onclick="document.getElementById('preview-modal').style.display='none'">Close</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('preview-modal').style.display='none'">Close</button>
         </div>
         <div id="preview-content" style="overflow-x:auto;"></div>
     </div>
@@ -78,7 +78,7 @@ bob@domain.org,Bob,Wilson,StartUp LLC</pre>
     </p>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
     // ---- Upload ----
     async function uploadRecipients() {
         const fileInput = document.getElementById('csv-file');
@@ -137,8 +137,8 @@ bob@domain.org,Bob,Wilson,StartUp LLC</pre>
                     <td>${kb} KB</td>
                     <td>${mod}</td>
                     <td style="display:flex; gap:0.5rem;">
-                        <button class="btn btn-secondary btn-sm" onclick="previewFile('${f.filename}')">Preview</button>
-                        <button class="btn btn-sm" style="background:var(--danger);color:#fff;" onclick="deleteFile('${f.filename}')">Delete</button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="previewFile('${f.filename}')">Preview</button>
+                        <button type="button" class="btn btn-sm" style="background:var(--danger);color:#fff;" onclick="deleteFile('${f.filename}')">Delete</button>
                     </td>
                 </tr>`;
             }

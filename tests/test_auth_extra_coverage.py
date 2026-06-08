@@ -32,6 +32,7 @@ from mercury.security.auth import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_user(**kwargs) -> User:
     defaults = dict(
         id="42",
@@ -49,6 +50,7 @@ def _make_user(**kwargs) -> User:
 # User.is_admin property  (line 58)
 # ---------------------------------------------------------------------------
 
+
 class TestUserIsAdmin:
     def test_is_admin_false_by_default(self):
         u = _make_user(is_admin=False)
@@ -62,6 +64,7 @@ class TestUserIsAdmin:
 # ---------------------------------------------------------------------------
 # User.check_password  (line 71)
 # ---------------------------------------------------------------------------
+
 
 class TestUserCheckPassword:
     def test_check_password_correct(self):
@@ -77,6 +80,7 @@ class TestUserCheckPassword:
 # ---------------------------------------------------------------------------
 # User.set_password  (line 75)
 # ---------------------------------------------------------------------------
+
 
 class TestUserSetPassword:
     def test_set_password_updates_hash(self):
@@ -96,6 +100,7 @@ class TestUserSetPassword:
 # ---------------------------------------------------------------------------
 # User.to_dict  (line 79)
 # ---------------------------------------------------------------------------
+
 
 class TestUserToDict:
     def test_to_dict_contains_all_fields(self):
@@ -132,6 +137,7 @@ class TestUserToDict:
 # verify_password with invalid hash format  (lines 167-169)
 # ---------------------------------------------------------------------------
 
+
 class TestVerifyPasswordInvalidHash:
     def test_returns_false_when_no_dollar_sign(self):
         """Lines 151-152, 167-169: hash without '$' must return False."""
@@ -150,6 +156,7 @@ class TestVerifyPasswordInvalidHash:
 # create_user with duplicate username  (line 204)
 # ---------------------------------------------------------------------------
 
+
 class TestCreateUserDuplicate:
     def test_duplicate_username_raises_value_error(self, app):
         """Line 204: creating a user with a taken username must raise ValueError."""
@@ -161,6 +168,7 @@ class TestCreateUserDuplicate:
 # ---------------------------------------------------------------------------
 # get_user_by_id with non-integer id  (lines 241-242)
 # ---------------------------------------------------------------------------
+
 
 class TestGetUserById:
     def test_non_integer_id_returns_none(self, app):
@@ -187,6 +195,7 @@ class TestGetUserById:
 # get_user_by_username  (lines 249-262)
 # ---------------------------------------------------------------------------
 
+
 class TestGetUserByUsername:
     def test_returns_none_for_unknown_username(self, app):
         """Lines 249-262: unknown username yields None."""
@@ -209,6 +218,7 @@ class TestGetUserByUsername:
 # init_auth  (lines 330-365)
 # ---------------------------------------------------------------------------
 
+
 class TestInitAuth:
     # init_auth imports init_db and get_session_direct inside the function body,
     # so we patch them at their source location (mercury.data.database /
@@ -226,12 +236,11 @@ class TestInitAuth:
         mock_repo = MagicMock()
         mock_repo.get_admins.return_value = []  # no admins yet
 
-        with patch("mercury.security.auth.login_manager"), \
-             patch("mercury.security.auth.init_db"), \
-             patch("mercury.security.auth.get_session_direct", return_value=mock_session), \
-             patch("mercury.security.auth.UserRepository", return_value=mock_repo), \
-             patch("mercury.security.auth.create_user") as mock_create:
-
+        with patch("mercury.security.auth.login_manager"), patch(
+            "mercury.security.auth.init_db"
+        ), patch("mercury.security.auth.get_session_direct", return_value=mock_session), patch(
+            "mercury.security.auth.UserRepository", return_value=mock_repo
+        ), patch("mercury.security.auth.create_user") as mock_create:
             init_auth(mock_app)
 
             mock_create.assert_called_once_with(
@@ -252,12 +261,13 @@ class TestInitAuth:
         mock_repo = MagicMock()
         mock_repo.get_admins.return_value = []
 
-        with patch("mercury.security.auth.login_manager"), \
-             patch("mercury.security.auth.init_db"), \
-             patch("mercury.security.auth.get_session_direct", return_value=mock_session), \
-             patch("mercury.security.auth.UserRepository", return_value=mock_repo):
-
+        with patch("mercury.security.auth.login_manager"), patch(
+            "mercury.security.auth.init_db"
+        ), patch("mercury.security.auth.get_session_direct", return_value=mock_session), patch(
+            "mercury.security.auth.UserRepository", return_value=mock_repo
+        ):
             import logging
+
             with caplog.at_level(logging.WARNING, logger="mercury.security.auth"):
                 init_auth(mock_app)
 
@@ -270,12 +280,11 @@ class TestInitAuth:
         mock_repo = MagicMock()
         mock_repo.get_admins.return_value = [MagicMock()]  # admin exists
 
-        with patch("mercury.security.auth.login_manager"), \
-             patch("mercury.security.auth.init_db"), \
-             patch("mercury.security.auth.get_session_direct", return_value=mock_session), \
-             patch("mercury.security.auth.UserRepository", return_value=mock_repo), \
-             patch("mercury.security.auth.create_user") as mock_create:
-
+        with patch("mercury.security.auth.login_manager"), patch(
+            "mercury.security.auth.init_db"
+        ), patch("mercury.security.auth.get_session_direct", return_value=mock_session), patch(
+            "mercury.security.auth.UserRepository", return_value=mock_repo
+        ), patch("mercury.security.auth.create_user") as mock_create:
             init_auth(mock_app)
 
             mock_create.assert_not_called()
@@ -284,6 +293,7 @@ class TestInitAuth:
 # ---------------------------------------------------------------------------
 # require_api_key with shlex exception  (lines 395-397)
 # ---------------------------------------------------------------------------
+
 
 class TestRequireApiKeyShlex:
     def test_shlex_exception_returns_false(self, monkeypatch):
@@ -307,6 +317,7 @@ class TestRequireApiKeyShlex:
 # ---------------------------------------------------------------------------
 # validate_unsubscribe_token edge cases  (lines 503-504, 539-540)
 # ---------------------------------------------------------------------------
+
 
 class TestValidateUnsubscribeToken:
     def _valid_token(self, email="user@example.com", email_id="111"):
@@ -339,9 +350,7 @@ class TestValidateUnsubscribeToken:
     def test_email_hash_mismatch_returns_false(self):
         """Lines 543-547: correct token but wrong email triggers hash mismatch."""
         token = self._valid_token(email="real@example.com", email_id="333")
-        valid, msg = validate_unsubscribe_token(
-            token, "333", email="other@example.com"
-        )
+        valid, msg = validate_unsubscribe_token(token, "333", email="other@example.com")
         assert valid is False
         assert "email" in msg.lower() or "address" in msg.lower()
 
@@ -354,9 +363,7 @@ class TestValidateUnsubscribeToken:
         expired_ts = int((datetime.now(UTC) - timedelta(days=1)).timestamp())
         email_hash = hashlib.sha256(email.lower().encode()).hexdigest()[:16]
         payload = f"{email_id}|{email_hash}|{expired_ts}"
-        signature = hmac.new(
-            secret, payload.encode("utf-8"), hashlib.sha256
-        ).hexdigest()[:32]
+        signature = hmac.new(secret, payload.encode("utf-8"), hashlib.sha256).hexdigest()[:32]
         token_data = f"{payload}|{signature}"
         token = base64.urlsafe_b64encode(token_data.encode()).decode()
 

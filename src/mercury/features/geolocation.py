@@ -122,9 +122,11 @@ class GeoResolver:
         # geolocate (loopback, RFC1918, link-local). MaxMind would just
         # raise AddressNotFoundError, but checking here avoids both the
         # exception cost and a noisy "address not in database" log line.
-        if ip.startswith(("10.", "127.", "192.168.", "169.254.", "::1", "fe80:")) or ip.startswith(
-            ("172.",)
-        ) and _is_rfc1918_172(ip):
+        if (
+            ip.startswith(("10.", "127.", "192.168.", "169.254.", "::1", "fe80:"))
+            or ip.startswith(("172.",))
+            and _is_rfc1918_172(ip)
+        ):
             return dict(_EMPTY)
 
         try:
@@ -141,12 +143,8 @@ class GeoResolver:
             "country": (r.country.name or "") if r.country else "",
             "country_code": (r.country.iso_code or "") if r.country else "",
             "city": (r.city.name or "") if r.city else "",
-            "region": (r.subdivisions.most_specific.name or "")
-            if r.subdivisions
-            else "",
-            "region_code": (r.subdivisions.most_specific.iso_code or "")
-            if r.subdivisions
-            else "",
+            "region": (r.subdivisions.most_specific.name or "") if r.subdivisions else "",
+            "region_code": (r.subdivisions.most_specific.iso_code or "") if r.subdivisions else "",
             "timezone": (r.location.time_zone or "") if r.location else "",
             "continent": (r.continent.name or "") if r.continent else "",
             "postal": (r.postal.code or "") if r.postal else "",

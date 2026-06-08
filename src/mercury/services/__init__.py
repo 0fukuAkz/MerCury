@@ -12,7 +12,7 @@ from .settings_service import SettingsService
 
 __all__ = [
     "CampaignService",
-    "EmailService", 
+    "EmailService",
     "SMTPService",
     "TrackingService",
     "BounceService",
@@ -21,5 +21,5 @@ __all__ = [
     "SchedulerService",
     "schedule_campaign",
     "IdentityService",
-    "SettingsService"
+    "SettingsService",
 ]

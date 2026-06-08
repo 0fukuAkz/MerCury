@@ -200,6 +200,7 @@
     }
     .glass-card {
         background: rgba(255, 255, 255, 0.03);
+        -webkit-backdrop-filter: blur(12px);
         backdrop-filter: blur(12px);
         border: 1px solid rgba(255, 255, 255, 0.08);
         border-radius: 16px;
@@ -379,9 +380,9 @@
 
 <!-- Toolbar -->
 <div class="toolbar">
-    <input type="text" class="search-input" id="search-input"
+    <input type="text" class="search-input" id="search-input" aria-label="Search campaigns"
            placeholder="Search campaigns…" oninput="applyFilter()">
-    <select class="filter-select" id="status-filter" onchange="applyFilter()">
+    <select class="filter-select" id="status-filter" aria-label="Filter by status" onchange="applyFilter()">
         <option value="">All statuses</option>
         <option value="draft">Draft</option>
         <option value="scheduled">Scheduled</option>
@@ -391,7 +392,7 @@
         <option value="failed">Failed</option>
         <option value="cancelled">Cancelled</option>
     </select>
-    <button class="btn btn-secondary" onclick="loadCampaigns()" title="Refresh list">
+    <button type="button" class="btn btn-secondary" onclick="loadCampaigns()" title="Refresh list">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="23 4 23 10 17 10"/>
             <polyline points="1 20 1 14 7 14"/>
@@ -404,11 +405,11 @@
 <!-- Bulk action bar -->
 <div class="bulk-bar" id="bulk-bar">
     <span><span class="bulk-count" id="bulk-count">0</span> selected</span>
-    <button class="act-btn del" onclick="bulkDelete()">
+    <button type="button" class="act-btn del" onclick="bulkDelete()">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
         Delete Selected
     </button>
-    <button class="act-btn cancel" onclick="clearSelection()">Cancel</button>
+    <button type="button" class="act-btn cancel" onclick="clearSelection()">Cancel</button>
 </div>
 
 <!-- Campaign table -->
@@ -416,7 +417,7 @@
     <table class="table">
         <thead>
             <tr>
-                <th style="width:32px;padding-right:0"><input type="checkbox" class="row-cb" id="select-all" onchange="toggleSelectAll(this)"></th>
+                <th style="width:32px;padding-right:0"><input type="checkbox" class="row-cb" id="select-all" aria-label="Select all campaigns" onchange="toggleSelectAll(this)"></th>
                 <th>Campaign</th>
                 <th>Type</th>
                 <th>Status</th>
@@ -437,8 +438,8 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
+<script nonce="{{ csp_nonce }}" src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script nonce="{{ csp_nonce }}">
     let allCampaigns = [];
     // track which detail rows are open by campaign id
     var _openDetails = {};
@@ -693,14 +694,22 @@
             if (smtpRes.servers && smtpRes.servers.length > 0) {
                 html += '<p class="detail-sec-title" style="margin-top:2rem;">SMTP Server Performance</p>';
                 html += '<table class="smtp-perf-table">';
-                html += '<tr><th>Server</th><th>Total Sent</th><th>Success</th><th>Failed</th><th>Success Rate</th></tr>';
+                html += '<tr><th>Server</th><th>Total Sent</th><th>Success</th><th>Failed</th><th>Success Rate</th><th>Bounces</th><th>Opens</th><th>Clicks</th></tr>';
                 smtpRes.servers.forEach(s => {
+                    const bounces = s.bounces !== undefined ? s.bounces : 0;
+                    const opens = s.unique_opens !== undefined ? s.unique_opens : 0;
+                    const clicks = s.unique_clicks !== undefined ? s.unique_clicks : 0;
+                    const openRate = s.open_rate !== undefined ? s.open_rate : 0.0;
+                    const clickRate = s.click_rate !== undefined ? s.click_rate : 0.0;
                     html += `<tr>
                         <td>${s.smtp_server || 'Unknown'}</td>
                         <td style="font-family:'JetBrains Mono',monospace;">${s.total.toLocaleString()}</td>
                         <td style="font-family:'JetBrains Mono',monospace;color:var(--neon-green);">${s.success.toLocaleString()}</td>
                         <td style="font-family:'JetBrains Mono',monospace;color:var(--error);">${s.failed.toLocaleString()}</td>
                         <td style="font-family:'JetBrains Mono',monospace;">${s.success_rate}%</td>
+                        <td style="font-family:'JetBrains Mono',monospace;color:var(--error);">${bounces.toLocaleString()}</td>
+                        <td style="font-family:'JetBrains Mono',monospace;color:#00f0ff;">${opens.toLocaleString()} <span style="font-size:0.7rem;color:var(--text-muted);">(${openRate}%)</span></td>
+                        <td style="font-family:'JetBrains Mono',monospace;color:#ff0055;">${clicks.toLocaleString()} <span style="font-size:0.7rem;color:var(--text-muted);">(${clickRate}%)</span></td>
                     </tr>`;
                 });
                 html += '</table>';
@@ -1165,8 +1174,9 @@
         if (c) {
             c.status = data.status;
             if (data.stats) {
-                if (data.stats.sent   !== undefined) c.sent_count   = data.stats.sent;
-                if (data.stats.failed !== undefined) c.failed_count = data.stats.failed;
+                if (data.stats.sent   !== undefined) c.sent_count       = data.stats.sent;
+                if (data.stats.failed !== undefined) c.failed_count     = data.stats.failed;
+                if (data.stats.total  !== undefined) c.total_recipients = data.stats.total;
             }
             if (c.total_recipients)
                 c.send_rate = Math.round((c.sent_count || 0) / c.total_recipients * 1000) / 10;

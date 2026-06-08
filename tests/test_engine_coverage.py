@@ -49,6 +49,7 @@ from mercury.exceptions import (
 # ErrorGroup.to_dict  –  line 29 (None dates)
 # ============================================================================
 
+
 class TestErrorGroupToDict:
     def test_to_dict_with_none_dates(self):
         """Line 29/35-36: first_occurrence and last_occurrence are None."""
@@ -81,6 +82,7 @@ class TestErrorGroupToDict:
 # ============================================================================
 # ErrorSummary.to_dict  –  line 55 (None start/end times)
 # ============================================================================
+
 
 class TestErrorSummaryToDict:
     def test_to_dict_with_none_times(self):
@@ -120,6 +122,7 @@ class TestErrorSummaryToDict:
 # ErrorAggregator.has_critical_errors – line 176 (total == 0)
 # ============================================================================
 
+
 class TestHasCriticalErrors:
     def test_has_critical_errors_empty_aggregator_returns_false(self):
         """Line 176: total == 0 → return False."""
@@ -137,9 +140,7 @@ class TestHasCriticalErrors:
         """Majority permanent → True."""
         aggregator = ErrorAggregator()
         for _ in range(6):
-            aggregator.add_error(
-                SMTPAuthenticationError("auth"), "u@t.com", is_transient=False
-            )
+            aggregator.add_error(SMTPAuthenticationError("auth"), "u@t.com", is_transient=False)
         for _ in range(4):
             aggregator.add_error(TransientSMTPError("tmp"), "u@t.com", is_transient=True)
         assert aggregator.has_critical_errors() is True
@@ -148,6 +149,7 @@ class TestHasCriticalErrors:
 # ============================================================================
 # ErrorAggregator.get_recommendations – lines 211, 221, 231-232, 238-240
 # ============================================================================
+
 
 class TestGetRecommendations:
     """Test every recommendation branch."""
@@ -213,6 +215,7 @@ class TestGetRecommendations:
 # ErrorAggregator.log_summary – lines 270-272
 # ============================================================================
 
+
 class TestLogSummary:
     def test_log_summary_with_recommendations(self):
         """Lines 270-272: log_summary logs recommendations when present."""
@@ -236,6 +239,7 @@ class TestLogSummary:
 # ============================================================================
 # ErrorAggregator.reset – lines 276-279
 # ============================================================================
+
 
 class TestReset:
     def test_reset_clears_groups(self):
@@ -280,6 +284,7 @@ class TestReset:
 # Circuit Breaker – lines 223-224 (seconds_until_half_open)
 # ============================================================================
 
+
 class TestCircuitBreakerStats:
     def test_get_stats_includes_seconds_until_half_open_when_open(self):
         """Lines 223-224: opened circuit → stats include seconds_until_half_open."""
@@ -304,6 +309,7 @@ class TestCircuitBreakerStats:
 # ============================================================================
 # Rate Limiter – lines 71, 74, 256
 # ============================================================================
+
 
 class TestRateLimiterBranches:
     @pytest.mark.asyncio
@@ -372,6 +378,7 @@ class TestRateLimiterBranches:
 # Error Recovery – lines 59, 124
 # ============================================================================
 
+
 class TestErrorRecovery:
     def test_to_dict(self):
         """Line 59: ErrorRecoveryDecision.to_dict() returns all fields."""
@@ -411,9 +418,7 @@ class TestErrorRecovery:
             available_smtp_servers=["smtp1", "smtp2"], max_smtp_switches=3
         )
         error = TransientSMTPError("connection timeout")
-        decision = manager.decide_recovery(
-            error, current_smtp="smtp1", correlation_id="cid-1"
-        )
+        decision = manager.decide_recovery(error, current_smtp="smtp1", correlation_id="cid-1")
         assert decision.strategy == RecoveryStrategy.SWITCH_SERVER
         assert decision.alternative_smtp == "smtp2"
 
@@ -424,9 +429,7 @@ class TestErrorRecovery:
         )
         manager._switch_counts["cid-over"] = 2  # already exceeded
         error = TransientSMTPError("timeout")
-        decision = manager.decide_recovery(
-            error, current_smtp="smtp1", correlation_id="cid-over"
-        )
+        decision = manager.decide_recovery(error, current_smtp="smtp1", correlation_id="cid-over")
         assert decision.strategy == RecoveryStrategy.DELAY_RETRY
 
     def test_get_statistics(self):
@@ -442,6 +445,7 @@ class TestErrorRecovery:
 # Async Sender – missing line coverage via mocked pool
 # ============================================================================
 
+
 class TestAsyncSenderCoverage:
     """Cover lines in async_sender.py via the categorize_smtp_error function
     and the send_email_async / send_bulk_emails_async convenience functions."""
@@ -449,6 +453,7 @@ class TestAsyncSenderCoverage:
     def test_categorize_smtp_error_connection_error(self):
         """Lines 45-47: ConnectionError → SMTPConnectionError (transient)."""
         from mercury.engine.async_sender import categorize_smtp_error
+
         is_t, etype, exc = categorize_smtp_error(ConnectionError("lost"))
         assert is_t is True
         assert etype == "connection_error"
@@ -456,6 +461,7 @@ class TestAsyncSenderCoverage:
     def test_categorize_smtp_error_asyncio_timeout(self):
         """Lines 45-47: asyncio.TimeoutError → connection_error."""
         from mercury.engine.async_sender import categorize_smtp_error
+
         is_t, etype, exc = categorize_smtp_error(asyncio.TimeoutError())
         assert is_t is True
         assert etype == "connection_error"
@@ -463,6 +469,7 @@ class TestAsyncSenderCoverage:
     def test_categorize_smtp_error_rate_limit(self):
         """Lines 54-57: rate-limit keyword → SMTPRateLimitError (transient)."""
         from mercury.engine.async_sender import categorize_smtp_error
+
         is_t, etype, exc = categorize_smtp_error(Exception("421 rate limit exceeded"))
         assert is_t is True
         assert etype == "rate_limit"
@@ -470,6 +477,7 @@ class TestAsyncSenderCoverage:
     def test_categorize_smtp_error_mailbox(self):
         """Lines 59-62: mailbox keyword → SMTPMailboxError (permanent)."""
         from mercury.engine.async_sender import categorize_smtp_error
+
         is_t, etype, exc = categorize_smtp_error(Exception("550 mailbox does not exist"))
         assert is_t is False
         assert etype == "mailbox_error"
@@ -477,6 +485,7 @@ class TestAsyncSenderCoverage:
     def test_categorize_smtp_error_transient_keyword(self):
         """Lines 65-68: transient keyword (timeout) → TransientSMTPError."""
         from mercury.engine.async_sender import categorize_smtp_error
+
         is_t, etype, exc = categorize_smtp_error(Exception("connection timeout error"))
         assert is_t is True
         assert etype == "transient"
@@ -484,6 +493,7 @@ class TestAsyncSenderCoverage:
     def test_categorize_smtp_error_permanent_keyword(self):
         """Lines 71-74: permanent keyword (spam) → PermanentSMTPError."""
         from mercury.engine.async_sender import categorize_smtp_error
+
         is_t, etype, exc = categorize_smtp_error(Exception("blocked: spam detected"))
         assert is_t is False
         assert etype == "permanent"
@@ -491,6 +501,7 @@ class TestAsyncSenderCoverage:
     def test_categorize_smtp_error_unknown(self):
         """Lines 77-78: unknown error → transient by default."""
         from mercury.engine.async_sender import categorize_smtp_error
+
         is_t, etype, exc = categorize_smtp_error(Exception("some weird error"))
         assert is_t is True
         assert etype == "unknown"
@@ -498,12 +509,14 @@ class TestAsyncSenderCoverage:
     def test_categorize_smtp_error_552_permanent(self):
         """Line 71: 552 code → permanent."""
         from mercury.engine.async_sender import categorize_smtp_error
+
         is_t, etype, exc = categorize_smtp_error(Exception("552 too much data"))
         assert is_t is False
 
     def test_email_result_to_dict(self):
         """Line 96: EmailResult.to_dict() serialises all fields."""
         from mercury.engine.async_sender import EmailResult
+
         result = EmailResult(
             success=True,
             recipient="a@b.com",
@@ -521,6 +534,7 @@ class TestAsyncSenderCoverage:
     def test_bulk_send_result_to_dict_zero_total(self):
         """Line 132: success_rate with total==0 → 0."""
         from mercury.engine.async_sender import BulkSendResult
+
         result = BulkSendResult(
             total=0,
             success=0,
@@ -685,9 +699,7 @@ class TestAsyncSenderCoverage:
         mock_conn.send_message = AsyncMock(return_value={"success": True, "response": "250 OK"})
 
         mock_pool = MagicMock()
-        mock_pool.acquire = AsyncMock(
-            return_value=(mock_conn, MagicMock(name="smtp1"))
-        )
+        mock_pool.acquire = AsyncMock(return_value=(mock_conn, MagicMock(name="smtp1")))
         mock_pool.release = AsyncMock()
         mock_pool.record_success = MagicMock()
         mock_pool.get_status.return_value = {}
@@ -722,9 +734,7 @@ class TestAsyncSenderCoverage:
         mock_conn.send_message = AsyncMock(return_value={"success": True, "response": "250 OK"})
 
         mock_pool = MagicMock()
-        mock_pool.acquire = AsyncMock(
-            return_value=(mock_conn, MagicMock(name="smtp1"))
-        )
+        mock_pool.acquire = AsyncMock(return_value=(mock_conn, MagicMock(name="smtp1")))
         mock_pool.release = AsyncMock()
         mock_pool.record_success = MagicMock()
         mock_pool.get_status.return_value = {}
@@ -777,9 +787,7 @@ class TestAsyncSenderCoverage:
         async def my_progress(data):
             progress_calls.append(data)
 
-        recipients = [
-            {"email": f"u{i}@test.com", "name": f"User {i}"} for i in range(3)
-        ]
+        recipients = [{"email": f"u{i}@test.com", "name": f"User {i}"} for i in range(3)]
 
         result = await sender.send_bulk(
             recipients=recipients,
@@ -931,6 +939,7 @@ class TestAsyncSenderCoverage:
 # Connection Pool – remaining missing lines
 # ============================================================================
 
+
 @pytest.fixture
 def base_config():
     return SMTPServerConfig(
@@ -939,7 +948,7 @@ def base_config():
         port=587,
         username="u@t.com",
         password="pw",
-        tls_mode='starttls',
+        tls_mode="starttls",
         max_per_minute=60,
         max_per_hour=1000,
     )
@@ -1074,6 +1083,7 @@ class TestAsyncConnectionPool:
         of spawning hundreds of doomed send tasks.
         """
         import logging
+
         caplog.set_level(logging.WARNING)
         pool = AsyncConnectionPool(base_config, pool_size=2)
         with patch.object(
@@ -1090,9 +1100,7 @@ class TestAsyncConnectionPool:
     @pytest.mark.asyncio
     async def test_get_connection_stale_triggers_replacement(self, base_config):
         """Lines 284-297: stale connection closed and replaced."""
-        pool = AsyncConnectionPool(
-            base_config, pool_size=2, max_connection_age=0.001
-        )
+        pool = AsyncConnectionPool(base_config, pool_size=2, max_connection_age=0.001)
         with patch.object(AsyncSMTPConnection, "connect", new_callable=AsyncMock):
             await pool.initialize()
             conn = pool.connections[0]
@@ -1198,7 +1206,9 @@ class TestSMTPConnectionPoolMulti:
         for cfg in two_configs:
             cfg.runtime.circuit_breaker.force_open()
         pool = SMTPConnectionPool(two_configs)
-        with pytest.raises(RuntimeError, match=r"circuit breakers are open|No SMTP servers available"):
+        with pytest.raises(
+            RuntimeError, match=r"circuit breakers are open|No SMTP servers available"
+        ):
             await pool.acquire()
 
     @pytest.mark.asyncio
@@ -1242,9 +1252,7 @@ class TestSMTPConnectionPoolMulti:
     async def test_close_all_multi(self, two_configs):
         """Lines 480-481: close_all closes all per-server pools."""
         pool = SMTPConnectionPool(two_configs)
-        with patch.object(
-            AsyncConnectionPool, "close_all", new_callable=AsyncMock
-        ) as mock_close:
+        with patch.object(AsyncConnectionPool, "close_all", new_callable=AsyncMock) as mock_close:
             await pool.close_all()
         assert mock_close.call_count == 2
 
@@ -1259,6 +1267,7 @@ class TestSMTPConnectionPoolMulti:
 # ============================================================================
 # Enhanced Sender – lines 178-179, 255
 # ============================================================================
+
 
 class TestEnhancedSenderCoverage:
     @pytest.mark.asyncio
@@ -1302,9 +1311,7 @@ class TestEnhancedSenderCoverage:
         mock_pool = MagicMock()
         mock_pool.get_status.return_value = {}
 
-        sender = EnhancedAsyncEmailSender(
-            connection_pool=mock_pool, dry_run=True
-        )
+        sender = EnhancedAsyncEmailSender(connection_pool=mock_pool, dry_run=True)
 
         recipients = [{"email": f"u{i}@test.com"} for i in range(2)]
 
@@ -1357,13 +1364,12 @@ class TestEnhancedSenderCoverage:
 # Retry Queue – lines 262-264, 280-281, 299
 # ============================================================================
 
+
 @pytest.mark.asyncio
 class TestRetryQueueMissingLines:
     async def test_process_loop_no_handler_still_sleeps(self):
         """Lines 241-243: when handler is None, loop still runs without crashing."""
-        config = RetryConfig(
-            max_attempts=1, base_delay=0.0, max_delay=0.01, process_interval=0.05
-        )
+        config = RetryConfig(max_attempts=1, base_delay=0.0, max_delay=0.01, process_interval=0.05)
         queue = RetryQueue(config=config, handler=None)
         await queue.start()
         await queue.add("noh-item", {"v": 1})
@@ -1373,9 +1379,7 @@ class TestRetryQueueMissingLines:
 
     async def test_process_loop_handles_inner_exception(self):
         """Lines 262-264: exception in loop body is caught and loop continues."""
-        config = RetryConfig(
-            max_attempts=3, base_delay=0.0, max_delay=0.01, process_interval=0.05
-        )
+        config = RetryConfig(max_attempts=3, base_delay=0.0, max_delay=0.01, process_interval=0.05)
 
         call_count = [0]
 
@@ -1401,7 +1405,7 @@ class TestRetryQueueMissingLines:
         await queue.add("ex2", {"v": 1}, error="first")
         # Increment attempt to exhaustion
         await queue.add("ex2", {"v": 1}, error="second")  # attempt=1
-        await queue.add("ex2", {"v": 1}, error="third")   # attempt=2 → exhausted
+        await queue.add("ex2", {"v": 1}, error="third")  # attempt=2 → exhausted
 
         item = queue._items["ex2"]
         assert item.status == RetryStatus.EXHAUSTED

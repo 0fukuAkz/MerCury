@@ -1,12 +1,12 @@
 """Features layer - Document generators, templates, placeholders."""
 
 from .generators import (
-    QRCodeGenerator, 
-    PDFGenerator, 
-    DOCXGenerator, 
+    QRCodeGenerator,
+    PDFGenerator,
+    DOCXGenerator,
     ImageGenerator,
     AttachmentGenerator,
-    GeneratorConfig
+    GeneratorConfig,
 )
 from .template_engine import TemplateEngine
 from .placeholders import PlaceholderProcessor
@@ -20,7 +20,7 @@ from .encoding import (
 
 __all__ = [
     "QRCodeGenerator",
-    "PDFGenerator", 
+    "PDFGenerator",
     "DOCXGenerator",
     "ImageGenerator",
     "AttachmentGenerator",
@@ -34,4 +34,3 @@ __all__ = [
     "unicode_homoglyph_replace",
     "url_encode_links",
 ]
-

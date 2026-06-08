@@ -27,7 +27,7 @@ from ...data.models import Attachment
 from ...data.repositories import AttachmentRepository
 from ...utils.app_dirs import get_data_dir
 
-attachments_bp = Blueprint('attachments', __name__, url_prefix='/attachments')
+attachments_bp = Blueprint("attachments", __name__, url_prefix="/attachments")
 
 # 25 MB — typical SMTP/Gmail/Outlook attachment ceiling. Refusing here is
 # friendlier than failing per-recipient at send time.
@@ -37,34 +37,47 @@ MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 # emailing themselves into a spam-filter incident. Not a security
 # boundary — content-type is not authenticated either way; this is UX.
 _BLOCKED_EXTENSIONS = {
-    'exe', 'bat', 'cmd', 'com', 'msi', 'scr', 'cpl', 'vbs', 'vbe',
-    'js', 'jse', 'wsf', 'wsh', 'ps1', 'sh',
+    "exe",
+    "bat",
+    "cmd",
+    "com",
+    "msi",
+    "scr",
+    "cpl",
+    "vbs",
+    "vbe",
+    "js",
+    "jse",
+    "wsf",
+    "wsh",
+    "ps1",
+    "sh",
 }
 
 
 def _attachments_dir() -> Path:
-    path = get_data_dir() / 'attachments'
+    path = get_data_dir() / "attachments"
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
 def _split_ext(filename: str) -> str:
-    ext = os.path.splitext(filename)[1].lower().lstrip('.')
-    return ext if ext.isalnum() and len(ext) <= 16 else ''
+    ext = os.path.splitext(filename)[1].lower().lstrip(".")
+    return ext if ext.isalnum() and len(ext) <= 16 else ""
 
 
-@attachments_bp.route('', methods=['GET'])
-@attachments_bp.route('/', methods=['GET'])
+@attachments_bp.route("", methods=["GET"])
+@attachments_bp.route("/", methods=["GET"])
 @login_required
 def index():
     """Attachments library page."""
     with session_scope() as session:
         rows = AttachmentRepository(session).list_active()
         attachments = [a.to_dict() for a in rows]
-    return render_template('attachments.html', attachments=attachments)
+    return render_template("attachments.html", attachments=attachments)
 
 
-@attachments_bp.route('/list.json', methods=['GET'])
+@attachments_bp.route("/list.json", methods=["GET"])
 @login_required
 def list_json():
     """Compact JSON list for picker UIs (e.g. campaign form).
@@ -76,47 +89,45 @@ def list_json():
         rows = AttachmentRepository(session).list_active()
         items = [
             {
-                'id': a.id,
-                'filename': a.filename,
-                'size_bytes': a.size_bytes,
-                'content_type': a.content_type,
-                'description': a.description or '',
+                "id": a.id,
+                "filename": a.filename,
+                "size_bytes": a.size_bytes,
+                "content_type": a.content_type,
+                "description": a.description or "",
             }
             for a in rows
         ]
-    return jsonify({'attachments': items, 'count': len(items)})
+    return jsonify({"attachments": items, "count": len(items)})
 
 
-@attachments_bp.route('', methods=['POST'])
-@attachments_bp.route('/', methods=['POST'])
+@attachments_bp.route("", methods=["POST"])
+@attachments_bp.route("/", methods=["POST"])
 @login_required
 def upload():
     """Accept a multipart file upload and persist it."""
-    file = request.files.get('file')
-    if file is None or file.filename == '':
-        return jsonify({'error': 'No file provided'}), 400
+    file = request.files.get("file")
+    if file is None or file.filename == "":
+        return jsonify({"error": "No file provided"}), 400
 
-    display_name = secure_filename(file.filename) or 'upload.bin'
+    display_name = secure_filename(file.filename) or "upload.bin"
     ext = _split_ext(display_name)
     if ext in _BLOCKED_EXTENSIONS:
-        return jsonify({'error': f'Files of type .{ext} are not allowed'}), 400
+        return jsonify({"error": f"Files of type .{ext} are not allowed"}), 400
 
     # Read once to enforce size cap before writing to disk. For 25 MB this
     # is fine in memory; if the cap ever grows, switch to streaming with
     # a running counter and unlink-on-overflow.
     data = file.read(MAX_UPLOAD_BYTES + 1)
     if len(data) > MAX_UPLOAD_BYTES:
-        return jsonify({
-            'error': f'File exceeds {MAX_UPLOAD_BYTES // (1024 * 1024)} MB limit'
-        }), 413
+        return jsonify({"error": f"File exceeds {MAX_UPLOAD_BYTES // (1024 * 1024)} MB limit"}), 413
     if not data:
-        return jsonify({'error': 'File is empty'}), 400
+        return jsonify({"error": "File is empty"}), 400
 
     stored_name = f"{uuid.uuid4().hex}{('.' + ext) if ext else ''}"
     disk_path = _attachments_dir() / stored_name
     disk_path.write_bytes(data)
 
-    description = (request.form.get('description') or '').strip() or None
+    description = (request.form.get("description") or "").strip() or None
 
     try:
         with session_scope() as session:
@@ -141,10 +152,10 @@ def upload():
             pass
         raise
 
-    return jsonify({'attachment': payload}), 201
+    return jsonify({"attachment": payload}), 201
 
 
-@attachments_bp.route('/<int:attachment_id>/download', methods=['GET'])
+@attachments_bp.route("/<int:attachment_id>/download", methods=["GET"])
 @login_required
 def download(attachment_id: int):
     """Stream the underlying file back to the browser."""
@@ -154,7 +165,7 @@ def download(attachment_id: int):
             abort(404)
         stored_name = row.stored_name
         display = row.filename
-        mimetype = row.content_type or 'application/octet-stream'
+        mimetype = row.content_type or "application/octet-stream"
 
     disk_path = _attachments_dir() / stored_name
     if not disk_path.is_file():
@@ -168,7 +179,7 @@ def download(attachment_id: int):
     )
 
 
-@attachments_bp.route('/<int:attachment_id>', methods=['DELETE'])
+@attachments_bp.route("/<int:attachment_id>", methods=["DELETE"])
 @login_required
 def delete(attachment_id: int):
     """Remove the attachment row and its on-disk file."""
@@ -176,7 +187,7 @@ def delete(attachment_id: int):
         repo = AttachmentRepository(session)
         row = repo.get(attachment_id)
         if row is None:
-            return jsonify({'error': 'Not found'}), 404
+            return jsonify({"error": "Not found"}), 404
         stored_name = row.stored_name
         repo.delete(row)
 
@@ -188,4 +199,4 @@ def delete(attachment_id: int):
         # Don't block the request on filesystem cleanup.
         pass
 
-    return jsonify({'deleted': True})
+    return jsonify({"deleted": True})

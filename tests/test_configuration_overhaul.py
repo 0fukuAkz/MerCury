@@ -4,6 +4,7 @@ from mercury.services.identity_service import IdentityService
 from mercury.services.settings_service import SettingsService
 from mercury.services.campaign_service import CampaignService, CampaignConfig
 
+
 def test_identity_service_emails(app):
     """Test identity service email operations."""
     with app.app_context():
@@ -26,21 +27,23 @@ def test_identity_service_emails(app):
         assert IdentityService.delete_email(email.id)
         assert len(IdentityService.get_emails()) == 0
 
+
 def test_identity_service_names(app):
     """Test identity service name operations."""
     with app.app_context():
         # Add
         name = IdentityService.add_name("John Doe", ["marketing"])
         assert name.name == "John Doe"
-        
+
         # Get
         names = IdentityService.get_names()
         assert len(names) == 1
-        
+
         # Toggle
         IdentityService.toggle_name_status(name.id)
         names = IdentityService.get_names(active_only=True)
         assert len(names) == 0
+
 
 def test_settings_service(app):
     """Test global settings service."""
@@ -49,44 +52,40 @@ def test_settings_service(app):
         settings = SettingsService.get_settings()
         assert settings.daily_limit == 500
         assert settings.max_retries == 3
-        
+
         # Update
-        updated = SettingsService.update_settings({
-            'daily_limit': 1000,
-            'max_concurrency': 10
-        })
+        updated = SettingsService.update_settings({"daily_limit": 1000, "max_concurrency": 10})
         assert updated.daily_limit == 1000
         assert updated.daily_limit == 1000
         assert updated.max_concurrency == 10
 
         # Update new fields
-        updated_new = SettingsService.update_settings({
-            'ui_theme': 'light',
-            'batch_size': 500,
-            'log_level': 'DEBUG'
-        })
-        assert updated_new.ui_theme == 'light'
+        updated_new = SettingsService.update_settings(
+            {"ui_theme": "light", "batch_size": 500, "log_level": "DEBUG"}
+        )
+        assert updated_new.ui_theme == "light"
         assert updated_new.batch_size == 500
-        assert updated_new.log_level == 'DEBUG'
-        
+        assert updated_new.log_level == "DEBUG"
+
         # Verify persistence
         refetched = SettingsService.get_settings()
         assert refetched.daily_limit == 1000
 
+
 def test_campaign_service_resolves_identities(app):
     """Test that CampaignService picks up identities from the pool."""
     service = CampaignService()
-    
+
     with app.app_context():
         # Setup pool
         IdentityService.add_email("pool@example.com")
         IdentityService.add_name("Pool Sender")
-        SettingsService.update_settings({'default_reply_to': 'reply@example.com'})
-        
+        SettingsService.update_settings({"default_reply_to": "reply@example.com"})
+
         # Load config with empty sender
         config = CampaignConfig(name="Test Campaign")
         service.load_config(config)
-        
+
         # Verify resolution
         assert service.config.from_email == "pool@example.com"
         assert service.config.from_name == "Pool Sender"

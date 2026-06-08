@@ -9,4 +9,4 @@ from .config import EmailConfig
 from .context import SendContext
 from .service import EmailService
 
-__all__ = ['EmailConfig', 'EmailService', 'SendContext']
+__all__ = ["EmailConfig", "EmailService", "SendContext"]

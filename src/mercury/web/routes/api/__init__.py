@@ -48,7 +48,7 @@ from ....features.template_engine import TemplateEngine  # noqa: F401
 from ....services.webhook_service import WebhookService, WebhookEvent  # noqa: F401
 # ---------------------------------------------------------------------------
 
-api_bp = Blueprint('api', __name__, url_prefix='/api')
+api_bp = Blueprint("api", __name__, url_prefix="/api")
 
 # Import sub-modules at the bottom so their @api_bp.route(...) decorators run
 # and register their routes on the shared blueprint.
@@ -68,4 +68,4 @@ from . import (  # noqa: E402, F401
     placeholders,
 )
 
-__all__ = ['api_bp']
+__all__ = ["api_bp"]

@@ -73,7 +73,7 @@
     {% endif %}
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
     const _CSRF = "{{ csrf_token() }}";
 
     async function _readError(res, fallback) {

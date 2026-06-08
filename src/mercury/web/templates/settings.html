@@ -172,6 +172,7 @@
         font-size: 0.8125rem;
         color: var(--text-secondary);
         cursor: pointer;
+        -webkit-user-select: none;
         user-select: none;
         transition: all 0.18s;
     }
@@ -197,7 +198,7 @@
     }
 
     /* ── Select ── */
-    select.form-input { appearance: none; cursor: pointer; }
+    select.form-input { -webkit-appearance: none; -moz-appearance: none; appearance: none; cursor: pointer; }
 
     /* ── Dirty indicator banner ── */
     #dirtyBanner {
@@ -625,7 +626,7 @@
         onclick="location.reload()">Discard</button>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
     /* ── Tab switching ── */
     const tabBtns  = document.querySelectorAll('.cfg-tab-btn');
     const panels   = document.querySelectorAll('.cfg-panel');

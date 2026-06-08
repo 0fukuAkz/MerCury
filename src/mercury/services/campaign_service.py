@@ -14,10 +14,7 @@ from ..data.repositories import (
     CampaignRepository,
     LogRepository,
 )
-from ..data.models import (
-    Campaign, CampaignStatus,
-    EmailLog, EmailStatus
-)
+from ..data.models import Campaign, CampaignStatus, EmailLog, EmailStatus
 from ..utils.async_io import AsyncFileLogger
 from ..utils.validation import is_valid_email
 from .email import EmailService, EmailConfig
@@ -44,27 +41,28 @@ def _detect_csv_encoding(path: str, sample_bytes: int = 1024 * 1024) -> str:
       * Western European Excel exports → windows-1252 / iso-8859-1
     """
     try:
-        with open(path, 'rb') as f:
+        with open(path, "rb") as f:
             head = f.read(sample_bytes)
     except OSError:
-        return 'utf-8'
+        return "utf-8"
 
     # Some test fixtures patch open() with mock_open(read_data=<str>),
     # which returns str regardless of mode. Treat that as "already
     # decoded, no detection needed" — the read in the caller will get
     # the same str through and csv.DictReader handles it.
     if not isinstance(head, (bytes, bytearray)):
-        return 'utf-8'
+        return "utf-8"
 
     # Fast path: BOM-tolerant UTF-8 (Excel adds a BOM on Save As CSV UTF-8).
     try:
-        head.decode('utf-8-sig')
-        return 'utf-8-sig'
+        head.decode("utf-8-sig")
+        return "utf-8-sig"
     except UnicodeDecodeError:
         pass
 
     try:
         from charset_normalizer import from_bytes
+
         # Restrict candidates to the encodings business-tool CSV exports
         # actually use. Without this, charset-normalizer considers exotic
         # legacy codecs (big5hkscs, cp949, euc-jis-2004, ...) that score
@@ -78,19 +76,27 @@ def _detect_csv_encoding(path: str, sample_bytes: int = 1024 * 1024) -> str:
         #   * Western Excel:      windows-1252 / iso-8859-1
         #   * Anything else:      utf-8 / utf-16 (covered earlier already)
         business_csv_encodings = [
-            'utf_8', 'utf_16',
-            'cp1251', 'windows-1251',
-            'gb18030', 'gbk',
-            'shift_jis', 'cp932',
-            'cp949', 'euc_kr',
-            'windows-1252', 'iso-8859-1',
+            "utf_8",
+            "utf_16",
+            "cp1251",
+            "windows-1251",
+            "gb18030",
+            "gbk",
+            "shift_jis",
+            "cp932",
+            "cp949",
+            "euc_kr",
+            "windows-1252",
+            "iso-8859-1",
         ]
         best = from_bytes(head, cp_isolation=business_csv_encodings).best()
         if best is not None and best.encoding:
             logger.info(
                 "CSV %s: detected non-UTF-8 encoding %r (confidence: %.2f). "
                 "Re-saving as UTF-8 will make future loads faster.",
-                path, best.encoding, 1.0 - best.chaos,
+                path,
+                best.encoding,
+                1.0 - best.chaos,
             )
             return best.encoding
     except ImportError:
@@ -101,14 +107,14 @@ def _detect_csv_encoding(path: str, sample_bytes: int = 1024 * 1024) -> str:
         "errors='replace'. Non-ASCII names may render as '?' or similar.",
         path,
     )
-    return 'utf-8'
+    return "utf-8"
 
 
 def _clean_val(val: Any) -> Any:
     """Helper to clean mock values in tests to prevent DB bind errors."""
     if val is None:
         return None
-    if 'Mock' in type(val).__name__:
+    if "Mock" in type(val).__name__:
         return None
     return val
 
@@ -116,9 +122,10 @@ def _clean_val(val: Any) -> Any:
 @dataclass
 class CampaignConfig:
     """Campaign configuration from YAML."""
+
     name: str
     description: str = ""
-    
+
     # Email settings
     subject: str = ""
     subjects: Optional[List[str]] = None
@@ -127,7 +134,7 @@ class CampaignConfig:
     from_names: Optional[List[str]] = None
     from_emails: Optional[List[str]] = None
     reply_to: str = ""
-    
+
     # Template
     template_id: Optional[int] = None
     template_path: str = ""
@@ -140,14 +147,14 @@ class CampaignConfig:
     email_column: str = "email"
     validate_emails: bool = True
     deduplicate: bool = True
-    
+
     # SMTP
     smtp_configs: Optional[List[Dict[str, Any]]] = None
     smtp_rotation: str = "weighted"
     # Pin the campaign to one specific SMTP server by id (set from the
     # campaign-form dropdown). None = use all enabled servers (rotation).
     smtp_server_id: Optional[int] = None
-    
+
     # Sending
     dry_run: bool = False
     concurrency: int = 50
@@ -155,7 +162,8 @@ class CampaignConfig:
     pause_between_chunks: int = 0
     rate_per_minute: int = 0
     rate_per_hour: int = 0
-    
+    ip_warmup_mode: bool = False
+
     # Features
     enable_qr_code: bool = False
     send_as_image: bool = False
@@ -186,7 +194,7 @@ class CampaignConfig:
 
     # Links
     links: Optional[List[str]] = None
-    
+
     # Static placeholders
     placeholders: Optional[Dict[str, str]] = None
     placeholders_path: str = ""
@@ -203,7 +211,7 @@ class CampaignConfig:
 
 class CampaignService:
     """Service for managing and executing email campaigns."""
-    
+
     def __init__(self):
         self.smtp_service = SMTPService()
         self.email_service: Optional[EmailService] = None
@@ -212,10 +220,10 @@ class CampaignService:
         self._running = False
         self._paused = False
         self._shutdown_event = asyncio.Event()
-        
+
         # Register signal handlers for graceful shutdown
         self._setup_signal_handlers()
-    
+
     def _setup_signal_handlers(self):
         """Setup signal handlers for graceful shutdown.
 
@@ -236,18 +244,18 @@ class CampaignService:
             # add_signal_handler is not implemented on Windows, and ValueError
             # is raised when called from a non-main thread.
             pass
-    
+
     def _handle_shutdown_signal(self):
         """Handle shutdown signal gracefully."""
         logger.info("Received shutdown signal, stopping gracefully...")
         self._running = False
         self._shutdown_event.set()
-    
+
     def initialize(self):
         """Initialize database and services."""
         init_db()
         logger.info("Campaign service initialized")
-    
+
     def load_config(self, config: CampaignConfig):
         """Load campaign configuration."""
         from .identity_service import IdentityService
@@ -294,7 +302,7 @@ class CampaignService:
             config.reply_to = global_settings.default_reply_to
 
         self.config = config
-        
+
         # Load SMTP servers. Per-campaign pin (config.smtp_server_id) wins
         # over the global pool; explicit smtp_configs (CLI/YAML path) wins
         # over both.
@@ -302,69 +310,69 @@ class CampaignService:
             self.smtp_service.load_from_config(config.smtp_configs)
         else:
             self.smtp_service.load_from_database(server_id=config.smtp_server_id)
-        
+
         # Initialize email service
         self.email_service = EmailService(self.smtp_service)
         self.email_service.configure(EmailConfig.from_campaign_config(config))
-        
+
         # Add static placeholders
         if config.placeholders and self.email_service._placeholder_processor:
             for key, value in config.placeholders.items():
                 self.email_service._placeholder_processor.static_placeholders[key] = value
-        
+
         logger.info(f"Loaded campaign config: {config.name}")
-    
+
     def create_campaign(self, config: CampaignConfig) -> Campaign:
         """Create a new campaign in database."""
         session = get_session_direct()
         try:
             extra_settings: Dict[str, Any] = {}
             if config.links:
-                extra_settings['links'] = config.links
+                extra_settings["links"] = config.links
             if config.manual_recipients:
-                extra_settings['manual_recipients'] = config.manual_recipients
+                extra_settings["manual_recipients"] = config.manual_recipients
             # Store path/flag fields that have no direct model column
             if config.recipients_path:
-                extra_settings['recipients_path'] = config.recipients_path
+                extra_settings["recipients_path"] = config.recipients_path
             if config.placeholders_path:
-                extra_settings['placeholders_path'] = config.placeholders_path
-            extra_settings['dry_run'] = bool(config.dry_run)
+                extra_settings["placeholders_path"] = config.placeholders_path
+            extra_settings["dry_run"] = bool(config.dry_run)
             # Store rotation arrays (no dedicated columns)
             if config.from_emails:
-                extra_settings['from_emails'] = config.from_emails
+                extra_settings["from_emails"] = config.from_emails
             if config.from_names:
-                extra_settings['from_names'] = config.from_names
+                extra_settings["from_names"] = config.from_names
             if config.template_path:
-                extra_settings['template_path'] = config.template_path
+                extra_settings["template_path"] = config.template_path
             if config.templates:
-                extra_settings['templates'] = config.templates
+                extra_settings["templates"] = config.templates
             if config.smtp_server_id is not None:
-                extra_settings['smtp_server_id'] = int(config.smtp_server_id)
+                extra_settings["smtp_server_id"] = int(config.smtp_server_id)
             if config.attachment_ids:
-                extra_settings['attachment_ids'] = list(config.attachment_ids)
+                extra_settings["attachment_ids"] = list(config.attachment_ids)
             if config.convert_attachment:
-                extra_settings['convert_attachment'] = True
+                extra_settings["convert_attachment"] = True
             if config.attachment_convert_to:
-                extra_settings['attachment_convert_to'] = config.attachment_convert_to
+                extra_settings["attachment_convert_to"] = config.attachment_convert_to
             if config.logo_attachment_id is not None:
-                extra_settings['logo_attachment_id'] = int(config.logo_attachment_id)
+                extra_settings["logo_attachment_id"] = int(config.logo_attachment_id)
             if config.auto_company_logo:
-                extra_settings['auto_company_logo'] = True
+                extra_settings["auto_company_logo"] = True
             if config.hide_from_email_header:
-                extra_settings['hide_from_email_header'] = True
+                extra_settings["hide_from_email_header"] = True
             # Default is True; only persist when operator explicitly
             # opted out so the absence-of-key path stays "include".
             if not config.include_default_body:
-                extra_settings['include_default_body'] = False
+                extra_settings["include_default_body"] = False
             # Persist recipient-list flags so they round-trip on edit and
             # on every subsequent campaign run (events.py rebuilds the
             # config from settings — without this, runs always default
             # to True for both, ignoring the operator's saved choice).
-            extra_settings['validate_emails'] = bool(config.validate_emails)
-            extra_settings['deduplicate'] = bool(config.deduplicate)
+            extra_settings["validate_emails"] = bool(config.validate_emails)
+            extra_settings["deduplicate"] = bool(config.deduplicate)
             # Mail priority — only store when non-default so absence = normal
-            if config.mail_priority and config.mail_priority != '3':
-                extra_settings['mail_priority'] = config.mail_priority
+            if config.mail_priority and config.mail_priority != "3":
+                extra_settings["mail_priority"] = config.mail_priority
 
             campaign = Campaign(
                 name=config.name,
@@ -383,40 +391,40 @@ class CampaignService:
                 enable_qr_code=config.enable_qr_code,
                 convert_to_image=config.send_as_image,
                 smtp_rotation_strategy=config.smtp_rotation,
-                settings=extra_settings
+                settings=extra_settings,
             )
-            
+
             repo = CampaignRepository(session)
             campaign = repo.create(campaign)
-            
+
             logger.info(f"Created campaign: {campaign.id} - {campaign.name}")
             return campaign
-            
+
         finally:
             session.close()
-    
+
     def load_recipients_from_csv(
         self,
         csv_path: str,
-        email_column: str = 'email',
+        email_column: str = "email",
         validate: bool = True,
-        deduplicate: bool = True
+        deduplicate: bool = True,
     ) -> Iterator[Dict[str, Any]]:
         """
         Load recipients from CSV file as a generator (streaming).
-        
+
         Args:
             csv_path: Path to CSV file
             email_column: Column name containing email addresses
             validate: Validate email format
             deduplicate: Remove duplicates (requires keeping a set in memory)
-            
+
         Returns:
             Iterator of recipient dicts
         """
         if not os.path.exists(csv_path):
             raise FileNotFoundError(f"CSV file not found: {csv_path}")
-        
+
         # Note: Deduplication still requires memory proportional to unique email count.
         # If memory is critical, we might need Bloom filters or disk-based dedup.
         seen_emails = set()
@@ -430,80 +438,81 @@ class CampaignService:
         # placeholder processor.
         encoding = _detect_csv_encoding(csv_path)
 
-        with open(csv_path, 'r', encoding=encoding, errors='replace') as f:
+        with open(csv_path, "r", encoding=encoding, errors="replace") as f:
             reader = csv.DictReader(f)
-            
+
             # Smart column detection
             fieldnames = reader.fieldnames or []
             target_column = email_column
-            
+
             if email_column not in fieldnames:
                 # Try case-insensitive match
                 lower_fieldnames = {f.lower(): f for f in fieldnames}
                 if email_column.lower() in lower_fieldnames:
                     target_column = lower_fieldnames[email_column.lower()]
-                    logger.info(f"Using column '{target_column}' for '{email_column}' (case-insensitive match)")
+                    logger.info(
+                        f"Using column '{target_column}' for '{email_column}' (case-insensitive match)"
+                    )
                 else:
-                    logger.warning(f"Email column '{email_column}' not found in CSV. Available: {fieldnames}")
-            
+                    logger.warning(
+                        f"Email column '{email_column}' not found in CSV. Available: {fieldnames}"
+                    )
+
             for row in reader:
-                email = row.get(target_column, '').strip().lower()
-                
+                email = row.get(target_column, "").strip().lower()
+
                 if not email:
                     continue
-                
+
                 # Deduplicate
                 if deduplicate:
                     if email in seen_emails:
                         continue
                     seen_emails.add(email)
-                
+
                 # Validate email format using simple check or email-validator
                 if validate:
                     if not is_valid_email(email):
                         continue
-                
+
                 # Build recipient dict
-                recipient = {'email': email}
+                recipient = {"email": email}
                 for key, value in row.items():
                     if key != email_column:
                         recipient[key] = value
-                
+
                 yield recipient
-        
+
         logger.info(f"Finished streaming recipients from {csv_path}")
-    
+
     def load_recipients_from_text(
-        self,
-        txt_path: str,
-        validate: bool = True,
-        deduplicate: bool = True
+        self, txt_path: str, validate: bool = True, deduplicate: bool = True
     ) -> Iterator[Dict[str, Any]]:
         """Load recipients from text file (one email per line) as generator."""
         if not os.path.exists(txt_path):
             raise FileNotFoundError(f"Text file not found: {txt_path}")
-        
+
         seen_emails = set()
-        
-        with open(txt_path, 'r', encoding='utf-8') as f:
+
+        with open(txt_path, "r", encoding="utf-8") as f:
             for line in f:
                 email = line.strip().lower()
-                
-                if not email or email.startswith('#'):
+
+                if not email or email.startswith("#"):
                     continue
-                
+
                 if validate and not is_valid_email(email):
                     continue
-                
+
                 if deduplicate:
                     if email in seen_emails:
                         continue
                     seen_emails.add(email)
-                
-                yield {'email': email}
-        
+
+                yield {"email": email}
+
         logger.info(f"Finished streaming recipients from {txt_path}")
-    
+
     async def load_recipients_async(
         self,
         path: str,
@@ -519,14 +528,13 @@ class CampaignService:
         underlying generator instead — constant memory, no thread hop, but
         the caller must consume it on a thread that can do blocking I/O.
         """
+
         def _open_iter() -> Iterator[Dict[str, Any]]:
-            if path.lower().endswith('.csv'):
+            if path.lower().endswith(".csv"):
                 return self.load_recipients_from_csv(
                     path, validate=validate, deduplicate=deduplicate
                 )
-            return self.load_recipients_from_text(
-                path, validate=validate, deduplicate=deduplicate
-            )
+            return self.load_recipients_from_text(path, validate=validate, deduplicate=deduplicate)
 
         if stream:
             return _open_iter()
@@ -534,9 +542,7 @@ class CampaignService:
         return await asyncio.to_thread(lambda: list(_open_iter()))
 
     def iterate_recipients(
-        self, 
-        recipients: Iterator[Dict[str, Any]], 
-        chunk_size: int = 1000
+        self, recipients: Iterator[Dict[str, Any]], chunk_size: int = 1000
     ) -> Iterator[List[Dict[str, Any]]]:
         """Iterate through recipients in chunks."""
         # Handle both list and iterator
@@ -546,281 +552,373 @@ class CampaignService:
             if len(chunk) >= chunk_size:
                 yield chunk
                 chunk = []
-        
+
         if chunk:
             yield chunk
-    
+
     async def run_campaign(
         self,
         recipients: List[Dict[str, Any]],
         progress_callback: Optional[Callable[[Dict[str, Any]], Awaitable[None]]] = None,
-        log_path: str = "logs"
+        log_path: str = "logs",
     ) -> Dict[str, Any]:
         """
         Execute campaign with all recipients.
-        
+
         Args:
             recipients: List of recipient dicts
             progress_callback: Async callback for progress updates
             log_path: Path for log files
-            
+
         Returns:
             Campaign statistics
         """
         if not self.email_service:
             raise RuntimeError("Email service not configured")
-        
+
         # Set campaign_id dynamically on the email service configuration
         if self._current_campaign and self.email_service.config:
             self.email_service.config.campaign_id = self._current_campaign.id
 
         # Apply email filter if specified in campaign settings
         if self._current_campaign and self._current_campaign.settings:
-            filter_emails = self._current_campaign.settings.get('filter_emails')
+            filter_emails = self._current_campaign.settings.get("filter_emails")
             if filter_emails:
                 filter_set = set(e.strip().lower() for e in filter_emails if e)
                 if isinstance(recipients, list):
-                    recipients = [r for r in recipients if r.get('email', '').strip().lower() in filter_set]
+                    recipients = [
+                        r for r in recipients if r.get("email", "").strip().lower() in filter_set
+                    ]
                 else:
+
                     def _filter_gen(it):
                         for r in it:
-                            if r.get('email', '').strip().lower() in filter_set:
+                            if r.get("email", "").strip().lower() in filter_set:
                                 yield r
+
                     recipients = _filter_gen(recipients)
 
         self._running = True
         self._paused = False
         self._shutdown_event.clear()
-        
+
+        # Pre-flight SMTP health check to avoid spinning wheels
+        preflight_results = await self.smtp_service.test_all_connections()
+        if preflight_results and all(not r.get("success", False) for r in preflight_results):
+            self._running = False
+            self.pause()
+
+            failed_hosts = ", ".join(
+                [
+                    f"{r.get('server', 'unknown')} ({r.get('error', 'unknown error')})"
+                    for r in preflight_results
+                ]
+            )
+            error_msg = (
+                f"Pre-flight block: All attached SMTP servers failed health check: {failed_hosts}"
+            )
+            logger.error(error_msg)
+
+            from mercury.data.database import session_scope
+
+            if self._current_campaign:
+                try:
+                    from mercury.data.repositories.campaign import CampaignRepository
+
+                    with session_scope() as session:
+                        repo = CampaignRepository(session)
+                        db_cam = repo.get(self._current_campaign.id)
+                        if db_cam:
+                            db_cam.status = "error"
+                except Exception as e:
+                    logger.error(f"Failed to update campaign state after pre-flight: {e}")
+
+            raise RuntimeError(error_msg)
+
         os.makedirs(log_path, exist_ok=True)
-        
+
+        # Async DB Log writer queue
+        db_log_queue = asyncio.Queue()
+        writer_task_done = asyncio.Event()
+
+        async def _db_log_writer():
+            try:
+                from mercury.data.database import session_scope
+
+                logs_batch = []
+                while True:
+                    try:
+                        # Wait up to 1 second for logs
+                        log = await asyncio.wait_for(db_log_queue.get(), timeout=1.0)
+                        if log is None:  # Sentinel
+                            db_log_queue.task_done()
+                            break
+                        logs_batch.append(log)
+                        db_log_queue.task_done()
+                    except asyncio.TimeoutError:
+                        pass
+
+                    # Flush if we have reached a good batch size or timed out and have some logs
+                    if len(logs_batch) >= 100 or (logs_batch and db_log_queue.empty()):
+                        batch_to_write = list(logs_batch)
+                        logs_batch.clear()
+
+                        def flush_to_db(logs_to_insert):
+                            with session_scope() as local_session:
+                                try:
+                                    LogRepository(local_session).bulk_create(logs_to_insert)
+                                except Exception as e:
+                                    logger.warning(f"Failed to bulk save email logs: {e}")
+
+                        # Run sync DB operation in a separate thread so we don't block the async loop
+                        await asyncio.to_thread(flush_to_db, batch_to_write)
+
+                # Final flush
+                if logs_batch:
+
+                    def flush_to_db_final(logs_to_insert):
+                        with session_scope() as local_session:
+                            try:
+                                LogRepository(local_session).bulk_create(logs_to_insert)
+                            except Exception as e:
+                                logger.warning(f"Failed to bulk save email logs (final): {e}")
+
+                    await asyncio.to_thread(flush_to_db_final, logs_batch)
+
+            except Exception as e:
+                logger.error(f"Async DB Log writer task crashed: {e}")
+            finally:
+                writer_task_done.set()
+
+        asyncio.create_task(_db_log_writer())
+
         # If recipients is a list, we know the total.
         # If it's an iterator, we might not know unless we counted first.
         # Assuming for now caller handles counting if they need progress bar accuracy.
-        total_count = len(recipients) if hasattr(recipients, '__len__') else 0
-        
+        total_count = len(recipients) if hasattr(recipients, "__len__") else 0
+
         total_stats = {
-            'total': total_count,
-            'sent': 0,
-            'failed': 0,
-            'chunks_processed': 0,
-            'start_time': datetime.now(UTC).isoformat()
+            "total": total_count,
+            "sent": 0,
+            "failed": 0,
+            "chunks_processed": 0,
+            "start_time": datetime.now(UTC).isoformat(),
         }
-        
+
         # Use async file loggers for better performance
-        success_log_path = os.path.join(log_path, 'success-emails.txt')
-        failed_log_path = os.path.join(log_path, 'failed-emails.txt')
-        
-        async with AsyncFileLogger(success_log_path) as success_logger, \
-                   AsyncFileLogger(failed_log_path) as failed_logger:
-            
+        success_log_path = os.path.join(log_path, "success-emails.txt")
+        failed_log_path = os.path.join(log_path, "failed-emails.txt")
+
+        async with AsyncFileLogger(success_log_path) as success_logger, AsyncFileLogger(
+            failed_log_path
+        ) as failed_logger:
             session = get_session_direct()
-            
+
             try:
                 original_chunk_size = self.config.chunk_size if self.config else 1000
                 pause = self.config.pause_between_chunks if self.config else 0
-                
+
                 campaign_id = self._current_campaign.id if self._current_campaign else None
-                
+
                 # We process in micro-chunks to ensure real-time DB logs and SMTP metrics
                 # update frequently without waiting for a massive 10,000 email chunk to finish.
                 MICRO_CHUNK_SIZE = 25
                 total_processed_for_pause = 0
-                
-                for chunk_num, chunk in enumerate(self.iterate_recipients(recipients, MICRO_CHUNK_SIZE)):
+
+                for chunk_num, chunk in enumerate(
+                    self.iterate_recipients(recipients, MICRO_CHUNK_SIZE)
+                ):
                     # Check for shutdown
                     if not self._running or self._shutdown_event.is_set():
                         logger.info("Campaign stopped")
                         break
-                    
+
                     # Handle pause
                     while self._paused and self._running:
                         await asyncio.sleep(1)
-                    
+
                     logger.info(f"Processing micro-chunk {chunk_num + 1} ({len(chunk)} recipients)")
-                    
+
                     # Send chunk
                     result = await self.email_service.send_bulk(
                         recipients=chunk,
                         progress_callback=progress_callback,
-                        shutdown_event=self._shutdown_event
+                        shutdown_event=self._shutdown_event,
                     )
 
                     # Fail fast: if every result in this chunk is a server-side
                     # error (auth / connection), abort the whole campaign rather
                     # than writing thousands of failed log entries and misleading
                     # the user into thinking recipients are at fault.
-                    _SERVER_ERR = {'authentication_error', 'connection_error'}
+                    _SERVER_ERR = {"authentication_error", "connection_error"}
                     if result.results and all(
-                        not r.success and r.error_type in _SERVER_ERR
-                        for r in result.results
+                        not r.success and r.error_type in _SERVER_ERR for r in result.results
                     ):
-                        sample_error = result.results[0].error or 'SMTP server error'
-                        raise RuntimeError(
-                            f"SMTP server error — campaign aborted: {sample_error}"
-                        )
+                        sample_error = result.results[0].error or "SMTP server error"
+                        raise RuntimeError(f"SMTP server error — campaign aborted: {sample_error}")
 
                     # Log results asynchronously and to DB
                     db_logs = []
-                    
+
                     for email_result in result.results:
                         if email_result.success:
                             await success_logger.log_success(email_result.recipient)
-                            total_stats['sent'] += 1
-                            
-                            db_logs.append(EmailLog(
-                                campaign_id=campaign_id,
-                                recipient_email=email_result.recipient,
-                                status=EmailStatus.SENT,
-                                sent_at=datetime.now(UTC),
-                                subject=self.config.subject if self.config else "",
-                                from_email=self.config.from_email if self.config else "",
-                                smtp_server_name=_clean_val(email_result.smtp_server),
-                                # Persist the relay's actual response text. Without
-                                # this, status='sent' only means "no exception was
-                                # raised by send_message" — operators have no way
-                                # to distinguish a real 250 (with queue-id) from a
-                                # silently-discarded relay-accept-then-drop, and
-                                # bounce investigation has nothing to correlate
-                                # against. The column already existed on the model
-                                # and was just being dropped here.
-                                smtp_response=_clean_val(email_result.smtp_response),
-                                correlation_id=_clean_val(email_result.correlation_id) or None
-                            ))
+                            total_stats["sent"] += 1
+
+                            db_logs.append(
+                                EmailLog(
+                                    campaign_id=campaign_id,
+                                    recipient_email=email_result.recipient,
+                                    status=EmailStatus.SENT,
+                                    sent_at=datetime.now(UTC),
+                                    subject=self.config.subject if self.config else "",
+                                    from_email=self.config.from_email if self.config else "",
+                                    smtp_server_name=_clean_val(email_result.smtp_server),
+                                    # Persist the relay's actual response text. Without
+                                    # this, status='sent' only means "no exception was
+                                    # raised by send_message" — operators have no way
+                                    # to distinguish a real 250 (with queue-id) from a
+                                    # silently-discarded relay-accept-then-drop, and
+                                    # bounce investigation has nothing to correlate
+                                    # against. The column already existed on the model
+                                    # and was just being dropped here.
+                                    smtp_response=_clean_val(email_result.smtp_response),
+                                    correlation_id=_clean_val(email_result.correlation_id) or None,
+                                )
+                            )
                         else:
                             await failed_logger.log_failure(
-                                email_result.recipient,
-                                email_result.error or 'Unknown error'
+                                email_result.recipient, email_result.error or "Unknown error"
                             )
-                            total_stats['failed'] += 1
+                            total_stats["failed"] += 1
 
-                            db_logs.append(EmailLog(
-                                campaign_id=campaign_id,
-                                recipient_email=email_result.recipient,
-                                status=EmailStatus.FAILED,
-                                failed_at=datetime.now(UTC),
-                                subject=self.config.subject if self.config else "",
-                                from_email=self.config.from_email if self.config else "",
-                                # Capture the server's response text on the failure
-                                # path too — many "errors" are well-formed SMTP
-                                # rejections (550 mailbox-not-exist, 5.7.0 from-
-                                # not-allowed) whose response body is the most
-                                # useful piece of diagnostic data we have. Also
-                                # carry the smtp_server name so per-server failure
-                                # patterns are queryable without joining log files.
-                                smtp_server_name=_clean_val(email_result.smtp_server),
-                                smtp_response=_clean_val(email_result.smtp_response),
-                                error_message=_clean_val(email_result.error),
-                                error_type=_clean_val(email_result.error_type),
-                                correlation_id=_clean_val(email_result.correlation_id) or None
-                            ))
-                    
+                            db_logs.append(
+                                EmailLog(
+                                    campaign_id=campaign_id,
+                                    recipient_email=email_result.recipient,
+                                    status=EmailStatus.FAILED,
+                                    failed_at=datetime.now(UTC),
+                                    subject=self.config.subject if self.config else "",
+                                    from_email=self.config.from_email if self.config else "",
+                                    # Capture the server's response text on the failure
+                                    # path too — many "errors" are well-formed SMTP
+                                    # rejections (550 mailbox-not-exist, 5.7.0 from-
+                                    # not-allowed) whose response body is the most
+                                    # useful piece of diagnostic data we have. Also
+                                    # carry the smtp_server name so per-server failure
+                                    # patterns are queryable without joining log files.
+                                    smtp_server_name=_clean_val(email_result.smtp_server),
+                                    smtp_response=_clean_val(email_result.smtp_response),
+                                    error_message=_clean_val(email_result.error),
+                                    error_type=_clean_val(email_result.error_type),
+                                    correlation_id=_clean_val(email_result.correlation_id) or None,
+                                )
+                            )
+
                     # Batch insert to DB via repository
                     if db_logs:
-                        try:
-                            LogRepository(session).bulk_create(db_logs)
-                        except Exception as e:
-                            from sqlalchemy.exc import IntegrityError
-                            if isinstance(e, IntegrityError):
-                                logger.warning(f"Failed to bulk save email logs, likely deleted campaign: {e}")
-                                session.rollback()
-                            else:
-                                session.rollback()
-                                raise
+                        for db_l in db_logs:
+                            db_log_queue.put_nowait(db_l)
 
                     # Batch update SMTPServer metrics
                     if result.results:
                         smtp_stats = {}
                         for r in result.results:
-                            server_name = _clean_val(getattr(r, 'smtp_server', None))
+                            server_name = _clean_val(getattr(r, "smtp_server", None))
                             if not server_name:
                                 continue
                             if server_name not in smtp_stats:
-                                smtp_stats[server_name] = {'sent': 0, 'failed': 0}
-                            
-                            success_val = getattr(r, 'success', False)
-                            if 'Mock' in type(success_val).__name__:
+                                smtp_stats[server_name] = {"sent": 0, "failed": 0}
+
+                            success_val = getattr(r, "success", False)
+                            if "Mock" in type(success_val).__name__:
                                 success_val = False
                             if success_val:
-                                smtp_stats[server_name]['sent'] += 1
+                                smtp_stats[server_name]["sent"] += 1
                             else:
-                                smtp_stats[server_name]['failed'] += 1
-                                
+                                smtp_stats[server_name]["failed"] += 1
+
                         if smtp_stats:
                             from ..data.repositories.smtp import SMTPRepository
+
                             smtp_repo = SMTPRepository(session)
                             for server_name, stats in smtp_stats.items():
                                 server = smtp_repo.get_by_name(server_name)
                                 if server:
                                     # Avoid TypeError when database repository/server is mocked
-                                    total_sent = getattr(server, 'total_sent', None)
-                                    if 'Mock' in type(total_sent).__name__:
+                                    total_sent = getattr(server, "total_sent", None)
+                                    if "Mock" in type(total_sent).__name__:
                                         total_sent = 0
                                     if isinstance(total_sent, int):
-                                        server.total_sent = total_sent + stats['sent']
+                                        server.total_sent = total_sent + stats["sent"]
                                     elif total_sent is None:
-                                        server.total_sent = stats['sent']
+                                        server.total_sent = stats["sent"]
 
-                                    total_failed = getattr(server, 'total_failed', None)
-                                    if 'Mock' in type(total_failed).__name__:
+                                    total_failed = getattr(server, "total_failed", None)
+                                    if "Mock" in type(total_failed).__name__:
                                         total_failed = 0
                                     if isinstance(total_failed, int):
-                                        server.total_failed = total_failed + stats['failed']
+                                        server.total_failed = total_failed + stats["failed"]
                                     elif total_failed is None:
-                                        server.total_failed = stats['failed']
+                                        server.total_failed = stats["failed"]
                             session.commit()
 
-                    total_stats['chunks_processed'] += 1
+                    total_stats["chunks_processed"] += 1
                     total_processed_for_pause += len(chunk)
-                    
+
                     # Pause between chunks based on the user's original chunk_size
                     if pause > 0 and total_processed_for_pause >= original_chunk_size:
                         logger.info(f"Pausing for {pause} seconds...")
                         try:
-                            await asyncio.wait_for(
-                                self._shutdown_event.wait(),
-                                timeout=pause
-                            )
+                            await asyncio.wait_for(self._shutdown_event.wait(), timeout=pause)
                             # If we get here, shutdown was requested
                             break
                         except asyncio.TimeoutError:
                             # Normal case - timeout expired, continue
                             pass
                         total_processed_for_pause = 0
-                
-                total_stats['end_time'] = datetime.now(UTC).isoformat()
-                total_stats['success_rate'] = round(
-                    total_stats['sent'] / total_stats['total'] * 100, 2
-                ) if total_stats['total'] > 0 else 0
-                
+
+                total_stats["end_time"] = datetime.now(UTC).isoformat()
+                _processed = total_stats["sent"] + total_stats["failed"]
+                total_stats["success_rate"] = (
+                    round(total_stats["sent"] / _processed * 100, 2)
+                    if _processed > 0
+                    else 0
+                )
+
                 return total_stats
-                
+
             finally:
+                try:
+                    db_log_queue.put_nowait(None)
+                    await writer_task_done.wait()
+                except Exception:
+                    pass
                 session.close()
                 self._running = False
-    
+
     def pause(self):
         """Pause campaign execution."""
         self._paused = True
         logger.info("Campaign paused")
-    
+
     def resume(self):
         """Resume campaign execution."""
         self._paused = False
         logger.info("Campaign resumed")
-    
+
     def stop(self):
         """Stop campaign execution."""
         self._running = False
         self._shutdown_event.set()
         logger.info("Campaign stop requested")
-    
+
     def get_campaign_stats(self, campaign_id: int = None) -> Dict[str, Any]:
         """Get campaign statistics."""
         if self.email_service:
             return self.email_service.get_statistics()
         return {}
-    
+
     def list_campaigns(self, limit: int = 200) -> List[Campaign]:
         """List recent campaigns."""
         session = get_session_direct()
@@ -829,12 +927,12 @@ class CampaignService:
             return repo.get_recent(limit)
         finally:
             session.close()
-    
+
     async def close(self):
         """Clean up resources."""
         self._running = False
         self._shutdown_event.set()
-        
+
         if self.email_service:
             await self.email_service.close()
 
@@ -842,77 +940,73 @@ class CampaignService:
 def load_campaign_from_yaml(yaml_path: str) -> CampaignConfig:
     """
     Load campaign configuration from YAML file.
-    
+
     Args:
         yaml_path: Path to YAML configuration file
-        
+
     Returns:
         CampaignConfig instance
     """
     import yaml
-    
-    with open(yaml_path, 'r', encoding='utf-8') as f:
+
+    with open(yaml_path, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
-    
+
     # Extract sections
-    campaign = data.get('campaign', {})
-    email = data.get('email', {})
-    template = data.get('template', {})
-    recipients = data.get('recipients', {})
-    smtp = data.get('smtp_providers', data.get('smtp', []))
-    sending = data.get('sending', {})
-    features = data.get('features', {})
-    placeholders = data.get('placeholders', {}).get('static', {})
-    placeholders_path = data.get('placeholders', {}).get('path', '')
-    
+    campaign = data.get("campaign", {})
+    email = data.get("email", {})
+    template = data.get("template", {})
+    recipients = data.get("recipients", {})
+    smtp = data.get("smtp_providers", data.get("smtp", []))
+    sending = data.get("sending", {})
+    features = data.get("features", {})
+    placeholders = data.get("placeholders", {}).get("static", {})
+    placeholders_path = data.get("placeholders", {}).get("path", "")
+
     return CampaignConfig(
-        name=campaign.get('name', 'Unnamed Campaign'),
-        description=campaign.get('description', ''),
-        
-        subject=email.get('subject', email.get('subjects', [''])[0] if email.get('subjects') else ''),
-        subjects=[s.get('template', s) if isinstance(s, dict) else s for s in email.get('subjects', [])],
-        from_email=email.get('from_email', ''),
-        from_name=email.get('from_name', ''),
-        from_names=email.get('from_names', []),
-        from_emails=email.get('from_emails', []),
-        reply_to=email.get('reply_to', ''),
-        
-        template_path=template.get('html', template.get('path', '')),
-        templates=template.get('variants', []),
-        
-        recipients_path=recipients.get('source', recipients.get('path', '')),
-        email_column=recipients.get('email_column', 'email'),
-        validate_emails=recipients.get('validate', True),
-        deduplicate=recipients.get('deduplicate', True),
-        
+        name=campaign.get("name", "Unnamed Campaign"),
+        description=campaign.get("description", ""),
+        subject=email.get(
+            "subject", email.get("subjects", [""])[0] if email.get("subjects") else ""
+        ),
+        subjects=[
+            s.get("template", s) if isinstance(s, dict) else s for s in email.get("subjects", [])
+        ],
+        from_email=email.get("from_email", ""),
+        from_name=email.get("from_name", ""),
+        from_names=email.get("from_names", []),
+        from_emails=email.get("from_emails", []),
+        reply_to=email.get("reply_to", ""),
+        template_path=template.get("html", template.get("path", "")),
+        templates=template.get("variants", []),
+        recipients_path=recipients.get("source", recipients.get("path", "")),
+        email_column=recipients.get("email_column", "email"),
+        validate_emails=recipients.get("validate", True),
+        deduplicate=recipients.get("deduplicate", True),
         smtp_configs=smtp if isinstance(smtp, list) else [smtp],
-        smtp_rotation=data.get('smtp_rotation', {}).get('strategy', 'weighted'),
-        
-        dry_run=sending.get('dry_run', data.get('dry_run', False)),
-        concurrency=sending.get('concurrency', 50),
-        chunk_size=sending.get('chunk_size', 1000),
-        pause_between_chunks=sending.get('pause_between_chunks', 0),
-        rate_per_minute=sending.get('rate_per_minute', 0),
-        rate_per_hour=sending.get('rate_per_hour', 0),
-        
-        enable_qr_code=features.get('qr_codes', False),
-        send_as_image=features.get('send_as_image', False),
-        attachment_ids=features.get('attachment_ids') or [],
-        convert_attachment=bool(features.get('convert_attachment', False)),
-        attachment_convert_to=features.get('attachment_convert_to') or None,
+        smtp_rotation=data.get("smtp_rotation", {}).get("strategy", "weighted"),
+        dry_run=sending.get("dry_run", data.get("dry_run", False)),
+        concurrency=sending.get("concurrency", 50),
+        chunk_size=sending.get("chunk_size", 1000),
+        pause_between_chunks=sending.get("pause_between_chunks", 0),
+        rate_per_minute=sending.get("rate_per_minute", 0),
+        rate_per_hour=sending.get("rate_per_hour", 0),
+        enable_qr_code=features.get("qr_codes", False),
+        send_as_image=features.get("send_as_image", False),
+        attachment_ids=features.get("attachment_ids") or [],
+        convert_attachment=bool(features.get("convert_attachment", False)),
+        attachment_convert_to=features.get("attachment_convert_to") or None,
         logo_attachment_id=(
-            int(features['logo_attachment_id'])
-            if str(features.get('logo_attachment_id') or '').strip().isdigit()
+            int(features["logo_attachment_id"])
+            if str(features.get("logo_attachment_id") or "").strip().isdigit()
             else None
         ),
-        auto_company_logo=bool(features.get('auto_company_logo', False)),
-        hide_from_email_header=bool(features.get('hide_from_email_header', False)),
+        auto_company_logo=bool(features.get("auto_company_logo", False)),
+        hide_from_email_header=bool(features.get("hide_from_email_header", False)),
         # Round-trip default True: any saved campaign without the key
         # behaves as "include", matching the dataclass default.
-        include_default_body=bool(features.get('include_default_body', True)),
-
-        links=data.get('links', []),
-        
+        include_default_body=bool(features.get("include_default_body", True)),
+        links=data.get("links", []),
         placeholders=placeholders,
-        placeholders_path=placeholders_path
+        placeholders_path=placeholders_path,
     )

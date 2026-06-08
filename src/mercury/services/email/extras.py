@@ -33,23 +33,23 @@ def build_extras(
 ) -> Tuple[Dict[str, str], Dict[str, str]]:
     """Returns ``(body_extras, header_extras)``."""
     body_extras: Dict[str, str] = {
-        'link': ctx.link or '',
-        'url': ctx.link or '',
-        'qr_code': f'<img src="{qr_data_url}" alt="QR Code" />' if qr_data_url else '',
-        'qr_code_url': qr_data_url or '',
-        'company_logo': branding.logo_img_tag,
-        'company_logo_url': branding.logo_data_url,
-        'brand': branding.body_brand,
+        "link": ctx.link or "",
+        "url": ctx.link or "",
+        "qr_code": f'<img src="{qr_data_url}" alt="QR Code" />' if qr_data_url else "",
+        "qr_code_url": qr_data_url or "",
+        "company_logo": branding.logo_img_tag,
+        "company_logo_url": branding.logo_data_url,
+        "brand": branding.body_brand,
     }
     header_extras: Dict[str, str] = {
-        'link': ctx.link or '',
-        'url': ctx.link or '',
+        "link": ctx.link or "",
+        "url": ctx.link or "",
         # Empty for headers — operators should never see <img> tags in
         # their subject lines or From names.
-        'qr_code': '',
-        'qr_code_url': '',
-        'company_logo': '',
-        'company_logo_url': '',
-        'brand': branding.header_brand,
+        "qr_code": "",
+        "qr_code_url": "",
+        "company_logo": "",
+        "company_logo_url": "",
+        "brand": branding.header_brand,
     }
     return body_extras, header_extras

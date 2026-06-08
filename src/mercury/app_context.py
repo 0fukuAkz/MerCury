@@ -18,21 +18,21 @@ logger = logging.getLogger(__name__)
 class AppContext:
     """
     Application context container for dependency injection.
-    
+
     This replaces global state by providing a centralized container
     for all application dependencies.
     """
-    
+
     # Flask extensions (initialized during app creation)
     socketio: Optional[SocketIO] = None
     limiter: Optional[Limiter] = None
-    
+
     # Configuration
     config: Dict[str, Any] = field(default_factory=dict)
-    
+
     # Flags
     is_initialized: bool = False
-    
+
     def initialize(self, app: Flask) -> None:
         """
         Initialize all dependencies with the Flask app.
@@ -59,6 +59,7 @@ class AppContext:
         # callbacks (in the asyncio loop's thread) enqueue events that
         # this greenlet drains and emits from the eventlet hub.
         from .web.extensions import start_emit_bridge
+
         start_emit_bridge(socketio)
 
         # Initialize CSRF protection. Honors WTF_CSRF_ENABLED app config — the
@@ -76,6 +77,7 @@ class AppContext:
             from .web.routes.api import api_bp
             from .web.routes.tracking import tracking_bp
             from .web.routes.health import health_bp
+
             csrf.exempt(api_bp)
             csrf.exempt(tracking_bp)
             csrf.exempt(health_bp)
@@ -84,8 +86,7 @@ class AppContext:
 
         self.is_initialized = True
         logger.info("AppContext initialized successfully")
-    
-    
+
     def emit_progress(self, data: Dict[str, Any]) -> None:
         """Emit progress update via the cross-thread bridge queue.
 
@@ -93,22 +94,25 @@ class AppContext:
         The eventlet bridge greenlet drains the queue and emits on hub.
         """
         from .web.extensions import queue_emit
-        queue_emit('campaign_progress', data)
+
+        queue_emit("campaign_progress", data)
 
     def emit_complete(self, data: Dict[str, Any]) -> None:
         """Emit campaign complete event via the bridge."""
         from .web.extensions import queue_emit
-        queue_emit('campaign_complete', data)
+
+        queue_emit("campaign_complete", data)
 
     def emit_event(self, event: str, data: Dict[str, Any]) -> None:
         """Emit a generic event via the bridge."""
         from .web.extensions import queue_emit
+
         queue_emit(event, data)
-    
+
     def get_limiter(self) -> Optional[Limiter]:
         """Get the rate limiter instance."""
         return self.limiter
-    
+
     def get_socketio(self) -> Optional[SocketIO]:
         """Get the SocketIO instance."""
         return self.socketio
@@ -122,7 +126,7 @@ _app_context: Optional[AppContext] = None
 def get_app_context() -> AppContext:
     """
     Get the application context singleton.
-    
+
     Returns:
         AppContext instance
     """
@@ -135,7 +139,7 @@ def get_app_context() -> AppContext:
 def set_app_context(context: AppContext) -> None:
     """
     Set a custom application context (useful for testing).
-    
+
     Args:
         context: AppContext instance to use
     """
@@ -147,4 +151,3 @@ def reset_app_context() -> None:
     """Reset the application context to None (useful for testing)."""
     global _app_context
     _app_context = None
-

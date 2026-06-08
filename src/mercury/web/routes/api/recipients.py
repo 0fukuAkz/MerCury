@@ -23,7 +23,8 @@ from . import (
 def _recipients_dir() -> str:
     """Return the absolute path to the data/recipients directory, creating it if needed."""
     from ....utils.app_dirs import get_data_dir
-    base = os.path.join(get_data_dir(), 'recipients')
+
+    base = os.path.join(get_data_dir(), "recipients")
     os.makedirs(base, exist_ok=True)
     return base
 
@@ -31,11 +32,11 @@ def _recipients_dir() -> str:
 def _safe_filename(name: str) -> str:
     """Sanitize a filename to prevent path traversal."""
     name = os.path.basename(name)
-    name = re.sub(r'[^\w\s.\-]', '_', name)
-    return name or 'upload.csv'
+    name = re.sub(r"[^\w\s.\-]", "_", name)
+    return name or "upload.csv"
 
 
-@api_bp.route('/recipients', methods=['GET'])
+@api_bp.route("/recipients", methods=["GET"])
 @api_key_or_login_required
 @limiter.limit("30/minute")
 def api_list_recipient_files():
@@ -44,38 +45,40 @@ def api_list_recipient_files():
     files = []
     for fname in sorted(os.listdir(base)):
         fpath = os.path.join(base, fname)
-        if os.path.isfile(fpath) and fname.lower().endswith(('.csv', '.txt')):
+        if os.path.isfile(fpath) and fname.lower().endswith((".csv", ".txt")):
             stat = os.stat(fpath)
-            files.append({
-                'filename': fname,
-                'size': stat.st_size,
-                'modified': datetime.fromtimestamp(stat.st_mtime, UTC).isoformat(),
-            })
-    return jsonify({'files': files, 'count': len(files)})
+            files.append(
+                {
+                    "filename": fname,
+                    "size": stat.st_size,
+                    "modified": datetime.fromtimestamp(stat.st_mtime, UTC).isoformat(),
+                }
+            )
+    return jsonify({"files": files, "count": len(files)})
 
 
-@api_bp.route('/recipients/upload', methods=['POST'])
+@api_bp.route("/recipients/upload", methods=["POST"])
 @api_key_or_login_required
 @limiter.limit("10/minute")
 def api_upload_recipients():
     """Upload a CSV/TXT recipient file with optional validation and deduplication."""
-    uploaded = request.files.get('file')
+    uploaded = request.files.get("file")
     if not uploaded:
-        return jsonify({'error': 'No file uploaded'}), 400
+        return jsonify({"error": "No file uploaded"}), 400
 
-    validate = request.form.get('validate', 'true').lower() in ('true', '1', 'yes')
-    deduplicate = request.form.get('deduplicate', 'true').lower() in ('true', '1', 'yes')
+    validate = request.form.get("validate", "true").lower() in ("true", "1", "yes")
+    deduplicate = request.form.get("deduplicate", "true").lower() in ("true", "1", "yes")
 
-    raw = uploaded.stream.read().decode('utf-8', errors='replace')
-    filename = _safe_filename(uploaded.filename or 'upload.csv')
+    raw = uploaded.stream.read().decode("utf-8", errors="replace")
+    filename = _safe_filename(uploaded.filename or "upload.csv")
 
     # Parse as CSV; fall back to plain-text (one email per line)
-    email_rgx = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+    email_rgx = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
     rows = []
     fieldnames = []
     try:
         reader = csv.DictReader(io.StringIO(raw))
-        if reader.fieldnames and any(f.lower().strip() == 'email' for f in reader.fieldnames):
+        if reader.fieldnames and any(f.lower().strip() == "email" for f in reader.fieldnames):
             fieldnames = [f.strip() for f in reader.fieldnames]
             for row in reader:
                 rows.append({k.strip(): v.strip() for k, v in row.items()})
@@ -83,8 +86,10 @@ def api_upload_recipients():
             raise ValueError("no email column")
     except Exception:
         # Plain-text fallback — one email per line
-        fieldnames = ['email']
-        rows = [{'email': line.strip()} for line in raw.splitlines() if line.strip() and '@' in line]
+        fieldnames = ["email"]
+        rows = [
+            {"email": line.strip()} for line in raw.splitlines() if line.strip() and "@" in line
+        ]
 
     total_raw = len(rows)
 
@@ -93,9 +98,9 @@ def api_upload_recipients():
     if validate:
         valid_rows = []
         for r in rows:
-            email = r.get('email', '').lower().strip()
+            email = r.get("email", "").lower().strip()
             if email_rgx.match(email):
-                r['email'] = email
+                r["email"] = email
                 valid_rows.append(r)
             else:
                 invalid_count += 1
@@ -107,7 +112,7 @@ def api_upload_recipients():
         seen = set()
         deduped = []
         for r in rows:
-            key = r.get('email', '').lower()
+            key = r.get("email", "").lower()
             if key not in seen:
                 seen.add(key)
                 deduped.append(r)
@@ -118,22 +123,24 @@ def api_upload_recipients():
     # Write processed file
     base = _recipients_dir()
     dest = os.path.join(base, filename)
-    with open(dest, 'w', newline='', encoding='utf-8') as f:
+    with open(dest, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)
 
-    return jsonify({
-        'success': True,
-        'filename': filename,
-        'total_raw': total_raw,
-        'invalid_removed': invalid_count,
-        'duplicates_removed': dup_count,
-        'saved': len(rows),
-    })
+    return jsonify(
+        {
+            "success": True,
+            "filename": filename,
+            "total_raw": total_raw,
+            "invalid_removed": invalid_count,
+            "duplicates_removed": dup_count,
+            "saved": len(rows),
+        }
+    )
 
 
-@api_bp.route('/recipients/<filename>/preview', methods=['GET'])
+@api_bp.route("/recipients/<filename>/preview", methods=["GET"])
 @api_key_or_login_required
 @limiter.limit("30/minute")
 def api_preview_recipients(filename: str):
@@ -141,12 +148,12 @@ def api_preview_recipients(filename: str):
     filename = _safe_filename(filename)
     fpath = os.path.join(_recipients_dir(), filename)
     if not os.path.isfile(fpath):
-        return jsonify({'error': 'File not found'}), 404
+        return jsonify({"error": "File not found"}), 404
 
-    limit = min(int(request.args.get('limit', 20)), 200)
+    limit = min(int(request.args.get("limit", 20)), 200)
     rows = []
     fieldnames = []
-    with open(fpath, 'r', encoding='utf-8', errors='replace') as f:
+    with open(fpath, "r", encoding="utf-8", errors="replace") as f:
         reader = csv.DictReader(f)
         fieldnames = reader.fieldnames or []
         for i, row in enumerate(reader):
@@ -154,10 +161,10 @@ def api_preview_recipients(filename: str):
                 break
             rows.append(dict(row))
 
-    return jsonify({'filename': filename, 'columns': fieldnames, 'rows': rows, 'count': len(rows)})
+    return jsonify({"filename": filename, "columns": fieldnames, "rows": rows, "count": len(rows)})
 
 
-@api_bp.route('/recipients/<filename>', methods=['DELETE'])
+@api_bp.route("/recipients/<filename>", methods=["DELETE"])
 @api_key_or_login_required
 @limiter.limit("10/minute")
 def api_delete_recipient_file(filename: str):
@@ -165,7 +172,7 @@ def api_delete_recipient_file(filename: str):
     filename = _safe_filename(filename)
     fpath = os.path.join(_recipients_dir(), filename)
     if not os.path.isfile(fpath):
-        return jsonify({'error': 'File not found'}), 404
+        return jsonify({"error": "File not found"}), 404
 
     os.remove(fpath)
-    return jsonify({'success': True, 'filename': filename})
+    return jsonify({"success": True, "filename": filename})

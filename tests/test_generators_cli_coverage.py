@@ -26,6 +26,7 @@ from mercury.cli.main import cli
 # QRCodeGenerator
 # ============================================================================
 
+
 class TestQRCodeGeneratorCoverage:
     """Cover remaining QRCodeGenerator lines."""
 
@@ -84,6 +85,7 @@ class TestQRCodeGeneratorCoverage:
 # PDFGenerator
 # ============================================================================
 
+
 class TestPDFGeneratorCoverage:
     """Cover PDFGenerator missing lines."""
 
@@ -108,7 +110,6 @@ class TestPDFGeneratorCoverage:
         """Lines 149-154: OSError (missing system libs) → _weasyprint_available is False."""
         config = GeneratorConfig(use_weasyprint=True)
         gen = PDFGenerator(config)
-
 
         # Simulate weasyprint importable but raising OSError on usage
         mock_wp = MagicMock()
@@ -175,9 +176,7 @@ class TestPDFGeneratorCoverage:
         gen._weasyprint_available = True
 
         with patch.dict("sys.modules", {"weasyprint": mock_wp}):
-            result = gen._generate_with_weasyprint(
-                "<p>content</p>", css="body { color: red; }"
-            )
+            result = gen._generate_with_weasyprint("<p>content</p>", css="body { color: red; }")
         assert result == b"%PDF-test"
 
     def test_generate_with_weasyprint_save_to_file(self, tmp_path):
@@ -196,15 +195,14 @@ class TestPDFGeneratorCoverage:
 
         output_path = str(tmp_path / "output.pdf")
         with patch.dict("sys.modules", {"weasyprint": mock_wp}):
-            result = gen._generate_with_weasyprint(
-                "<p>content</p>", output_path=output_path
-            )
+            result = gen._generate_with_weasyprint("<p>content</p>", output_path=output_path)
         assert os.path.exists(output_path)
 
 
 # ============================================================================
 # DOCXGenerator
 # ============================================================================
+
 
 class TestDOCXGeneratorCoverage:
     """Cover DOCXGenerator missing lines."""
@@ -305,6 +303,7 @@ class TestDOCXGeneratorCoverage:
 # ImageGenerator
 # ============================================================================
 
+
 class TestImageGeneratorCoverage:
     """Cover ImageGenerator missing lines."""
 
@@ -318,9 +317,7 @@ class TestImageGeneratorCoverage:
     def test_generate_from_html_with_width_and_format(self):
         """Lines 448-449: custom width and format override config."""
         gen = ImageGenerator()
-        result = gen.generate_from_html(
-            "<p>Hello</p>", width=400, format="PNG"
-        )
+        result = gen.generate_from_html("<p>Hello</p>", width=400, format="PNG")
         assert isinstance(result, bytes)
 
     def test_generate_from_html_jpeg_format(self):
@@ -374,6 +371,7 @@ class TestImageGeneratorCoverage:
 # AttachmentGenerator
 # ============================================================================
 
+
 class TestAttachmentGeneratorCoverage:
     """Cover AttachmentGenerator.generate_attachment missing lines."""
 
@@ -414,9 +412,7 @@ class TestAttachmentGeneratorCoverage:
     def test_generate_qr_attachment_with_link(self):
         """Lines 564-566: qr type uses link when provided."""
         gen = AttachmentGenerator()
-        data, fname, ctype = gen.generate_attachment(
-            "qr", "fallback", link="https://example.com"
-        )
+        data, fname, ctype = gen.generate_attachment("qr", "fallback", link="https://example.com")
         assert fname == "qrcode.png"
         assert ctype == "image/png"
         assert isinstance(data, bytes)
@@ -456,6 +452,7 @@ class TestAttachmentGeneratorCoverage:
 # ============================================================================
 # CLI / main.py
 # ============================================================================
+
 
 @pytest.fixture
 def runner():
@@ -538,9 +535,7 @@ class TestCheckCommand:
         with runner.isolated_filesystem():
             with open("cfg.yaml", "w") as f:
                 f.write("")
-            with patch(
-                "mercury.services.campaign_service.load_campaign_from_yaml"
-            ) as mock_load:
+            with patch("mercury.services.campaign_service.load_campaign_from_yaml") as mock_load:
                 config = Mock()
                 config.name = "Test"
                 config.from_email = "f@e.com"
@@ -557,9 +552,7 @@ class TestCheckCommand:
         with runner.isolated_filesystem():
             with open("cfg.yaml", "w") as f:
                 f.write("")
-            with patch(
-                "mercury.services.campaign_service.load_campaign_from_yaml"
-            ) as mock_load:
+            with patch("mercury.services.campaign_service.load_campaign_from_yaml") as mock_load:
                 config = Mock()
                 config.name = "Test"
                 config.from_email = "f@e.com"
@@ -584,18 +577,14 @@ class TestTestCommand:
                 "mercury.services.campaign_service.load_campaign_from_yaml"
             ) as mock_load, patch(
                 "mercury.services.smtp_service.SMTPService"
-            ) as MockService, patch(
-                "asyncio.run"
-            ) as mock_run:
+            ) as MockService, patch("asyncio.run") as mock_run:
                 config = Mock()
                 config.smtp_configs = [Mock()]
                 mock_load.return_value = config
 
                 mock_run.return_value = True
 
-                result = runner.invoke(
-                    cli, ["test", "cfg.yaml", "--server", "primary"]
-                )
+                result = runner.invoke(cli, ["test", "cfg.yaml", "--server", "primary"])
                 # The asyncio.run mock returns True → "All connections OK!"
                 assert "All connections OK!" in result.output
 
@@ -608,9 +597,7 @@ class TestTestCommand:
                 "mercury.services.campaign_service.load_campaign_from_yaml"
             ) as mock_load, patch(
                 "mercury.services.smtp_service.SMTPService"
-            ) as MockService, patch(
-                "asyncio.run"
-            ) as mock_run:
+            ) as MockService, patch("asyncio.run") as mock_run:
                 config = Mock()
                 config.smtp_configs = [Mock()]
                 mock_load.return_value = config
@@ -652,18 +639,14 @@ class TestSendCommand:
                 "mercury.services.campaign_service.load_campaign_from_yaml"
             ) as mock_load, patch(
                 "mercury.services.campaign_service.CampaignService"
-            ) as MockService, patch(
-                "asyncio.run"
-            ) as mock_run:
+            ) as MockService, patch("asyncio.run") as mock_run:
                 config = Mock()
                 config.recipients_path = "recipients.txt"
                 config.dry_run = False
                 mock_load.return_value = config
 
                 service = MockService.return_value
-                service.load_recipients_from_text.return_value = [
-                    {"email": "u@test.com"}
-                ]
+                service.load_recipients_from_text.return_value = [{"email": "u@test.com"}]
                 mock_run.return_value = {"sent": 1, "failed": 0}
 
                 result = runner.invoke(cli, ["send", "cfg.yaml", "--yes"])
@@ -678,9 +661,7 @@ class TestSendCommand:
                 "mercury.services.campaign_service.load_campaign_from_yaml"
             ) as mock_load, patch(
                 "mercury.services.campaign_service.CampaignService"
-            ) as MockService, patch(
-                "asyncio.run"
-            ) as mock_run:
+            ) as MockService, patch("asyncio.run") as mock_run:
                 config = Mock()
                 config.recipients_path = "r.csv"
                 config.dry_run = False
@@ -705,18 +686,14 @@ class TestSendCommand:
                 "mercury.services.campaign_service.load_campaign_from_yaml"
             ) as mock_load, patch(
                 "mercury.services.campaign_service.CampaignService"
-            ) as MockService, patch(
-                "asyncio.run"
-            ) as mock_run:
+            ) as MockService, patch("asyncio.run") as mock_run:
                 config = Mock()
                 config.recipients_path = "r.csv"
                 config.dry_run = False
                 mock_load.return_value = config
 
                 service = MockService.return_value
-                service.load_recipients_from_csv.return_value = [
-                    {"email": "u@test.com"}
-                ]
+                service.load_recipients_from_csv.return_value = [{"email": "u@test.com"}]
                 mock_run.return_value = {"sent": 0, "failed": 1}
 
                 result = runner.invoke(cli, ["send", "cfg.yaml", "--yes"])
@@ -731,23 +708,17 @@ class TestSendCommand:
                 "mercury.services.campaign_service.load_campaign_from_yaml"
             ) as mock_load, patch(
                 "mercury.services.campaign_service.CampaignService"
-            ) as MockService, patch(
-                "asyncio.run"
-            ) as mock_run:
+            ) as MockService, patch("asyncio.run") as mock_run:
                 config = Mock()
                 config.recipients_path = "r.csv"
                 config.dry_run = False
                 mock_load.return_value = config
 
                 service = MockService.return_value
-                service.load_recipients_from_csv.return_value = [
-                    {"email": "u@test.com"}
-                ]
+                service.load_recipients_from_csv.return_value = [{"email": "u@test.com"}]
                 mock_run.return_value = {"sent": 1, "failed": 0}
 
-                result = runner.invoke(
-                    cli, ["-q", "send", "cfg.yaml", "--yes"]
-                )
+                result = runner.invoke(cli, ["-q", "send", "cfg.yaml", "--yes"])
                 assert result.exit_code == 0
                 # MerCury banner should not appear with --quiet
                 assert "MerCury" not in result.output
@@ -797,9 +768,7 @@ class TestShowCommand:
         with runner.isolated_filesystem():
             with open("my_config.yaml", "w") as f:
                 f.write("key: value\n")
-            result = runner.invoke(
-                cli, ["show", "config", "--file", "my_config.yaml"]
-            )
+            result = runner.invoke(cli, ["show", "config", "--file", "my_config.yaml"])
             assert "key: value" in result.output
 
 
@@ -809,9 +778,7 @@ class TestGenerateCommands:
     def test_generate_qr_default_output(self, runner):
         """Line 480 (generate_qr): generates qrcode.png by default."""
         with runner.isolated_filesystem():
-            result = runner.invoke(
-                cli, ["generate", "qr", "https://example.com"]
-            )
+            result = runner.invoke(cli, ["generate", "qr", "https://example.com"])
             assert result.exit_code == 0
             assert "Saved to qrcode.png" in result.output
             assert os.path.exists("qrcode.png")
@@ -819,9 +786,7 @@ class TestGenerateCommands:
     def test_generate_qr_custom_output(self, runner):
         """Line 480: custom output path."""
         with runner.isolated_filesystem():
-            result = runner.invoke(
-                cli, ["generate", "qr", "data", "myqr.png"]
-            )
+            result = runner.invoke(cli, ["generate", "qr", "data", "myqr.png"])
             assert "Saved to myqr.png" in result.output
             assert os.path.exists("myqr.png")
 
@@ -834,9 +799,7 @@ class TestGenerateCommands:
                 "mercury.features.generators.PDFGenerator.generate_from_html",
                 return_value=b"%PDF-mock",
             ) as mock_gen:
-                result = runner.invoke(
-                    cli, ["generate", "pdf", "input.html", "output.pdf"]
-                )
+                result = runner.invoke(cli, ["generate", "pdf", "input.html", "output.pdf"])
             assert result.exit_code == 0
             assert "Saved to output.pdf" in result.output
             mock_gen.assert_called_once()
@@ -924,9 +887,7 @@ class TestStartCommand:
         ), patch("webbrowser.open") as mock_wb:
             mock_app = Mock()
             mock_create.return_value = mock_app
-            result = runner.invoke(
-                cli, ["start", "server", "--port", "9999", "--open"]
-            )
+            result = runner.invoke(cli, ["start", "server", "--port", "9999", "--open"])
             mock_wb.assert_called_once_with("http://127.0.0.1:9999")
 
     def test_start_with_socketio(self, runner):

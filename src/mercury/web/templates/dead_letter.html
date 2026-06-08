@@ -84,11 +84,11 @@
     <div class="card-header">
         <h2 class="card-title">Failed Messages</h2>
         <div class="flex gap-2">
-            <button id="requeue-all-btn" class="btn btn-primary" onclick="requeueAll()">
+            <button type="button" id="requeue-all-btn" class="btn btn-primary" onclick="requeueAll()">
                 ♻ Requeue All
             </button>
-            <button class="btn btn-secondary btn-danger" onclick="discardAll()">Discard All</button>
-            <button class="btn btn-secondary" onclick="loadDeadLetters()">Refresh</button>
+            <button type="button" class="btn btn-secondary btn-danger" onclick="discardAll()">Discard All</button>
+            <button type="button" class="btn btn-secondary" onclick="loadDeadLetters()">Refresh</button>
         </div>
     </div>
     <div style="overflow-x: auto;">
@@ -114,7 +114,7 @@
 
 <div id="dl-toast-container"></div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
     /* ── Toast ──────────────────────────────────────────────────────────── */
     function dlToast(msg, type) {
         var t = document.createElement('div');
@@ -169,10 +169,10 @@
                     <td style="white-space:nowrap">${item.failed_at ? new Date(item.failed_at).toLocaleString() : '-'}</td>
                     <td>
                         <div class="flex gap-2">
-                            <button id="requeue-btn-${item.id}" class="act-btn requeue" onclick="requeueItem(${item.id})" title="Re-send via SMTP and mark resolved">
+                            <button type="button" id="requeue-btn-${item.id}" class="act-btn requeue" onclick="requeueItem(${item.id})" title="Re-send via SMTP and mark resolved">
                                 ♻ Requeue
                             </button>
-                            <button class="act-btn discard" onclick="discardItem(${item.id})" title="Mark resolved without sending">
+                            <button type="button" class="act-btn discard" onclick="discardItem(${item.id})" title="Mark resolved without sending">
                                 ✕ Discard
                             </button>
                         </div>

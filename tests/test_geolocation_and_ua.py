@@ -20,36 +20,40 @@ from mercury.features.placeholders import PlaceholderProcessor
 
 # ───── UA parser ───────────────────────────────────────────────────────────
 
-@pytest.mark.parametrize("ua,expected", [
-    (
-        # Chrome 122 on macOS
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-        {"browser": "Chrome", "os": "macOS", "device": "Desktop"},
-    ),
-    (
-        # Safari iPhone iOS 17
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 "
-        "(KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
-        {"browser": "Safari", "os": "iOS", "device": "Mobile"},
-    ),
-    (
-        # Firefox on Windows 10
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
-        {"browser": "Firefox", "os": "Windows", "os_version": "10", "device": "Desktop"},
-    ),
-    (
-        # Edge on Windows 11 (still NT 10.0)
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0",
-        {"browser": "Edge", "os": "Windows", "device": "Desktop"},
-    ),
-    (
-        # Generic crawler — should be classified as Bot regardless of browser
-        "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
-        {"device": "Bot"},
-    ),
-])
+
+@pytest.mark.parametrize(
+    "ua,expected",
+    [
+        (
+            # Chrome 122 on macOS
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            {"browser": "Chrome", "os": "macOS", "device": "Desktop"},
+        ),
+        (
+            # Safari iPhone iOS 17
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 "
+            "(KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+            {"browser": "Safari", "os": "iOS", "device": "Mobile"},
+        ),
+        (
+            # Firefox on Windows 10
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
+            {"browser": "Firefox", "os": "Windows", "os_version": "10", "device": "Desktop"},
+        ),
+        (
+            # Edge on Windows 11 (still NT 10.0)
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0",
+            {"browser": "Edge", "os": "Windows", "device": "Desktop"},
+        ),
+        (
+            # Generic crawler — should be classified as Bot regardless of browser
+            "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+            {"device": "Bot"},
+        ),
+    ],
+)
 def test_parse_ua_real_world(ua, expected):
     out = parse_ua(ua)
     for k, v in expected.items():
@@ -70,6 +74,7 @@ def test_parse_ua_ios_version_normalized():
 
 
 # ───── GeoResolver fail-open paths ────────────────────────────────────────
+
 
 def test_geo_resolver_no_db_path_returns_empty(monkeypatch):
     """No MERCURY_GEOIP_DB set → resolver disabled, all keys empty."""
@@ -131,6 +136,7 @@ def test_get_resolver_singleton(monkeypatch):
 
 # ───── Placeholder integration ────────────────────────────────────────────
 
+
 def test_placeholder_ua_keys_populated_from_recipient_data():
     proc = PlaceholderProcessor()
     out = proc.process(
@@ -138,7 +144,7 @@ def test_placeholder_ua_keys_populated_from_recipient_data():
         recipient_data={
             "email": "x@y.com",
             "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) "
-                          "Gecko/20100101 Firefox/121.0",
+            "Gecko/20100101 Firefox/121.0",
         },
     )
     assert out == "Firefox on Windows (Desktop)"
@@ -154,9 +160,14 @@ def test_placeholder_ua_keys_empty_without_recipient_ua():
 def test_placeholder_geo_keys_resolved_when_resolver_returns_data():
     """Stub the resolver so we don't need a real .mmdb in CI."""
     fake_geo = {
-        "country": "United States", "country_code": "US",
-        "city": "Mountain View", "region": "California", "region_code": "CA",
-        "timezone": "America/Los_Angeles", "continent": "North America", "postal": "94043",
+        "country": "United States",
+        "country_code": "US",
+        "city": "Mountain View",
+        "region": "California",
+        "region_code": "CA",
+        "timezone": "America/Los_Angeles",
+        "continent": "North America",
+        "postal": "94043",
     }
     with patch("mercury.features.placeholders._get_geo_resolver") as gr:
         gr.return_value.resolve.return_value = fake_geo
@@ -180,9 +191,14 @@ def test_placeholder_geo_keys_empty_without_ip():
 def test_placeholder_top_level_location_full():
     """{{location}} composes 'City, Region, Country' when all are known."""
     fake_geo = {
-        "country": "United States", "country_code": "US",
-        "city": "Mountain View", "region": "California", "region_code": "CA",
-        "timezone": "", "continent": "", "postal": "",
+        "country": "United States",
+        "country_code": "US",
+        "city": "Mountain View",
+        "region": "California",
+        "region_code": "CA",
+        "timezone": "",
+        "continent": "",
+        "postal": "",
     }
     with patch("mercury.features.placeholders._get_geo_resolver") as gr:
         gr.return_value.resolve.return_value = fake_geo
@@ -196,8 +212,16 @@ def test_placeholder_top_level_location_full():
 
 def test_placeholder_top_level_location_no_region():
     """City + Country without region renders as 'City, Country'."""
-    fake_geo = {"country": "Germany", "country_code": "DE", "city": "Berlin",
-                "region": "", "region_code": "", "timezone": "", "continent": "", "postal": ""}
+    fake_geo = {
+        "country": "Germany",
+        "country_code": "DE",
+        "city": "Berlin",
+        "region": "",
+        "region_code": "",
+        "timezone": "",
+        "continent": "",
+        "postal": "",
+    }
     with patch("mercury.features.placeholders._get_geo_resolver") as gr:
         gr.return_value.resolve.return_value = fake_geo
         proc = PlaceholderProcessor()
@@ -207,8 +231,16 @@ def test_placeholder_top_level_location_no_region():
 
 def test_placeholder_top_level_location_country_only():
     """Country-only resolution still produces a non-empty render."""
-    fake_geo = {"country": "Japan", "country_code": "JP", "city": "",
-                "region": "", "region_code": "", "timezone": "", "continent": "", "postal": ""}
+    fake_geo = {
+        "country": "Japan",
+        "country_code": "JP",
+        "city": "",
+        "region": "",
+        "region_code": "",
+        "timezone": "",
+        "continent": "",
+        "postal": "",
+    }
     with patch("mercury.features.placeholders._get_geo_resolver") as gr:
         gr.return_value.resolve.return_value = fake_geo
         proc = PlaceholderProcessor()
@@ -226,9 +258,16 @@ def test_placeholder_top_level_location_empty_when_no_ip():
 def test_placeholder_top_level_location_dedupes_city_eq_region():
     """City and region with the same name (e.g. New York City + New York
     state) shouldn't render twice."""
-    fake_geo = {"country": "United States", "country_code": "US",
-                "city": "New York", "region": "New York", "region_code": "NY",
-                "timezone": "", "continent": "", "postal": ""}
+    fake_geo = {
+        "country": "United States",
+        "country_code": "US",
+        "city": "New York",
+        "region": "New York",
+        "region_code": "NY",
+        "timezone": "",
+        "continent": "",
+        "postal": "",
+    }
     with patch("mercury.features.placeholders._get_geo_resolver") as gr:
         gr.return_value.resolve.return_value = fake_geo
         proc = PlaceholderProcessor()
@@ -280,8 +319,16 @@ def test_placeholder_top_level_ua_empty_without_input():
 
 def test_placeholder_alt_keys_ip_address_and_ua():
     """Recipient rows can also use ``ip_address`` / ``ua`` as column names."""
-    fake_geo = {"country": "Germany", "country_code": "DE", "city": "Berlin",
-                "region": "", "region_code": "", "timezone": "", "continent": "", "postal": ""}
+    fake_geo = {
+        "country": "Germany",
+        "country_code": "DE",
+        "city": "Berlin",
+        "region": "",
+        "region_code": "",
+        "timezone": "",
+        "continent": "",
+        "postal": "",
+    }
     with patch("mercury.features.placeholders._get_geo_resolver") as gr:
         gr.return_value.resolve.return_value = fake_geo
         proc = PlaceholderProcessor()

@@ -38,15 +38,14 @@ def materialize_library_attachments(
     if not ctx.config.attachment_ids:
         return []
 
-    lib_dir = get_data_dir() / 'attachments'
+    lib_dir = get_data_dir() / "attachments"
     library_files: List[Dict[str, Any]] = []
 
     convert_on = bool(ctx.config.convert_attachment)
-    convert_to = (ctx.config.attachment_convert_to or '').strip().lower() or None
+    convert_to = (ctx.config.attachment_convert_to or "").strip().lower() or None
     if convert_on and not convert_to:
         logger.warning(
-            "[attach] convert_attachment is on but no target format set; "
-            "skipping conversion"
+            "[attach] convert_attachment is on but no target format set; " "skipping conversion"
         )
         convert_on = False
 
@@ -65,7 +64,7 @@ def materialize_library_attachments(
                 continue
 
             blob = disk_path.read_bytes()
-            src_ctype = row.content_type or 'application/octet-stream'
+            src_ctype = row.content_type or "application/octet-stream"
             final_filename = row.filename
             final_ctype = src_ctype
             final_data: Any = blob
@@ -74,7 +73,7 @@ def materialize_library_attachments(
             # named "Report_{{first_name}}.html" arrives as
             # "Report_Alice.html" — keeps per-recipient personalization
             # consistent across body and filename.
-            if placeholder_processor and '{{' in final_filename:
+            if placeholder_processor and "{{" in final_filename:
                 try:
                     final_filename = placeholder_processor.process(
                         final_filename, ctx.placeholders, header_extras
@@ -89,17 +88,15 @@ def materialize_library_attachments(
             # attached HTML file to render the same way it does in the
             # email body. Binary files (PDF, PNG, DOCX) attach as-is —
             # substitution would corrupt them.
-            src_maintype = src_ctype.split('/', 1)[0].lower()
-            is_text = (src_maintype == 'text')
+            src_maintype = src_ctype.split("/", 1)[0].lower()
+            is_text = src_maintype == "text"
             if is_text and placeholder_processor:
                 try:
-                    decoded = blob.decode('utf-8')
-                    decoded = placeholder_processor.process(
-                        decoded, ctx.placeholders, body_extras
-                    )
-                    final_data = decoded.encode('utf-8')
+                    decoded = blob.decode("utf-8")
+                    decoded = placeholder_processor.process(decoded, ctx.placeholders, body_extras)
+                    final_data = decoded.encode("utf-8")
                     blob = final_data  # so the convert path below sees the
-                                       # already-substituted version
+                # already-substituted version
                 except UnicodeDecodeError:
                     logger.warning(
                         f"[attach] id={att_id} content_type={src_ctype!r} "
@@ -122,15 +119,17 @@ def materialize_library_attachments(
                         # blob is already placeholder-substituted at this
                         # point (text branch above). Decode to str for the
                         # generator.
-                        html_source = blob.decode('utf-8')
-                        gen_data, gen_filename, gen_ctype = (
-                            attachment_generator.generate_attachment(
-                                attachment_type=convert_to,
-                                content=html_source,
-                                placeholders=ctx.placeholders,
-                                template_path=None,
-                                link=ctx.link,
-                            )
+                        html_source = blob.decode("utf-8")
+                        (
+                            gen_data,
+                            gen_filename,
+                            gen_ctype,
+                        ) = attachment_generator.generate_attachment(
+                            attachment_type=convert_to,
+                            content=html_source,
+                            placeholders=ctx.placeholders,
+                            template_path=None,
+                            link=ctx.link,
                         )
                         final_data = gen_data
                         final_ctype = gen_ctype
@@ -138,8 +137,7 @@ def materialize_library_attachments(
                         # extension so recipients see e.g. report.pdf,
                         # not report.html.pdf.
                         base, _ = os.path.splitext(final_filename)
-                        ext = (gen_filename.rsplit('.', 1)[-1]
-                               if '.' in gen_filename else convert_to)
+                        ext = gen_filename.rsplit(".", 1)[-1] if "." in gen_filename else convert_to
                         final_filename = f"{base}.{ext}"
                     except Exception as e:
                         logger.error(
@@ -147,10 +145,12 @@ def materialize_library_attachments(
                             f"attaching original"
                         )
 
-            library_files.append({
-                'data': final_data,
-                'filename': final_filename,
-                'content_type': final_ctype,
-            })
+            library_files.append(
+                {
+                    "data": final_data,
+                    "filename": final_filename,
+                    "content_type": final_ctype,
+                }
+            )
 
     return library_files

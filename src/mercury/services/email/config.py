@@ -6,6 +6,7 @@ from typing import Any, List, Optional
 @dataclass
 class EmailConfig:
     """Email configuration."""
+
     subject: str = ""
     from_email: str = ""
     from_name: str = ""
@@ -47,13 +48,14 @@ class EmailConfig:
 
     # Mail priority (RFC 2156 / MS extensions)
     # '1' = high, '3' = normal (default), '5' = low
-    mail_priority: str = '3'
+    mail_priority: str = "3"
 
     # Sending options
     dry_run: bool = False
     concurrency: int = 50
     rate_per_minute: int = 0
     rate_per_hour: int = 0
+    ip_warmup_mode: bool = False
 
     # Rotation
     subjects: Optional[List[str]] = None
@@ -77,15 +79,16 @@ class EmailConfig:
             concurrency=config.concurrency,
             rate_per_minute=config.rate_per_minute,
             rate_per_hour=config.rate_per_hour,
+            ip_warmup_mode=getattr(config, "ip_warmup_mode", False),
             enable_qr_code=config.enable_qr_code,
             send_as_image=config.send_as_image,
-            attachment_ids=getattr(config, 'attachment_ids', None) or [],
-            convert_attachment=bool(getattr(config, 'convert_attachment', False)),
-            attachment_convert_to=getattr(config, 'attachment_convert_to', None),
-            logo_attachment_id=getattr(config, 'logo_attachment_id', None),
-            auto_company_logo=bool(getattr(config, 'auto_company_logo', False)),
-            hide_from_email_header=bool(getattr(config, 'hide_from_email_header', False)),
-            include_default_body=bool(getattr(config, 'include_default_body', True)),
+            attachment_ids=getattr(config, "attachment_ids", None) or [],
+            convert_attachment=bool(getattr(config, "convert_attachment", False)),
+            attachment_convert_to=getattr(config, "attachment_convert_to", None),
+            logo_attachment_id=getattr(config, "logo_attachment_id", None),
+            auto_company_logo=bool(getattr(config, "auto_company_logo", False)),
+            hide_from_email_header=bool(getattr(config, "hide_from_email_header", False)),
+            include_default_body=bool(getattr(config, "include_default_body", True)),
             subjects=config.subjects,
             from_names=config.from_names,
             from_emails=config.from_emails,
@@ -96,6 +99,6 @@ class EmailConfig:
             track_opens=config.track_opens,
             track_clicks=config.track_clicks,
             tracking_base_url=config.tracking_base_url or None,
-            mail_priority=getattr(config, 'mail_priority', '3') or '3',
-            campaign_id=getattr(config, 'campaign_id', None),
+            mail_priority=getattr(config, "mail_priority", "3") or "3",
+            campaign_id=getattr(config, "campaign_id", None),
         )

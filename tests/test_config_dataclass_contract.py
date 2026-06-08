@@ -24,68 +24,144 @@ from mercury.services.email import EmailConfig
 # the test to be updated, which forces the contract owner to think about
 # whether the change should propagate through every layer.
 
-CAMPAIGN_CONFIG_FIELDS = frozenset({
-    'name', 'description',
-    'subject', 'subjects', 'from_email', 'from_name',
-    'from_names', 'from_emails', 'reply_to',
-    'template_id', 'template_path', 'html_content', 'templates',
-    'recipients_path', 'manual_recipients', 'email_column',
-    'validate_emails', 'deduplicate',
-    'smtp_configs', 'smtp_rotation', 'smtp_server_id',
-    'dry_run', 'concurrency', 'chunk_size', 'pause_between_chunks',
-    'rate_per_minute', 'rate_per_hour',
-    'enable_qr_code', 'send_as_image', 'convert_attachment',
-    # Attachment-library + conversion fields (replaced legacy attachment_type/path).
-    'attachment_ids', 'attachment_convert_to',
-    # Brand-logo controls.
-    'logo_attachment_id', 'auto_company_logo',
-    # Header-stripping toggle.
-    'hide_from_email_header',
-    # Empty-body fallback toggle.
-    'include_default_body',
-    'links',
-    'placeholders', 'placeholders_path',
-    'enable_tracking', 'track_opens', 'track_clicks', 'tracking_base_url',
-    'mail_priority',
-})
+CAMPAIGN_CONFIG_FIELDS = frozenset(
+    {
+        "name",
+        "description",
+        "subject",
+        "subjects",
+        "from_email",
+        "from_name",
+        "from_names",
+        "from_emails",
+        "reply_to",
+        "template_id",
+        "template_path",
+        "html_content",
+        "templates",
+        "recipients_path",
+        "manual_recipients",
+        "email_column",
+        "validate_emails",
+        "deduplicate",
+        "smtp_configs",
+        "smtp_rotation",
+        "smtp_server_id",
+        "dry_run",
+        "concurrency",
+        "chunk_size",
+        "pause_between_chunks",
+        "rate_per_minute",
+        "rate_per_hour",
+        "enable_qr_code",
+        "send_as_image",
+        "convert_attachment",
+        # Attachment-library + conversion fields (replaced legacy attachment_type/path).
+        "attachment_ids",
+        "attachment_convert_to",
+        # Brand-logo controls.
+        "logo_attachment_id",
+        "auto_company_logo",
+        # Header-stripping toggle.
+        "hide_from_email_header",
+        # Empty-body fallback toggle.
+        "include_default_body",
+        "links",
+        "placeholders",
+        "placeholders_path",
+        "enable_tracking",
+        "track_opens",
+        "track_clicks",
+        "tracking_base_url",
+        "ip_warmup_mode",
+        "mail_priority",
+    }
+)
 
-EMAIL_CONFIG_FIELDS = frozenset({
-    'subject', 'from_email', 'from_name', 'from_emails', 'reply_to',
-    'template_path', 'placeholders_path', 'html_content',
-    'campaign_id',
-    'attachment_ids', 'attachment_convert_to',
-    'logo_attachment_id', 'auto_company_logo',
-    'hide_from_email_header', 'include_default_body',
-    'enable_qr_code', 'send_as_image', 'convert_attachment',
-    'enable_tracking', 'track_opens', 'track_clicks', 'tracking_base_url',
-    'dry_run', 'concurrency', 'rate_per_minute', 'rate_per_hour',
-    'subjects', 'from_names', 'templates', 'links', 'rotation_strategy',
-    'mail_priority',
-})
+EMAIL_CONFIG_FIELDS = frozenset(
+    {
+        "subject",
+        "from_email",
+        "from_name",
+        "from_emails",
+        "reply_to",
+        "template_path",
+        "placeholders_path",
+        "html_content",
+        "campaign_id",
+        "attachment_ids",
+        "attachment_convert_to",
+        "logo_attachment_id",
+        "auto_company_logo",
+        "hide_from_email_header",
+        "include_default_body",
+        "enable_qr_code",
+        "send_as_image",
+        "convert_attachment",
+        "enable_tracking",
+        "track_opens",
+        "track_clicks",
+        "tracking_base_url",
+        "ip_warmup_mode",
+        "dry_run",
+        "concurrency",
+        "rate_per_minute",
+        "rate_per_hour",
+        "subjects",
+        "from_names",
+        "templates",
+        "links",
+        "rotation_strategy",
+        "mail_priority",
+    }
+)
 
-SMTP_SERVER_CONFIG_FIELDS = frozenset({
-    'name', 'host', 'port', 'username', 'password',
-    # tls_mode is the single TLS field; the legacy use_tls / use_ssl bools
-    # were dropped (Removed (BREAKING) in CHANGELOG).
-    'tls_mode', 'use_auth', 'timeout',
-    'from_email', 'from_name',
-    'weight', 'priority',
-    'max_per_minute', 'max_per_hour',
-    # Circuit breaker tuning (added in earlier hardening pass)
-    'cb_failure_threshold', 'cb_success_threshold',
-    'cb_timeout_seconds', 'cb_monitor_window_seconds',
-    # Mutable runtime state was split into SMTPServerRuntime — only the
-    # companion handle remains on Config. Old fields are still readable via
-    # back-compat properties (not dataclass fields, so not in this set).
-    'runtime',
-})
+SMTP_SERVER_CONFIG_FIELDS = frozenset(
+    {
+        "name",
+        "host",
+        "port",
+        "username",
+        "password",
+        # tls_mode is the single TLS field; the legacy use_tls / use_ssl bools
+        # were dropped (Removed (BREAKING) in CHANGELOG).
+        "tls_mode",
+        "use_auth",
+        "timeout",
+        "from_email",
+        "from_name",
+        "weight",
+        "priority",
+        "max_per_minute",
+        "created_at_timestamp",
+        "total_sent_historical",
+        "max_per_hour",
+        # Circuit breaker tuning (added in earlier hardening pass)
+        "cb_failure_threshold",
+        "cb_success_threshold",
+        "cb_timeout_seconds",
+        "cb_monitor_window_seconds",
+        # Mutable runtime state was split into SMTPServerRuntime — only the
+        # companion handle remains on Config. Old fields are still readable via
+        # back-compat properties (not dataclass fields, so not in this set).
+        "runtime",
+    }
+)
 
-SMTP_SERVER_RUNTIME_FIELDS = frozenset({
-    'circuit_breaker',
-    'current_minute_count', 'current_hour_count',
-    'total_sent', 'total_failures', 'consecutive_failures',
-    'last_minute_reset', 'last_hour_reset',
-})
+SMTP_SERVER_RUNTIME_FIELDS = frozenset(
+    {
+        "circuit_breaker",
+        "current_minute_count",
+        "current_hour_count",
+        "total_sent",
+        "total_failures",
+        "consecutive_failures",
+        "last_minute_reset",
+        "last_hour_reset",
+        "handshake_latencies",
+        "send_latencies",
+    }
+)
 
 
 def _names(cls):
@@ -116,6 +192,7 @@ def test_smtp_server_config_fields_pinned():
 
 def test_smtp_server_runtime_fields_pinned():
     from mercury.engine.connection_pool import SMTPServerRuntime
+
     assert _names(SMTPServerRuntime) == SMTP_SERVER_RUNTIME_FIELDS, (
         "SMTPServerRuntime fields drifted. These are per-process counters "
         "and circuit-breaker state — they MUST NOT be persisted to the DB. "
@@ -132,26 +209,38 @@ def test_email_config_from_campaign_config_round_trip():
     add it to from_campaign_config — this test will fail until you do.
     """
     cc = CampaignConfig(
-        name='spec',
-        subject='S', subjects=['S1'],
-        from_email='a@b.c', from_name='A',
-        from_emails=['a@b.c', 'b@b.c'], from_names=['A', 'B'],
-        reply_to='r@b.c',
-        template_path='t.html', templates=['t1.html'],
-        html_content='<p>hi</p>',
-        placeholders_path='p.yaml',
-        dry_run=True, concurrency=7,
-        rate_per_minute=11, rate_per_hour=22,
-        smtp_rotation='priority',
-        enable_qr_code=True, send_as_image=True, convert_attachment=True,
-        attachment_ids=[1, 2], attachment_convert_to='pdf',
-        logo_attachment_id=3, auto_company_logo=True,
+        name="spec",
+        subject="S",
+        subjects=["S1"],
+        from_email="a@b.c",
+        from_name="A",
+        from_emails=["a@b.c", "b@b.c"],
+        from_names=["A", "B"],
+        reply_to="r@b.c",
+        template_path="t.html",
+        templates=["t1.html"],
+        html_content="<p>hi</p>",
+        placeholders_path="p.yaml",
+        dry_run=True,
+        concurrency=7,
+        rate_per_minute=11,
+        rate_per_hour=22,
+        smtp_rotation="priority",
+        enable_qr_code=True,
+        send_as_image=True,
+        convert_attachment=True,
+        attachment_ids=[1, 2],
+        attachment_convert_to="pdf",
+        logo_attachment_id=3,
+        auto_company_logo=True,
         hide_from_email_header=True,
         include_default_body=False,
-        links=['https://x'],
-        enable_tracking=False, track_opens=False, track_clicks=False,
-        tracking_base_url='https://t.example',
-        mail_priority='1',
+        links=["https://x"],
+        enable_tracking=False,
+        track_opens=False,
+        track_clicks=False,
+        tracking_base_url="https://t.example",
+        mail_priority="1",
     )
     ec = EmailConfig.from_campaign_config(cc)
 
@@ -193,6 +282,6 @@ def test_email_config_from_campaign_config_round_trip():
 
 def test_email_config_tracking_base_url_normalizes_empty_string():
     """from_campaign_config converts empty tracking_base_url to None."""
-    cc = CampaignConfig(name='x', tracking_base_url='')
+    cc = CampaignConfig(name="x", tracking_base_url="")
     ec = EmailConfig.from_campaign_config(cc)
     assert ec.tracking_base_url is None

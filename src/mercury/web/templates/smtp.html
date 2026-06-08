@@ -61,7 +61,7 @@
     .tls-row { display: flex; flex-direction: column; gap: 0.3rem; }
     .toggle-sm {
         display: flex; align-items: center; gap: 0.5rem;
-        cursor: pointer; user-select: none; font-size: 0.78rem; color: var(--text-secondary);
+        cursor: pointer; -webkit-user-select: none; user-select: none; font-size: 0.78rem; color: var(--text-secondary);
     }
     .toggle-sm input[type="checkbox"] { position: absolute; opacity: 0; width: 0; height: 0; }
     .toggle-track-sm {
@@ -208,7 +208,7 @@
         <h1 class="page-title">SMTP Servers</h1>
         <p class="page-description">Configure and test outbound mail connections</p>
     </div>
-    <button class="btn btn-primary" onclick="toggleAddPanel()">
+    <button type="button" class="btn btn-primary" onclick="toggleAddPanel()">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
         </svg>
@@ -278,13 +278,13 @@
 <div class="server-table-wrap">
     <div class="server-table-header">
         <div style="display:flex;gap:0.5rem">
-            <button class="btn btn-secondary" style="padding:0.35rem 0.75rem;font-size:0.75rem" onclick="runHealthChecks(this)">
+            <button type="button" class="btn btn-secondary" style="padding:0.35rem 0.75rem;font-size:0.75rem" onclick="runHealthChecks(this)">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:0.2rem">
                     <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
                 </svg>
                 Run Health Checks
             </button>
-            <button class="btn btn-secondary" style="padding:0.35rem 0.75rem;font-size:0.75rem" onclick="loadServers()">
+            <button type="button" class="btn btn-secondary" style="padding:0.35rem 0.75rem;font-size:0.75rem" onclick="loadServers()">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
                     <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
@@ -302,19 +302,20 @@
                 <th>Status</th>
                 <th>Circuit</th>
                 <th>Metrics</th>
+                <th>Latency</th>
                 <th>Rate</th>
                 <th>Actions</th>
             </tr>
         </thead>
         <tbody id="servers-table">
-            <tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text-muted)">Loading…</td></tr>
+            <tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--text-muted)">Loading…</td></tr>
         </tbody>
     </table>
 </div>
 
 <div id="toast-container"></div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
     /* ── Helpers ─────────────────────────────────────────────────────────── */
     function fmtDate(iso) {
         if (!iso) return '—';
@@ -368,7 +369,7 @@
     /* ── Load servers ────────────────────────────────────────────────────── */
     async function loadServers() {
         var tbody = document.getElementById('servers-table');
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text-muted)">Loading…</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--text-muted)">Loading…</td></tr>';
 
         try {
             var res = await fetch('/api/smtp');
@@ -377,7 +378,7 @@
 
             if (!data.servers || data.servers.length === 0) {
                 tbody.innerHTML = [
-                    '<tr><td colspan="8">',
+                    '<tr><td colspan="9">',
                     '<div class="empty-state">',
                     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">',
                     '<rect x="2" y="4" width="20" height="16" rx="2"/>',
@@ -457,19 +458,43 @@
                                 : '<span style="font-size:0.68rem;color:var(--text-muted)">No activity</span>') +
                             '</td>';
                     })(),
+                    (function() {
+                        if (s.avg_handshake_latency !== undefined && s.avg_handshake_latency !== null) {
+                            var hMs = Math.round(s.avg_handshake_latency * 1000);
+                            var sMs = (s.avg_send_latency !== undefined && s.avg_send_latency !== null) ? Math.round(s.avg_send_latency * 1000) : null;
+                            
+                            var hClass = hMs > 2500 ? 'color: var(--error);' : (hMs > 1000 ? 'color: var(--warning);' : 'color: var(--neon-green);');
+                            var sClass = sMs !== null ? (sMs > 2500 ? 'color: var(--error);' : (sMs > 1000 ? 'color: var(--warning);' : 'color: var(--neon-cyan);')) : '';
+                            
+                            var alertBadge = '';
+                            if (hMs > 2500 || (sMs !== null && sMs > 2500)) {
+                                alertBadge = '<div style="margin-top:0.25rem"><span class="badge badge-err" style="font-size:0.58rem;padding:0.1rem 0.35rem">Slow Node</span></div>';
+                            }
+                            
+                            return '<td>' +
+                                '<div style="font-size:0.75rem;line-height:1.3;font-family:\'JetBrains Mono\',monospace">' +
+                                '<div>Shake: <span style="' + hClass + 'font-weight:600">' + hMs + 'ms</span></div>' +
+                                (sMs !== null 
+                                    ? '<div>Send: <span style="' + sClass + 'font-weight:600">' + sMs + 'ms</span></div>'
+                                    : '<div style="color:var(--text-muted)">Send: —</div>') +
+                                '</div>' + alertBadge +
+                                '</td>';
+                        }
+                        return '<td><span style="font-size:0.68rem;color:var(--text-muted)">No connections</span></td>';
+                    })(),
                     '<td class="font-mono" style="font-size:0.78rem">' +
                         esc(s.current_minute_count || 0) + '/' + esc(s.max_per_minute || 30) + '/min' +
                     '</td>',
                     '<td style="white-space:nowrap">',
-                    '  <button class="act-btn edit" onclick="editServer(this, ' + jsStr(s.name) + ')">',
+                    '  <button type="button" class="act-btn edit" onclick="editServer(this, ' + jsStr(s.name) + ')">',
                     '    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>',
                     '    Edit',
                     '  </button>',
-                    '  <button class="act-btn test" style="margin-left:0.35rem" onclick="testServer(this, ' + jsStr(s.name) + ')">',
+                    '  <button type="button" class="act-btn test" style="margin-left:0.35rem" onclick="testServer(this, ' + jsStr(s.name) + ')">',
                     '    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>',
                     '    Test',
                     '  </button>',
-                    '  <button class="act-btn del" style="margin-left:0.35rem" onclick="deleteServer(this, ' + jsStr(s.name) + ')">',
+                    '  <button type="button" class="act-btn del" style="margin-left:0.35rem" onclick="deleteServer(this, ' + jsStr(s.name) + ')">',
                     '    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>',
                     '    Delete',
                     '  </button>',
@@ -480,7 +505,7 @@
             });
 
         } catch (err) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--error)">Failed to load: ' + esc(err.message) + '</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--error)">Failed to load: ' + esc(err.message) + '</td></tr>';
         }
     }
 

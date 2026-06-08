@@ -18,7 +18,7 @@ from . import (
 )
 
 
-@api_bp.route('/campaigns/<int:campaign_id>/start', methods=['POST'])
+@api_bp.route("/campaigns/<int:campaign_id>/start", methods=["POST"])
 @api_key_or_login_required
 @limiter.limit("5/minute")
 def api_start_campaign(campaign_id):
@@ -27,15 +27,15 @@ def api_start_campaign(campaign_id):
     from ...extensions import socketio
 
     if campaign_id in _active_services:
-        return jsonify({'error': 'Campaign already running'}), 409
+        return jsonify({"error": "Campaign already running"}), 409
 
     with session_scope() as session:
         repo = CampaignRepository(session)
         campaign = repo.get(campaign_id)
         if not campaign:
-            return jsonify({'error': 'Campaign not found'}), 404
-        if campaign.status not in ('draft', 'scheduled'):
-            return jsonify({'error': f'Cannot start campaign with status: {campaign.status}'}), 400
+            return jsonify({"error": "Campaign not found"}), 404
+        if campaign.status not in ("draft", "scheduled"):
+            return jsonify({"error": f"Cannot start campaign with status: {campaign.status}"}), 400
 
     app = current_app._get_current_object()
     t = threading.Thread(
@@ -46,8 +46,10 @@ def api_start_campaign(campaign_id):
     )
     t.start()
 
-    return jsonify({
-        'success': True,
-        'campaign_id': campaign_id,
-        'status': 'starting',
-    })
+    return jsonify(
+        {
+            "success": True,
+            "campaign_id": campaign_id,
+            "status": "starting",
+        }
+    )

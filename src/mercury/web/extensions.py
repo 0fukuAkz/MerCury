@@ -74,6 +74,7 @@ def start_emit_bridge(sio: SocketIO) -> None:
     sio._mercury_bridge_started = True
     sio.start_background_task(_drain_emit_queue, sio)
 
+
 def _get_rate_limit_key():
     """Get rate limit key based on user or IP."""
     # Note: current_user proxy only works within request context
@@ -81,24 +82,25 @@ def _get_rate_limit_key():
         return f"user:{current_user.id}"
     return get_remote_address()
 
+
 # Initialize extensions without application instance
 # They will be initialized with the app in app_context.py or verify logic
 limiter = Limiter(
     key_func=_get_rate_limit_key,
-    strategy="fixed-window", # Default strategy
-    storage_uri=os.environ.get('RATE_LIMIT_STORAGE', 'memory://')
+    strategy="fixed-window",  # Default strategy
+    storage_uri=os.environ.get("RATE_LIMIT_STORAGE", "memory://"),
 )
 
 # SocketIO CORS: default to same-origin only. Operators must explicitly opt
 # into cross-origin SocketIO by setting CORS_ORIGINS (comma-separated).
 # A bare '*' is still honored for explicit override but is no longer the default.
-_cors_env = os.environ.get('CORS_ORIGINS', '').strip()
+_cors_env = os.environ.get("CORS_ORIGINS", "").strip()
 if not _cors_env:
     _cors_origins: object = []  # disables CORS = same-origin only
-elif _cors_env == '*':
-    _cors_origins = '*'
+elif _cors_env == "*":
+    _cors_origins = "*"
 else:
-    _cors_origins = [o.strip() for o in _cors_env.split(',') if o.strip()]
+    _cors_origins = [o.strip() for o in _cors_env.split(",") if o.strip()]
 
 # SocketIO async mode must agree with whichever server is running the app:
 #   - run.py launches gunicorn --worker-class eventlet  → 'eventlet'
@@ -116,7 +118,7 @@ else:
 # gunicorn --worker-class eventlet by hand (e.g. in their own deployment
 # scripts) needs the same env var. docker-compose.yml sets it; the Dockerfile
 # CMD inherits it from there.
-_async_mode = os.environ.get('SOCKETIO_ASYNC_MODE', 'threading').strip() or 'threading'
+_async_mode = os.environ.get("SOCKETIO_ASYNC_MODE", "threading").strip() or "threading"
 
 socketio = SocketIO(
     async_mode=_async_mode,
@@ -154,12 +156,12 @@ async def _periodic_smtp_health_check() -> None:
             from ..services.smtp_service import SMTPService
             from ..data.database import session_scope
             from ..data.repositories.smtp import SMTPRepository
-            
+
             with session_scope() as session:
                 repo = SMTPRepository(session)
                 servers = repo.get_all()
                 configs = [s.get_connection_config() for s in servers if s.is_enabled]
-            
+
             if configs:
                 service = SMTPService()
                 service.load_from_config(configs)
@@ -167,7 +169,7 @@ async def _periodic_smtp_health_check() -> None:
                 logger.info("⏰ Background SMTP health checks completed successfully")
             else:
                 logger.debug("⏰ No enabled SMTP servers found for health check")
-        except Exception as e:
+        except Exception:
             logger.exception("Error in background SMTP health check daemon")
         # Sleep for 5 minutes (300 seconds)
         await asyncio.sleep(300)

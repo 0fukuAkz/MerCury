@@ -18,38 +18,38 @@ from mercury.web.decorators import api_key_required
 
 def _make_app(view):
     app = Flask(__name__)
-    app.add_url_rule('/protected', view_func=api_key_required(view), methods=['GET'])
+    app.add_url_rule("/protected", view_func=api_key_required(view), methods=["GET"])
     return app
 
 
 def test_api_key_required_accepts_valid_key():
-    with patch('mercury.web.decorators.require_api_key', return_value=True):
-        app = _make_app(lambda: jsonify({'ok': True}))
+    with patch("mercury.web.decorators.require_api_key", return_value=True):
+        app = _make_app(lambda: jsonify({"ok": True}))
         client = app.test_client()
-        resp = client.get('/protected', headers={'X-API-Key': 'good-key'})
+        resp = client.get("/protected", headers={"X-API-Key": "good-key"})
         assert resp.status_code == 200
-        assert resp.get_json()['ok'] is True
+        assert resp.get_json()["ok"] is True
 
 
 def test_api_key_required_rejects_missing_key():
-    app = _make_app(lambda: jsonify({'ok': True}))
+    app = _make_app(lambda: jsonify({"ok": True}))
     client = app.test_client()
-    resp = client.get('/protected')
+    resp = client.get("/protected")
     assert resp.status_code == 401
-    assert 'X-API-Key' in resp.get_json()['error']
+    assert "X-API-Key" in resp.get_json()["error"]
 
 
 def test_api_key_required_rejects_invalid_key():
-    with patch('mercury.web.decorators.require_api_key', return_value=False):
-        app = _make_app(lambda: jsonify({'ok': True}))
+    with patch("mercury.web.decorators.require_api_key", return_value=False):
+        app = _make_app(lambda: jsonify({"ok": True}))
         client = app.test_client()
-        resp = client.get('/protected', headers={'X-API-Key': 'bad-key'})
+        resp = client.get("/protected", headers={"X-API-Key": "bad-key"})
         assert resp.status_code == 401
 
 
 def test_session_scope_closes_session_on_success():
     fake_session = MagicMock()
-    with patch('mercury.data.database.get_session_direct', return_value=fake_session):
+    with patch("mercury.data.database.get_session_direct", return_value=fake_session):
         with session_scope() as s:
             assert s is fake_session
     fake_session.close.assert_called_once()
@@ -58,7 +58,7 @@ def test_session_scope_closes_session_on_success():
 
 def test_session_scope_rolls_back_and_closes_on_exception():
     fake_session = MagicMock()
-    with patch('mercury.data.database.get_session_direct', return_value=fake_session):
+    with patch("mercury.data.database.get_session_direct", return_value=fake_session):
         with pytest.raises(RuntimeError, match="boom"):
             with session_scope():
                 raise RuntimeError("boom")
@@ -70,7 +70,7 @@ def test_session_scope_swallows_rollback_failure():
     """If rollback itself raises, the original exception still propagates."""
     fake_session = MagicMock()
     fake_session.rollback.side_effect = RuntimeError("rollback also failed")
-    with patch('mercury.data.database.get_session_direct', return_value=fake_session):
+    with patch("mercury.data.database.get_session_direct", return_value=fake_session):
         with pytest.raises(ValueError, match="original"):
             with session_scope():
                 raise ValueError("original")

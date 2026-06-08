@@ -63,7 +63,7 @@
 <div class="card">
     <div class="card-header">
         <h2 class="card-title">Recent Campaigns</h2>
-        <a href="/campaigns" class="btn btn-secondary" style="padding: 0.5rem 1rem;">View All</a>
+        <a href="/campaigns" class="btn btn-secondary">View All</a>
     </div>
     <table class="table">
         <thead>
@@ -107,7 +107,7 @@
     </table>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
     // Load statistics
     async function loadStats() {
         try {
@@ -173,7 +173,7 @@
                     <td><span class="badge badge-${server.is_enabled ? 'success' : 'error'}">${server.is_enabled ? 'Active' : 'Inactive'}</span></td>
                     <td class="font-mono">${server.current_minute_count || 0}/${server.max_per_minute || 30}</td>
                     <td>
-                        <button class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;"
+                        <button type="button" class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;"
                             onclick="event.stopPropagation(); testServer(${server.id}, '${server.name}')">Test</button>
                     </td>
                 </tr>
@@ -228,7 +228,7 @@
     // Without subscribing, the dashboard goes stale for up to 30s after
     // every event — operators ended up reflexively refreshing.
     //
-    // We register inside DOMContentLoaded because this <script> sits in
+    // We register inside DOMContentLoaded because this <script nonce="{{ csp_nonce }}"> sits in
     // the "content" template block, which renders BEFORE base.html's
     // `var socket = io()` at the bottom of the document. Registering
     // synchronously here would reference an undefined `socket`. By the

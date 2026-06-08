@@ -178,6 +178,38 @@
             transition: all 0.2s;
         }
 
+        .nav-section-logout {
+            margin-top: auto;
+            border-top: 1px solid var(--border-color);
+            padding-top: 1rem;
+        }
+
+        .logout-btn {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            border-radius: var(--radius);
+            margin-bottom: 0.25rem;
+            transition: all 0.2s;
+            width: 100%;
+            text-align: left;
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: var(--error);
+        }
+
+        .logout-btn:hover {
+            background: var(--bg-tertiary);
+            color: var(--error);
+        }
+
+        .logout-btn svg {
+            width: 20px;
+            height: 20px;
+        }
+
         .nav-link:hover {
             background: var(--bg-tertiary);
             color: var(--text-primary);
@@ -492,8 +524,8 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="url(#gradient)" stroke-width="2">
                     <defs>
                         <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" style="stop-color:#ff0080" />
-                            <stop offset="100%" style="stop-color:#00ffff" />
+                            <stop offset="0%" stop-color="#ff0080" />
+                            <stop offset="100%" stop-color="#00ffff" />
                         </linearGradient>
                     </defs>
                     <circle cx="12" cy="12" r="10" />
@@ -633,10 +665,10 @@
                     </a>
                 </div>
 
-                <div class="nav-section" style="margin-top: auto; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+                <div class="nav-section-logout">
                     <form action="/logout" method="POST" style="margin: 0;">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                        <button type="submit" class="nav-link" style="width: 100%; text-align: left; background: none; border: none; cursor: pointer; color: var(--error);">
+                        <button type="submit" class="logout-btn">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
                                 <polyline points="16 17 21 12 16 7"></polyline>
@@ -665,8 +697,8 @@
         </main>
     </div>
 
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-    <script>
+    <script nonce="{{ csp_nonce }}" src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script nonce="{{ csp_nonce }}">
         // Window-scoped socket so child templates can subscribe to
         // campaign events. Per-page handlers live in each template's
         // own script block — we deliberately do NOT register generic

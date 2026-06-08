@@ -27,7 +27,7 @@ from .services import (
     TrackingService,
     BounceService,
     WebhookService,
-    SchedulerService
+    SchedulerService,
 )
 
 # Export main exceptions for convenience
@@ -39,7 +39,7 @@ from .exceptions import (
     TransientSMTPError,
     PermanentSMTPError,
     DatabaseException,
-    RateLimitException
+    RateLimitException,
 )
 
 __all__ = [

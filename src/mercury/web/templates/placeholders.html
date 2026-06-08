@@ -167,7 +167,7 @@
     .hidden { display: none; }
 </style>
 
-<script>
+<script nonce="{{ csp_nonce }}">
     {% raw %}
     /* ── State & helpers ───────────────────────────────────────────── */
     /* All JS in this script tag is wrapped in raw so Jinja leaves
@@ -256,11 +256,11 @@
                             : '<span style="color:var(--text-muted)">○ disabled</span>')
                 + '  </td>'
                 + '  <td class="ph-row-actions">'
-                + '    <button class="btn btn-secondary" onclick="toggleActive(' + c.id + ', ' + (c.is_active ? 'false' : 'true') + ')">'
+                + '    <button type="button" class="btn btn-secondary" onclick="toggleActive(' + c.id + ', ' + (c.is_active ? 'false' : 'true') + ')">'
                 +       (c.is_active ? 'Disable' : 'Enable')
                 + '    </button>'
-                + '    <button class="btn btn-secondary" onclick="editCustom(' + c.id + ')">Edit</button>'
-                + '    <button class="btn btn-secondary" onclick="deleteCustom(' + c.id + ', \'' + esc(c.name) + '\')">Delete</button>'
+                + '    <button type="button" class="btn btn-secondary" onclick="editCustom(' + c.id + ')">Edit</button>'
+                + '    <button type="button" class="btn btn-secondary" onclick="deleteCustom(' + c.id + ', \'' + esc(c.name) + '\')">Delete</button>'
                 + '  </td>'
                 + '</tr>';
         }).join('');

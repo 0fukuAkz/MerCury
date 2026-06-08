@@ -48,9 +48,7 @@ def _fetch_url(url: str) -> Optional[Tuple[bytes, str]]:
         with urllib.request.urlopen(req, timeout=_FETCH_TIMEOUT) as resp:
             if getattr(resp, "status", 200) != 200:
                 return None
-            content_type = (
-                resp.headers.get("Content-Type", "").split(";")[0].strip().lower()
-            )
+            content_type = resp.headers.get("Content-Type", "").split(";")[0].strip().lower()
             data = resp.read(_MAX_BYTES + 1)
     except (urllib.error.URLError, OSError, ValueError) as e:
         logger.debug("Logo fetch %s failed: %s", url, e)

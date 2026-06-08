@@ -7,9 +7,10 @@ from sqlalchemy import select
 from ..data.database import get_session_direct
 from ..data.models.identity import FromEmail, SenderName
 
+
 class IdentityService:
     """Service for managing sender identities."""
-    
+
     @staticmethod
     def get_emails(active_only: bool = False) -> List[FromEmail]:
         """Get list of From emails."""
@@ -43,7 +44,7 @@ class IdentityService:
             existing = session.scalar(select(FromEmail).where(FromEmail.email == email))
             if existing:
                 return existing
-            
+
             new_email = FromEmail(email=email, tags=tags or [], is_active=True)
             session.add(new_email)
             session.commit()
@@ -134,18 +135,18 @@ class IdentityService:
             # JSON filtering in SQLite can be tricky, doing simplistic check or application-side for now
             # If tags needed, fetching all active and filtering in python for simplicity with SQLite
             all_emails = session.scalars(email_query).all()
-            
+
             selected_email = None
             if all_emails:
                 if tag:
                     filtered_emails = [e for e in all_emails if tag in (e.tags or [])]
                     if filtered_emails:
                         selected_email = random.choice(filtered_emails)
-                    elif all_emails: # Fallback?
+                    elif all_emails:  # Fallback?
                         selected_email = random.choice(all_emails)
                 else:
                     selected_email = random.choice(all_emails)
-            
+
             # Update stats
             if selected_email:
                 selected_email.use_count += 1
@@ -155,7 +156,7 @@ class IdentityService:
             # Get Name
             name_query = select(SenderName).where(SenderName.is_active == True)
             all_names = session.scalars(name_query).all()
-            
+
             selected_name = None
             if all_names:
                 if tag:
@@ -163,7 +164,7 @@ class IdentityService:
                     if filtered_names:
                         selected_name = random.choice(filtered_names)
                     elif all_names:
-                         selected_name = random.choice(all_names)
+                        selected_name = random.choice(all_names)
                 else:
                     selected_name = random.choice(all_names)
 
@@ -171,12 +172,12 @@ class IdentityService:
                 selected_name.use_count += 1
                 selected_name.last_used_at = datetime.now(UTC).isoformat()
                 session.add(selected_name)
-            
+
             session.commit()
-            
+
             return (
-                selected_email.email if selected_email else None, 
-                selected_name.name if selected_name else None
+                selected_email.email if selected_email else None,
+                selected_name.name if selected_name else None,
             )
         finally:
             session.close()

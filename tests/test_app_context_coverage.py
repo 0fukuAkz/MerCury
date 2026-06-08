@@ -17,6 +17,7 @@ from mercury.app_context import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _fresh_context(**kwargs) -> AppContext:
     """Return an uninitialised AppContext (never touches real extensions)."""
     return AppContext(**kwargs)
@@ -25,6 +26,7 @@ def _fresh_context(**kwargs) -> AppContext:
 # ---------------------------------------------------------------------------
 # AppContext.initialize
 # ---------------------------------------------------------------------------
+
 
 class TestInitialize:
     """Lines 46-62."""
@@ -50,8 +52,7 @@ class TestInitialize:
 
         # The method should log a warning and return without touching extensions.
         # We verify by asserting no extension init is attempted.
-        with patch("mercury.app_context.AppContext.initialize",
-                   wraps=AppContext.initialize):
+        with patch("mercury.app_context.AppContext.initialize", wraps=AppContext.initialize):
             # Since extensions import would fail in unit-test environment,
             # mark already initialized so the early-return path (lines 46-48) is hit.
             with patch.object(
@@ -86,6 +87,7 @@ class TestInitialize:
 # AppContext.initialize via mocked extensions (full path, lines 51-62)
 # ---------------------------------------------------------------------------
 
+
 class TestInitializeFullPath:
     """Lines 51-62 - the non-early-return branch."""
 
@@ -104,6 +106,7 @@ class TestInitializeFullPath:
         # Manually replicate what initialize does after the early-return guard
         # by calling through a patched sys import
         import sys
+
         fake_extensions_module = MagicMock()
         fake_extensions_module.limiter = mock_limiter
         fake_extensions_module.socketio = mock_socketio
@@ -132,6 +135,7 @@ class TestInitializeFullPath:
 # thread, etc.). These tests pin the contract that AppContext forwards
 # to that bridge, not the now-obsolete direct-emit path.
 
+
 class TestEmitProgress:
     def test_emit_progress_with_socketio(self):
         ctx = _fresh_context(socketio=MagicMock())
@@ -150,6 +154,7 @@ class TestEmitProgress:
 # AppContext.emit_complete
 # ---------------------------------------------------------------------------
 
+
 class TestEmitComplete:
     def test_emit_complete_with_socketio(self):
         ctx = _fresh_context(socketio=MagicMock())
@@ -166,6 +171,7 @@ class TestEmitComplete:
 # ---------------------------------------------------------------------------
 # AppContext.emit_event
 # ---------------------------------------------------------------------------
+
 
 class TestEmitEvent:
     def test_emit_event_with_socketio(self):
@@ -184,6 +190,7 @@ class TestEmitEvent:
 # AppContext.get_limiter  (line 82)
 # ---------------------------------------------------------------------------
 
+
 class TestGetLimiter:
     def test_get_limiter_returns_limiter(self):
         mock_lim = MagicMock()
@@ -199,6 +206,7 @@ class TestGetLimiter:
 # AppContext.get_socketio  (line 86)
 # ---------------------------------------------------------------------------
 
+
 class TestGetSocketio:
     def test_get_socketio_returns_socketio(self):
         mock_sio = MagicMock()
@@ -213,6 +221,7 @@ class TestGetSocketio:
 # ---------------------------------------------------------------------------
 # Module-level helpers  (lines 102-104, 115, 121)
 # ---------------------------------------------------------------------------
+
 
 class TestModuleHelpers:
     def setup_method(self):

@@ -3,9 +3,11 @@
 import pytest
 from mercury.services.bounce_service import BounceService, BounceType, BounceCategory
 
+
 @pytest.fixture
 def bounce_service():
     return BounceService()
+
 
 def test_bounce_detection(bounce_service):
     # Hard bounce
@@ -20,14 +22,16 @@ def test_bounce_detection(bounce_service):
     assert b_type2 == BounceType.SOFT
     assert category2 == BounceCategory.MAILBOX_FULL
 
+
 def test_bounce_processing(bounce_service, db_session):
     email = "bounce@test.com"
     # Process hard bounce
     bounce_service.process_bounce(email, "550 User unknown")
-    
+
     assert len(bounce_service._bounces) == 1
+
 
 def test_reputation_penalty(bounce_service):
     # Test stats instead
     stats = bounce_service.get_bounce_stats()
-    assert 'total_bounces' in stats
+    assert "total_bounces" in stats

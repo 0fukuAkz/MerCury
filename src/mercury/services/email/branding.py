@@ -32,8 +32,8 @@ class BrandingResult:
 
 
 def resolve_branding(ctx: SendContext) -> BrandingResult:
-    logo_img_tag = ''
-    logo_data_url = ''
+    logo_img_tag = ""
+    logo_data_url = ""
 
     if ctx.config.logo_attachment_id:
         logo_img_tag, logo_data_url = _load_pinned_logo(ctx.config.logo_attachment_id)
@@ -44,8 +44,9 @@ def resolve_branding(ctx: SendContext) -> BrandingResult:
     company_text = _derive_company_text(ctx.recipient)
 
     body_brand = (
-        logo_img_tag if logo_img_tag
-        else (f'<span class="company-name">{company_text}</span>' if company_text else '')
+        logo_img_tag
+        if logo_img_tag
+        else (f'<span class="company-name">{company_text}</span>' if company_text else "")
     )
 
     return BrandingResult(
@@ -63,21 +64,19 @@ def _load_pinned_logo(logo_id: int) -> tuple[str, str]:
         from ...data.database import session_scope
         from ...data.repositories import AttachmentRepository
         from ...utils.app_dirs import get_data_dir
+
         with session_scope() as session:
             row = AttachmentRepository(session).get(int(logo_id))
             if row is None or not row.is_active:
                 logger.warning(
-                    f"[logo] id={logo_id} missing/inactive in DB; "
-                    "{{company_logo}} renders empty"
+                    f"[logo] id={logo_id} missing/inactive in DB; " "{{company_logo}} renders empty"
                 )
-                return '', ''
-            disk = get_data_dir() / 'attachments' / row.stored_name
+                return "", ""
+            disk = get_data_dir() / "attachments" / row.stored_name
             if not disk.is_file():
-                logger.error(
-                    f"[logo] id={logo_id} ({row.filename}) missing on disk at {disk}"
-                )
-                return '', ''
-            if not (row.content_type or '').lower().startswith('image/'):
+                logger.error(f"[logo] id={logo_id} ({row.filename}) missing on disk at {disk}")
+                return "", ""
+            if not (row.content_type or "").lower().startswith("image/"):
                 # Defensive: refuse to inline a non-image as if it were one.
                 # Some clients render data:text/html;base64,... as inline
                 # content, which leaks the file's source into the email.
@@ -86,14 +85,14 @@ def _load_pinned_logo(logo_id: int) -> tuple[str, str]:
                     f"(content_type={row.content_type!r}); "
                     "{{company_logo}} renders empty"
                 )
-                return '', ''
+                return "", ""
             blob = disk.read_bytes()
-            b64 = base64.b64encode(blob).decode('ascii')
+            b64 = base64.b64encode(blob).decode("ascii")
             data_url = f"data:{row.content_type};base64,{b64}"
             return f'<img src="{data_url}" alt="Logo" />', data_url
     except Exception as e:
         logger.error(f"[logo] failed to inline company_logo: {e}")
-        return '', ''
+        return "", ""
 
 
 def _auto_fetch_logo(recipient: str) -> tuple[str, str]:
@@ -107,25 +106,26 @@ def _auto_fetch_logo(recipient: str) -> tuple[str, str]:
             extract_domain,
             fetch_logo_for_domain,
         )
+
         dom = extract_domain(recipient)
         if not dom:
-            return '', ''
+            return "", ""
         fetched = fetch_logo_for_domain(dom)
         if fetched is None:
             logger.info(f"[logo] auto-fetch: no logo found for domain={dom!r}")
-            return '', ''
+            return "", ""
         blob, ct = fetched
-        b64 = base64.b64encode(blob).decode('ascii')
+        b64 = base64.b64encode(blob).decode("ascii")
         data_url = f"data:{ct};base64,{b64}"
         return f'<img src="{data_url}" alt="Logo" />', data_url
     except Exception as e:
         logger.warning(f"[logo] auto-fetch failed for recipient={recipient!r}: {e}")
-        return '', ''
+        return "", ""
 
 
 def _derive_company_text(recipient: str) -> str:
-    if not (recipient and '@' in recipient):
-        return ''
-    dom = recipient.rsplit('@', 1)[1]
-    dom_name = dom.split('.', 1)[0] if dom else ''
-    return dom_name.capitalize() if dom_name else ''
+    if not (recipient and "@" in recipient):
+        return ""
+    dom = recipient.rsplit("@", 1)[1]
+    dom_name = dom.split(".", 1)[0] if dom else ""
+    return dom_name.capitalize() if dom_name else ""

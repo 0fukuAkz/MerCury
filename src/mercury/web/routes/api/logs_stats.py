@@ -11,7 +11,7 @@ from . import (
 )
 
 
-@api_bp.route('/logs/success')
+@api_bp.route("/logs/success")
 @api_key_or_login_required
 @limiter.limit("30/minute")
 def api_success_logs():
@@ -19,10 +19,10 @@ def api_success_logs():
     with session_scope() as session:
         repo = LogRepository(session)
         logs = repo.get_recent_success(limit=100)
-        return jsonify({'emails': [log.recipient_email for log in logs]})
+        return jsonify({"emails": [log.recipient_email for log in logs]})
 
 
-@api_bp.route('/logs/failed')
+@api_bp.route("/logs/failed")
 @api_key_or_login_required
 @limiter.limit("30/minute")
 def api_failed_logs():
@@ -34,10 +34,10 @@ def api_failed_logs():
             f"{log.recipient_email}|{log.error_message} ({log.failed_at.isoformat() if log.failed_at else 'Unknown time'})"
             for log in logs
         ]
-        return jsonify({'failures': failures})
+        return jsonify({"failures": failures})
 
 
-@api_bp.route('/stats')
+@api_bp.route("/stats")
 @api_key_or_login_required
 @limiter.limit("30/minute")
 def api_stats():

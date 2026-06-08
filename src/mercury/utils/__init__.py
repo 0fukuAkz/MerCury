@@ -5,14 +5,13 @@ from .validation import validate_email, validate_emails_batch, EmailValidationRe
 from .logging_config import configure_logging, get_logger
 
 __all__ = [
-    'async_write_line',
-    'async_read_file', 
-    'async_write_file',
-    'AsyncFileLogger',
-    'validate_email',
-    'validate_emails_batch',
-    'EmailValidationResult',
-    'configure_logging',
-    'get_logger'
+    "async_write_line",
+    "async_read_file",
+    "async_write_file",
+    "AsyncFileLogger",
+    "validate_email",
+    "validate_emails_batch",
+    "EmailValidationResult",
+    "configure_logging",
+    "get_logger",
 ]
-

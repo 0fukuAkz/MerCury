@@ -15,6 +15,7 @@ _SessionLocal = None
 _engine_lock = threading.Lock()
 _session_lock = threading.Lock()
 
+
 @event.listens_for(Engine, "connect")
 def set_sqlite_pragma(dbapi_connection, connection_record):
     if "sqlite" in dbapi_connection.__class__.__module__.lower():
@@ -33,6 +34,7 @@ def get_engine(db_url: str = None):
                 if db_url is None:
                     # Use app_dirs to determine correct path (local or system user data)
                     from mercury.utils.app_dirs import get_db_path
+
                     db_path = get_db_path()
                 else:
                     db_path = db_url
@@ -40,7 +42,7 @@ def get_engine(db_url: str = None):
                 _engine = create_engine(
                     db_path,
                     connect_args={"check_same_thread": False} if "sqlite" in db_path else {},
-                    echo=os.environ.get("SQL_DEBUG", "").lower() == "true"
+                    echo=os.environ.get("SQL_DEBUG", "").lower() == "true",
                 )
 
     return _engine
@@ -65,11 +67,12 @@ def get_session() -> Generator[Session, None, None]:
 def init_db(db_url: str = None):
     """Initialize database tables."""
     engine = get_engine(db_url)
-    
+
     # Import all models to register them with SQLAlchemy metadata (side-effect imports)
     from .models import Campaign, SMTPServer, Template, RecipientList, Recipient, EmailLog
+
     _ = (Campaign, SMTPServer, Template, RecipientList, Recipient, EmailLog)  # register metadata
-    
+
     Base.metadata.create_all(bind=engine)
     return engine
 
@@ -110,4 +113,3 @@ def session_scope() -> Iterator[Session]:
         raise
     finally:
         session.close()
-

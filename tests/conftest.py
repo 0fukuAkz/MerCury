@@ -25,7 +25,7 @@ def _restore_log_propagation():
     # Undo any global logging.disable() set by an earlier test.
     logging.disable(logging.NOTSET)
     for name in list(logging.root.manager.loggerDict.keys()):
-        if name == 'mercury' or name.startswith('mercury.'):
+        if name == "mercury" or name.startswith("mercury."):
             lg = logging.getLogger(name)
             lg.propagate = True
             lg.disabled = False
@@ -36,15 +36,17 @@ def _restore_log_propagation():
 
 # Database Fixtures
 
+
 @pytest.fixture(scope="function")
 def db_engine():
     """Create in-memory SQLite database engine."""
     from sqlalchemy.pool import StaticPool
+
     engine = create_engine(
-        "sqlite:///:memory:", 
-        connect_args={"check_same_thread": False}, 
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
         poolclass=StaticPool,
-        echo=False
+        echo=False,
     )
     Base.metadata.create_all(engine)
     yield engine
@@ -64,7 +66,28 @@ def db_session(db_engine) -> Generator[Session, None, None]:
         session.close()
 
 
+@pytest.fixture(scope="function", autouse=True)
+def isolate_database(db_engine):
+    """Ensure all database access during tests uses the test in-memory engine.
+    
+    This prevents tests from accidentally polluting the production mercury.db.
+    """
+    import mercury.data.database
+    
+    original_engine = mercury.data.database._engine
+    original_session = mercury.data.database._SessionLocal
+    
+    mercury.data.database._engine = db_engine
+    mercury.data.database._SessionLocal = None
+    
+    yield
+    
+    mercury.data.database._engine = original_engine
+    mercury.data.database._SessionLocal = original_session
+
+
 # SMTP Fixtures
+
 
 @pytest.fixture
 def smtp_config() -> SMTPServerConfig:
@@ -75,9 +98,9 @@ def smtp_config() -> SMTPServerConfig:
         port=587,
         username="test@example.com",
         password="testpass123",
-        tls_mode='starttls',
+        tls_mode="starttls",
         max_per_minute=60,
-        max_per_hour=1000
+        max_per_hour=1000,
     )
 
 
@@ -92,6 +115,7 @@ async def smtp_pool(smtp_config) -> AsyncGenerator[AsyncConnectionPool, None]:
 
 # Rate Limiter Fixtures
 
+
 @pytest.fixture
 def rate_limiter() -> RateLimiter:
     """Create rate limiter for testing."""
@@ -101,6 +125,7 @@ def rate_limiter() -> RateLimiter:
 
 # Retry Queue Fixtures
 
+
 @pytest.fixture
 async def retry_queue() -> AsyncGenerator[RetryQueue, None]:
     """Create retry queue for testing."""
@@ -109,7 +134,7 @@ async def retry_queue() -> AsyncGenerator[RetryQueue, None]:
         base_delay=0.1,  # Fast retries for testing
         max_delay=1.0,
         concurrency=5,
-        process_interval=0.1
+        process_interval=0.1,
     )
     queue = RetryQueue(config)
     await queue.start()
@@ -118,6 +143,7 @@ async def retry_queue() -> AsyncGenerator[RetryQueue, None]:
 
 
 # Template Fixtures
+
 
 @pytest.fixture
 def sample_html_template() -> str:
@@ -168,6 +194,7 @@ def sample_recipients() -> list[dict]:
 
 # Web Fixtures
 
+
 @pytest.fixture
 def app(db_engine):
     """Create Flask application fixture."""
@@ -175,7 +202,7 @@ def app(db_engine):
     from unittest.mock import patch, MagicMock
     from mercury.app_context import AppContext
     import os
-    
+
     mock_context = MagicMock(spec=AppContext)
     mock_context.limiter = MagicMock()
     mock_context.limiter.limit = lambda x: lambda f: f
@@ -183,6 +210,7 @@ def app(db_engine):
 
     # Create a factory for sessions bound to the test engine
     from sqlalchemy.orm import sessionmaker
+
     TestSession = sessionmaker(bind=db_engine)
 
     # Patch DB init and Admin creation. Patching `get_session_direct` at its
@@ -190,30 +218,34 @@ def app(db_engine):
     # call `session_scope()` which does runtime lookup. Per-submodule
     # patches remain for callers that still snapshot the function at import
     # time (services, web.app, web.routes.templates).
-    with patch('mercury.web.app.init_db'), \
-         patch('mercury.security.auth.UserRepository') as MockRepo, \
-         patch('mercury.web.app.get_app_context', return_value=mock_context), \
-         patch('mercury.data.database.get_session_direct', side_effect=TestSession), \
-         patch('mercury.services.smtp_service.get_session_direct', side_effect=TestSession), \
-         patch('mercury.services.campaign_service.get_session_direct', side_effect=TestSession), \
-         patch('mercury.services.identity_service.get_session_direct', side_effect=TestSession), \
-         patch('mercury.services.settings_service.get_session_direct', side_effect=TestSession), \
-         patch.dict(os.environ, {'API_KEYS': 'test_api_key'}):
-         
+    with patch("mercury.web.app.init_db"), patch(
+        "mercury.security.auth.UserRepository"
+    ) as MockRepo, patch("mercury.web.app.get_app_context", return_value=mock_context), patch(
+        "mercury.data.database.get_session_direct", side_effect=TestSession
+    ), patch("mercury.services.smtp_service.get_session_direct", side_effect=TestSession), patch(
+        "mercury.services.campaign_service.get_session_direct", side_effect=TestSession
+    ), patch(
+        "mercury.services.identity_service.get_session_direct", side_effect=TestSession
+    ), patch(
+        "mercury.services.settings_service.get_session_direct", side_effect=TestSession
+    ), patch.dict(os.environ, {"API_KEYS": "test_api_key"}):
         MockRepo.return_value.get_admins.return_value = [MagicMock()]
-        
-        app = create_app(config={'TESTING': True, 'WTF_CSRF_ENABLED': False})
+
+        app = create_app(config={"TESTING": True, "WTF_CSRF_ENABLED": False})
         yield app
+
 
 @pytest.fixture
 def client(app):
     """Create test client."""
     return app.test_client()
 
+
 @pytest.fixture
 def admin_user(db_session):
     """Create and return an admin user."""
     from mercury.security.auth import hash_password
+
     u = User(username="admin", email="admin@test.com", is_admin=True, is_active=True)
     u.password_hash = hash_password("password")
     u.api_key = "test_api_key"
@@ -227,8 +259,8 @@ def admin_user(db_session):
         u = db_session.query(User).filter_by(username="admin").first()
     return u
 
+
 @pytest.fixture
 def auth_headers(admin_user):
     """Return headers for authenticated API requests."""
-    return {'X-API-Key': admin_user.api_key}
-
+    return {"X-API-Key": admin_user.api_key}

@@ -35,6 +35,11 @@ services:
       - redis
       - migrations
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # One-shot: apply pending Alembic migrations before the web service starts.
   # Replaces the previous boot-time inline `alembic upgrade head`, which would
