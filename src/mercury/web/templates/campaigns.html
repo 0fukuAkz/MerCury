@@ -1155,13 +1155,12 @@
         // on every progress event (computed from the engine's authoritative
         // tally). We SET — don't increment — so missed events while the tab
         // was inactive can't cause the displayed count to drift from the
-        // real value. The legacy local-increment branch (per-event
-        // success:bool) is gone because it was the source of the
-        // "sent vs failed doesn't match exact sent/failed" reports.
+        // real value.
         if (data.status !== undefined) c.status           = data.status;
         if (data.total  !== undefined) c.total_recipients = data.total;
         if (data.sent   !== undefined) c.sent_count       = data.sent;
         if (data.failed !== undefined) c.failed_count     = data.failed;
+        if (data.bounces!== undefined) c.bounces          = data.bounces;
         if (data.errors !== undefined) c.errors           = data.errors;
         if (data.velocity !== undefined) c.velocity       = data.velocity;
         if (c.total_recipients)

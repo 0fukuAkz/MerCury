@@ -32,7 +32,7 @@
         </label>
     </div>
 
-    <button type="button" class="btn btn-primary" onclick="uploadRecipients()">Upload & Process</button>
+    <button type="button" class="btn btn-primary" id="btn-upload">Upload & Process</button>
     <div id="upload-result" class="mt-4" style="display:none;"></div>
 </div>
 
@@ -40,21 +40,34 @@
 <div class="card">
     <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
         <h2 class="card-title" style="margin:0;">Recipient Lists</h2>
-        <button type="button" class="btn btn-secondary btn-sm" onclick="loadFiles()">Refresh</button>
+        <button type="button" class="btn btn-secondary btn-sm" id="btn-refresh">Refresh</button>
     </div>
     <div id="files-table-wrap">
         <p class="text-muted">Loading…</p>
     </div>
 </div>
 
-<!-- Preview modal -->
+<!-- Preview Modal -->
 <div id="preview-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9999; overflow-y:auto;">
     <div style="background:var(--bg-secondary); margin:4rem auto; max-width:900px; border-radius:12px; padding:1.5rem;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
             <h3 id="preview-title" style="margin:0;"></h3>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('preview-modal').style.display='none'">Close</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-close-modal">Close</button>
         </div>
         <div id="preview-content" style="overflow-x:auto;"></div>
+    </div>
+</div>
+
+<!-- Delete Modal -->
+<div id="delete-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9999; overflow-y:auto;">
+    <div style="background:var(--bg-secondary); margin:10rem auto; max-width:400px; border-radius:12px; padding:1.5rem; text-align:center;">
+        <h3 style="margin-top:0; color:var(--danger);">Delete Recipient List</h3>
+        <p class="text-muted" style="margin: 1.5rem 0;">Are you sure you want to delete <strong id="delete-filename" style="color:var(--text-primary);"></strong>?</p>
+        <p class="text-muted" style="margin-bottom: 2rem; font-size: 0.85rem;">This action cannot be undone.</p>
+        <div style="display:flex; justify-content:center; gap:1rem;">
+            <button type="button" class="btn btn-secondary" id="btn-cancel-delete">Cancel</button>
+            <button type="button" class="btn" style="background:var(--danger);color:#fff;" id="btn-confirm-delete">Delete Forever</button>
+        </div>
     </div>
 </div>
 
@@ -119,7 +132,7 @@ bob@domain.org,Bob,Wilson,StartUp LLC</pre>
     async function loadFiles() {
         const wrap = document.getElementById('files-table-wrap');
         try {
-            const resp = await fetch('/api/recipients');
+            const resp = await fetch('/api/recipients', { cache: 'no-store' });
             const data = await resp.json();
             if (!data.files || data.files.length === 0) {
                 wrap.innerHTML = '<p class="text-muted">No recipient lists uploaded yet.</p>';
@@ -137,13 +150,20 @@ bob@domain.org,Bob,Wilson,StartUp LLC</pre>
                     <td>${kb} KB</td>
                     <td>${mod}</td>
                     <td style="display:flex; gap:0.5rem;">
-                        <button type="button" class="btn btn-secondary btn-sm" onclick="previewFile('${f.filename}')">Preview</button>
-                        <button type="button" class="btn btn-sm" style="background:var(--danger);color:#fff;" onclick="deleteFile('${f.filename}')">Delete</button>
+                        <button type="button" class="btn btn-secondary btn-sm" data-action="preview" data-filename="${f.filename}">Preview</button>
+                        <button type="button" class="btn btn-sm" style="background:var(--danger);color:#fff;" data-action="delete" data-filename="${f.filename}">Delete</button>
                     </td>
                 </tr>`;
             }
             html += '</tbody></table>';
             wrap.innerHTML = html;
+
+            wrap.querySelectorAll('button[data-action="preview"]').forEach(b => {
+                b.addEventListener('click', () => previewFile(b.dataset.filename));
+            });
+            wrap.querySelectorAll('button[data-action="delete"]').forEach(b => {
+                b.addEventListener('click', () => confirmDelete(b.dataset.filename));
+            });
         } catch (e) {
             wrap.innerHTML = `<p style="color:var(--danger)">Failed to load files: ${e.message}</p>`;
         }
@@ -180,17 +200,53 @@ bob@domain.org,Bob,Wilson,StartUp LLC</pre>
     }
 
     // ---- Delete ----
-    async function deleteFile(filename) {
-        if (!confirm(`Delete ${filename}? This cannot be undone.`)) return;
+    let fileToDelete = null;
+    
+    function confirmDelete(filename) {
+        fileToDelete = filename;
+        document.getElementById('delete-filename').textContent = filename;
+        document.getElementById('delete-modal').style.display = 'block';
+    }
+
+    async function executeDelete() {
+        if (!fileToDelete) return;
+        const filename = fileToDelete;
+        document.getElementById('delete-modal').style.display = 'none';
+        
+        const wrap = document.getElementById('files-table-wrap');
         try {
             const resp = await fetch(`/api/recipients/${encodeURIComponent(filename)}`, { method: 'DELETE' });
             const data = await resp.json();
-            if (data.success) loadFiles();
-            else alert(data.error || 'Delete failed');
+            if (data.success) {
+                loadFiles();
+            } else {
+                wrap.insertAdjacentHTML('afterbegin', `<div class="card" style="border-left: 4px solid var(--error); padding: 1rem; margin-bottom: 1rem;"><div class="text-error">Delete failed: ${data.error || 'Unknown error'}</div></div>`);
+            }
         } catch (e) {
-            alert(`Error: ${e.message}`);
+            wrap.insertAdjacentHTML('afterbegin', `<div class="card" style="border-left: 4px solid var(--error); padding: 1rem; margin-bottom: 1rem;"><div class="text-error">Error: ${e.message}</div></div>`);
         }
     }
+
+    // Bind static events
+    const btnUpload = document.getElementById('btn-upload');
+    if (btnUpload) btnUpload.addEventListener('click', uploadRecipients);
+    
+    const btnRefresh = document.getElementById('btn-refresh');
+    if (btnRefresh) btnRefresh.addEventListener('click', loadFiles);
+    
+    const btnClosePreview = document.getElementById('btn-close-modal');
+    if (btnClosePreview) btnClosePreview.addEventListener('click', () => {
+        document.getElementById('preview-modal').style.display = 'none';
+    });
+
+    const btnCancelDelete = document.getElementById('btn-cancel-delete');
+    if (btnCancelDelete) btnCancelDelete.addEventListener('click', () => {
+        document.getElementById('delete-modal').style.display = 'none';
+        fileToDelete = null;
+    });
+
+    const btnConfirmDelete = document.getElementById('btn-confirm-delete');
+    if (btnConfirmDelete) btnConfirmDelete.addEventListener('click', executeDelete);
 
     // Load on page ready
     loadFiles();

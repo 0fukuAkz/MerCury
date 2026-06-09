@@ -129,8 +129,6 @@ class CampaignConfig:
     # Email settings
     subject: str = ""
     subjects: Optional[List[str]] = None
-    from_email: str = ""
-    from_name: str = ""
     from_names: Optional[List[str]] = None
     from_emails: Optional[List[str]] = None
     reply_to: str = ""
@@ -275,28 +273,17 @@ class CampaignService:
             config.chunk_size = global_settings.batch_size
 
         # Apply Identity Defaults
-        # If no "From" identity specified at all, use the pool
-        if not config.from_email and not config.from_emails:
+        if not config.from_emails:
             active_emails = IdentityService.get_emails(active_only=True)
             if active_emails:
-                if len(active_emails) == 1:
-                    config.from_email = active_emails[0].email
-                else:
-                    # Enable rotation
-                    config.from_emails = [e.email for e in active_emails]
-                    # Set a default for single-send contexts
-                    config.from_email = active_emails[0].email
-                    logger.info(f"Using {len(active_emails)} From-Emails from identity pool")
+                config.from_emails = [e.email for e in active_emails]
+                logger.info(f"Using {len(active_emails)} From-Emails from identity pool")
 
-        if not config.from_name and not config.from_names:
+        if not config.from_names:
             active_names = IdentityService.get_names(active_only=True)
             if active_names:
-                if len(active_names) == 1:
-                    config.from_name = active_names[0].name
-                else:
-                    config.from_names = [n.name for n in active_names]
-                    config.from_name = active_names[0].name
-                    logger.info(f"Using {len(active_names)} Sender Names from identity pool")
+                config.from_names = [n.name for n in active_names]
+                logger.info(f"Using {len(active_names)} Sender Names from identity pool")
 
         if not config.reply_to and global_settings.default_reply_to:
             config.reply_to = global_settings.default_reply_to
@@ -379,8 +366,6 @@ class CampaignService:
                 description=config.description,
                 status=CampaignStatus.DRAFT,
                 template_id=config.template_id,
-                from_email=config.from_email,
-                from_name=config.from_name,
                 reply_to=config.reply_to,
                 subjects=config.subjects or [config.subject],
                 placeholders=config.placeholders,
@@ -772,7 +757,7 @@ class CampaignService:
                                     status=EmailStatus.SENT,
                                     sent_at=datetime.now(UTC),
                                     subject=self.config.subject if self.config else "",
-                                    from_email=self.config.from_email if self.config else "",
+                                    from_email=self.config.from_emails[0] if self.config and self.config.from_emails else "",
                                     smtp_server_name=_clean_val(email_result.smtp_server),
                                     # Persist the relay's actual response text. Without
                                     # this, status='sent' only means "no exception was
@@ -796,10 +781,10 @@ class CampaignService:
                                 EmailLog(
                                     campaign_id=campaign_id,
                                     recipient_email=email_result.recipient,
-                                    status=EmailStatus.FAILED,
+                                    status=EmailStatus.BOUNCED if getattr(email_result, "is_bounce", False) else EmailStatus.FAILED,
                                     failed_at=datetime.now(UTC),
                                     subject=self.config.subject if self.config else "",
-                                    from_email=self.config.from_email if self.config else "",
+                                    from_email=self.config.from_emails[0] if self.config and self.config.from_emails else "",
                                     # Capture the server's response text on the failure
                                     # path too — many "errors" are well-formed SMTP
                                     # rejections (550 mailbox-not-exist, 5.7.0 from-
@@ -972,8 +957,6 @@ def load_campaign_from_yaml(yaml_path: str) -> CampaignConfig:
         subjects=[
             s.get("template", s) if isinstance(s, dict) else s for s in email.get("subjects", [])
         ],
-        from_email=email.get("from_email", ""),
-        from_name=email.get("from_name", ""),
         from_names=email.get("from_names", []),
         from_emails=email.get("from_emails", []),
         reply_to=email.get("reply_to", ""),

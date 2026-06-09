@@ -8,6 +8,7 @@ the manifest. The disk path is *never* constructed from user input —
 from __future__ import annotations
 
 import os
+import re
 import uuid
 from pathlib import Path
 
@@ -20,7 +21,6 @@ from flask import (
     send_file,
 )
 from flask_login import login_required
-from werkzeug.utils import secure_filename
 
 from ...data.database import session_scope
 from ...data.models import Attachment
@@ -109,7 +109,10 @@ def upload():
     if file is None or file.filename == "":
         return jsonify({"error": "No file provided"}), 400
 
-    display_name = secure_filename(file.filename) or "upload.bin"
+    # secure_filename strips curly braces, but operators want placeholders in filenames.
+    # The display_name is only used for MIME generation, not file storage paths.
+    raw_name = os.path.basename(file.filename.replace('\\', '/')).strip()
+    display_name = re.sub(r'[\x00-\x1f\x7f]+', '', raw_name) or "upload.bin"
     ext = _split_ext(display_name)
     if ext in _BLOCKED_EXTENSIONS:
         return jsonify({"error": f"Files of type .{ext} are not allowed"}), 400

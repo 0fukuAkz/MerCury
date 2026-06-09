@@ -23,8 +23,10 @@ def campaigns():
 @views_bp.route("/campaigns/new")
 @login_required
 def new_campaign():
-    """New campaign creation form."""
-    return render_template("campaign_form.html", campaign=None)
+    from ...services.identity_service import IdentityService
+    emails = IdentityService.get_emails(active_only=True)
+    names = IdentityService.get_names(active_only=True)
+    return render_template("campaign_form.html", campaign=None, emails=emails, names=names)
 
 
 @views_bp.route("/campaigns/<int:campaign_id>/edit")
@@ -42,7 +44,10 @@ def edit_campaign(campaign_id):
 
             abort(404)
         campaign_dict = campaign.to_dict()
-    return render_template("campaign_form.html", campaign=campaign_dict)
+    from ...services.identity_service import IdentityService
+    emails = IdentityService.get_emails(active_only=True)
+    names = IdentityService.get_names(active_only=True)
+    return render_template("campaign_form.html", campaign=campaign_dict, emails=emails, names=names)
 
 
 @views_bp.route("/smtp")

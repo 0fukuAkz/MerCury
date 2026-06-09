@@ -81,8 +81,6 @@ class Campaign(Base, BaseModel):
     subject_rotation_strategy = Column(String(50), default="round_robin")
 
     # FROM configuration
-    from_email = Column(String(255))
-    from_name = Column(String(255))
     reply_to = Column(String(255))
 
     # Placeholders

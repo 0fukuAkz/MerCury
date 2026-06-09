@@ -8,6 +8,20 @@
     <p class="page-description">Manage pools of 'From' addresses and Sender names for rotation.</p>
 </div>
 
+
+<div class="card mb-4" style="background: var(--bg-secondary); border: 1px solid var(--border-color); padding: 1.5rem; border-radius: var(--radius);">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <h2 class="card-title" style="color: var(--neon-purple); margin-bottom: 0.5rem;">SMTP Identity Scanner</h2>
+            <p class="text-muted" style="margin-bottom: 0;">Automatically scan all configured SMTP servers and extract valid From Emails and Sender Names.</p>
+        </div>
+        <form action="{{ url_for('senders.scan_smtp') }}" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-primary" id="btn-scan-smtp">Scan SMTP Servers</button>
+        </form>
+    </div>
+</div>
+
 <div class="layout-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
 
     <!-- From Emails Column -->

@@ -169,10 +169,19 @@ def api_preview_recipients(filename: str):
 @limiter.limit("10/minute")
 def api_delete_recipient_file(filename: str):
     """Delete a recipient list file."""
+    print(f"API DELETE RECIPIENT FILE REQUESTED: {filename}")
     filename = _safe_filename(filename)
     fpath = os.path.join(_recipients_dir(), filename)
+    print(f"Checking if file exists: {fpath}")
     if not os.path.isfile(fpath):
+        print(f"File not found: {fpath}")
         return jsonify({"error": "File not found"}), 404
 
-    os.remove(fpath)
+    try:
+        os.remove(fpath)
+        print(f"Successfully deleted {fpath}")
+    except Exception as e:
+        print(f"Error deleting {fpath}: {e}")
+        return jsonify({"error": str(e)}), 500
+        
     return jsonify({"success": True, "filename": filename})

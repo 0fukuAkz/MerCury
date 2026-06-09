@@ -60,8 +60,20 @@
         <div class="stat-value error" id="failed-count">-</div>
     </div>
     <div class="stat-card">
+        <div class="stat-label">Bounces</div>
+        <div class="stat-value warning" id="bounced-count">-</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Total Opens</div>
+        <div class="stat-value accent" id="opens-count">-</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Total Clicks</div>
+        <div class="stat-value accent" id="clicks-count">-</div>
+    </div>
+    <div class="stat-card">
         <div class="stat-label">Success Rate</div>
-        <div class="stat-value accent" id="success-rate">-</div>
+        <div class="stat-value info" id="success-rate">-</div>
     </div>
 </div>
 
@@ -97,9 +109,12 @@
             const response = await fetch('/api/stats');
             const data = await response.json();
 
-            document.getElementById('success-count').textContent = data.total_sent.toLocaleString();
-            document.getElementById('failed-count').textContent = data.total_failed.toLocaleString();
-            document.getElementById('success-rate').textContent = data.success_rate + '%';
+            document.getElementById('success-count').textContent = (data.total_sent || 0).toLocaleString();
+            document.getElementById('failed-count').textContent = (data.total_failed || 0).toLocaleString();
+            document.getElementById('bounced-count').textContent = (data.total_bounced || 0).toLocaleString();
+            document.getElementById('opens-count').textContent = (data.total_opens || 0).toLocaleString();
+            document.getElementById('clicks-count').textContent = (data.total_clicks || 0).toLocaleString();
+            document.getElementById('success-rate').textContent = (data.success_rate || 0) + '%';
         } catch (error) {
             console.error('Failed to load stats:', error);
         }
@@ -117,11 +132,19 @@
                 return;
             }
 
-            container.innerHTML = data.emails.map(email => `
-                <div class="log-item-mono">
-                    ${email}
-                </div>
-            `).join('');
+            container.innerHTML = data.emails.map(log => {
+                const timeStr = log.time ? new Date(log.time).toLocaleString() : 'Unknown';
+                let stats = [];
+                if (log.opens > 0) stats.push(`Opens: ${log.opens}`);
+                if (log.clicks > 0) stats.push(`Clicks: ${log.clicks}`);
+                const statsStr = stats.length > 0 ? ` <span style="color:var(--accent-secondary); float:right;">${stats.join(', ')}</span>` : '';
+                return `
+                    <div class="log-item-pkg">
+                        <div class="log-item-pkg-meta">${log.email} ${statsStr}</div>
+                        <div class="text-muted log-item-pkg-err">Sent: ${timeStr} | Status: ${log.status}</div>
+                    </div>
+                `;
+            }).join('');
         } catch (error) {
             console.error('Failed to load success logs:', error);
         }
@@ -139,13 +162,12 @@
                 return;
             }
 
-            container.innerHTML = data.failures.map(line => {
-                const [email, ...errorParts] = line.split('|');
-                const error = errorParts.join('|') || 'Unknown error';
+            container.innerHTML = data.failures.map(log => {
+                const timeStr = log.time ? new Date(log.time).toLocaleString() : 'Unknown';
                 return `
                     <div class="log-item-pkg">
-                        <div class="log-item-pkg-meta">${email}</div>
-                        <div class="text-muted log-item-pkg-err">${error}</div>
+                        <div class="log-item-pkg-meta">${log.email} <span style="float:right;color:var(--warning)">${log.status}</span></div>
+                        <div class="text-muted log-item-pkg-err">${timeStr} | ${log.error}</div>
                     </div>
                 `;
             }).join('');

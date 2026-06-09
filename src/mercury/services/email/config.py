@@ -8,8 +8,6 @@ class EmailConfig:
     """Email configuration."""
 
     subject: str = ""
-    from_email: str = ""
-    from_name: str = ""
     from_emails: Optional[List[str]] = None
     reply_to: str = ""
     template_path: Optional[str] = None
@@ -69,8 +67,6 @@ class EmailConfig:
         """Build an EmailConfig from a CampaignConfig instance."""
         return cls(
             subject=config.subject,
-            from_email=config.from_email,
-            from_name=config.from_name,
             reply_to=config.reply_to,
             template_path=config.template_path,
             html_content=config.html_content,

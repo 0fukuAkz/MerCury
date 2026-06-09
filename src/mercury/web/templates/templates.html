@@ -416,52 +416,33 @@
         <span style="font-size:0.75rem; color:var(--text-muted);">Click any token to insert at cursor</span>
     </div>
     <div class="ph-grid">
+        {% for category, items in grouped_catalog.items() %}
         <div>
-            <div class="ph-group-title">Recipient</div>
-            {% for tok in ['{{email}}','{{first_name}}','{{last_name}}','{{full_name}}','{{domain}}','{{domain_name}}'] %}
-            <button type="button" class="ph-token" onclick="insertToken('{{ tok }}')">
+            <div class="ph-group-title">{{ category }}</div>
+            {% for item in items %}
+            <button type="button" class="ph-token" onclick="insertToken('{{ '{{' ~ item.name ~ '}}' }}')" title="{{ item.description }}">
                 <svg class="ph-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
                 </svg>
-                {{ tok }}
+                {{ '{{' ~ item.name ~ '}}' }}
             </button>
             {% endfor %}
         </div>
+        {% endfor %}
+
+        {% if custom_placeholders %}
         <div>
-            <div class="ph-group-title">Date / Time</div>
-            {% for tok in ['{{date}}','{{date_formatted}}','{{time}}','{{year}}','{{month_name}}','{{day_name}}'] %}
-            <button type="button" class="ph-token" onclick="insertToken('{{ tok }}')">
+            <div class="ph-group-title">Custom Placeholders</div>
+            {% for tok in custom_placeholders %}
+            <button type="button" class="ph-token" onclick="insertToken('{{ '{{' ~ tok.name ~ '}}' }}')" title="{{ tok.description or 'Custom placeholder' }}">
                 <svg class="ph-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/>
-                    <line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                    <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
                 </svg>
-                {{ tok }}
+                {{ '{{' ~ tok.name ~ '}}' }}
             </button>
             {% endfor %}
         </div>
-        <div>
-            <div class="ph-group-title">Random</div>
-            {% for tok in ['{{random_name}}','{{random_company}}','{{random_phone}}','{{uuid}}','{{random_number}}'] %}
-            <button type="button" class="ph-token" onclick="insertToken('{{ tok }}')">
-                <svg class="ph-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/>
-                    <polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/>
-                </svg>
-                {{ tok }}
-            </button>
-            {% endfor %}
-        </div>
-        <div>
-            <div class="ph-group-title">Features</div>
-            {% for tok in ['{{link}}','{{qr_code}}','{{if:placeholder}}...{{endif}}','{{include:file.html}}'] %}
-            <button type="button" class="ph-token" onclick="insertToken('{{ tok }}')">
-                <svg class="ph-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-                </svg>
-                {{ tok }}
-            </button>
-            {% endfor %}
-        </div>
+        {% endif %}
     </div>
 </div>
 

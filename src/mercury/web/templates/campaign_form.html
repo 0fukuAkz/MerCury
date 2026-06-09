@@ -327,17 +327,17 @@
     </a>
 </div>
 
-<form id="campaign-form" onsubmit="submitCampaign(event)" novalidate>
+<form id="campaign-form" novalidate>
 <div class="form-layout">
 
     <!-- LEFT: tabbed form -->
     <div>
         <nav class="tab-nav" role="tablist">
-            <button type="button" class="tab-btn active" onclick="switchTab('details', this)">Details</button>
-            <button type="button" class="tab-btn"        onclick="switchTab('content', this)">Content</button>
-            <button type="button" class="tab-btn"        onclick="switchTab('delivery', this)">Delivery</button>
-            <button type="button" class="tab-btn"        onclick="switchTab('recipients', this)">Recipients</button>
-            <button type="button" class="tab-btn"        onclick="switchTab('features', this)">Features</button>
+            <button type="button" class="tab-btn active" data-tab="details">Details</button>
+            <button type="button" class="tab-btn"        data-tab="content">Content</button>
+            <button type="button" class="tab-btn"        data-tab="delivery">Delivery</button>
+            <button type="button" class="tab-btn"        data-tab="recipients">Recipients</button>
+            <button type="button" class="tab-btn"        data-tab="features">Features</button>
         </nav>
 
         <!-- Tab: Details -->
@@ -378,32 +378,36 @@
                         placeholder="Hello {{first_name}}, check this out!">
                     <div class="form-hint">Primary subject. For A/B testing expand the rotation section below.</div>
                     <div class="ph-tokens">
-                        <span class="ph-token" onclick="insertToken('subject-input', '{{first_name}}')">{{first_name}}</span>
-                        <span class="ph-token" onclick="insertToken('subject-input', '{{last_name}}')">{{last_name}}</span>
-                        <span class="ph-token" onclick="insertToken('subject-input', '{{company}}')">{{company}}</span>
-                        <span class="ph-token" onclick="insertToken('subject-input', '{{date}}')">{{date}}</span>
-                        <span class="ph-token" onclick="insertToken('subject-input', '{{random_name}}')">{{random_name}}</span>
-                        <span class="ph-token" onclick="insertToken('subject-input', '{{uuid}}')">{{uuid}}</span>
+                        <span class="ph-token" data-ph-token="{{first_name}}" data-ph-target="subject-input">{{first_name}}</span>
+                        <span class="ph-token" data-ph-token="{{last_name}}" data-ph-target="subject-input">{{last_name}}</span>
+                        <span class="ph-token" data-ph-token="{{company}}" data-ph-target="subject-input">{{company}}</span>
+                        <span class="ph-token" data-ph-token="{{date}}" data-ph-target="subject-input">{{date}}</span>
+                        <span class="ph-token" data-ph-token="{{random_name}}" data-ph-target="subject-input">{{random_name}}</span>
+                        <span class="ph-token" data-ph-token="{{uuid}}" data-ph-target="subject-input">{{uuid}}</span>
                     </div>
                 </div>
                 <div class="fg fg-2" style="margin-bottom:1rem" id="senderFieldsRow">
                     <div class="form-group" id="fromEmailGroup">
                         <label class="form-label" style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem">
-                            <span>From Email</span>
-                            <a href="#" id="hideFromEmailLink" onclick="toggleFromEmailVisibility(event)"
-                               style="font-size:0.7rem;font-weight:400;color:var(--text-muted, #888);text-decoration:none">Hide</a>
+                            <span>From Emails</span>
                         </label>
-                        <input type="email" class="form-input" name="from_email"
-                            placeholder="sender@example.com">
-                        <div class="form-hint">Optional — SMTP server fills From: if left blank.</div>
+                        <select multiple class="form-input" name="from_emails" id="fromEmailsSelect" style="height: 100px;">
+                            {% for email in emails %}
+                                <option value="{{ email.email }}">{{ email.email }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-hint">Select one or more sender addresses. Holding Ctrl/Cmd to select multiple rotates them automatically.</div>
                     </div>
                     <div class="form-group" id="fromNameGroup">
                         <label class="form-label" style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem">
-                            <span>From Name</span>
-                            <a href="#" id="showFromEmailLink" onclick="toggleFromEmailVisibility(event)"
-                               style="font-size:0.7rem;font-weight:400;color:var(--neon-cyan, #06b6d4);text-decoration:none;display:none">Show From Email</a>
+                            <span>From Names</span>
                         </label>
-                        <input type="text" class="form-input" name="from_name" placeholder="Your Company">
+                        <select multiple class="form-input" name="from_names" id="fromNamesSelect" style="height: 100px;">
+                            {% for name in names %}
+                                <option value="{{ name.name }}">{{ name.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-hint">Select one or more sender names. Holding Ctrl/Cmd to select multiple rotates them automatically.</div>
                     </div>
                 </div>
                 <div class="form-group" style="margin-bottom:1rem">
@@ -434,7 +438,7 @@
                 </div>
                 <div class="form-group" style="margin-bottom:0.75rem">
                     <label class="form-label">Template</label>
-                    <select class="form-select form-input" id="templateSelect" onchange="onTemplateSelect(this)">
+                    <select class="form-select form-input" id="templateSelect">
                         <option value="">— Loading templates… —</option>
                     </select>
                     <div class="form-hint">Select a saved template or choose &ldquo;Custom path&rdquo; to enter a file path.</div>
@@ -462,21 +466,7 @@
                                 placeholder="Subject A&#10;Subject B&#10;Subject C"></textarea>
                             <div class="form-hint">Leave empty to use the primary subject.</div>
                         </div>
-                        <div class="form-group">
-                            <label class="form-label">From Names</label>
-                            <textarea class="form-textarea" name="from_names_list" rows="4"
-                                placeholder="John Smith&#10;Jane Doe&#10;Sales Team"></textarea>
-                            <div class="form-hint">Leave empty to use the primary from name.</div>
-                        </div>
-                    </div>
-                    <div class="fg fg-2" style="margin-bottom:1rem">
-                        <div class="form-group">
-                            <label class="form-label">From Emails</label>
-                            <textarea class="form-textarea" name="from_emails_list" rows="4"
-                                placeholder="sender1@domain.com&#10;sender2@domain.com"></textarea>
-                            <div class="form-hint">Rotates the sender address per email.</div>
-                        </div>
-                        <div class="form-group">
+                        <div class="form-group" style="grid-column: span 2;">
                             <label class="form-label">Link URLs</label>
                             <textarea class="form-textarea" name="links_list" rows="4"
                                 placeholder="https://link1.example.com&#10;https://link2.example.com"></textarea>
@@ -590,12 +580,9 @@
 
                 <!-- Source toggle (3 modes) -->
                 <div style="display:flex;gap:0.25rem;margin-bottom:1rem">
-                    <button type="button" class="tab-btn active" id="srcBtnList"
-                        onclick="setRecipientsSource('list', this)">Uploaded Lists</button>
-                    <button type="button" class="tab-btn" id="srcBtnFile"
-                        onclick="setRecipientsSource('file', this)">File Path</button>
-                    <button type="button" class="tab-btn" id="srcBtnManual"
-                        onclick="setRecipientsSource('manual', this)">Paste Emails</button>
+                    <button type="button" class="tab-btn active" id="srcBtnList" data-src="list">Uploaded Lists</button>
+                    <button type="button" class="tab-btn" id="srcBtnFile" data-src="file">File Path</button>
+                    <button type="button" class="tab-btn" id="srcBtnManual" data-src="manual">Paste Emails</button>
                 </div>
 
                 <!-- List source (uploaded files) -->
@@ -603,7 +590,7 @@
                     <div class="fg fg-2" style="margin-bottom:1rem">
                         <div class="form-group">
                             <label class="form-label">Recipient List</label>
-                            <select class="form-select form-input" id="recipientListSelect" onchange="onRecipientListSelect()">
+                            <select class="form-select form-input" id="recipientListSelect">
                                 <option value="">— Loading lists… —</option>
                             </select>
                             <div class="form-hint">Choose an uploaded CSV/TXT from the <a href="/recipients" style="color:var(--neon-cyan)">Recipients</a> page.</div>
@@ -680,7 +667,7 @@
                         <input type="email" class="form-input" id="testEmailTo" placeholder="you@example.com">
                     </div>
                     <div class="form-group" style="display:flex;align-items:flex-end;">
-                        <button type="button" class="btn btn-secondary" id="testEmailBtn" onclick="sendTestEmail()" style="width:100%;">
+                        <button type="button" class="btn btn-secondary" id="testEmailBtn" style="width:100%;">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                             Send Test
                         </button>
@@ -757,8 +744,7 @@
                             Manage files at <a rel="noopener noreferrer" href="/attachments" target="_blank">Attachments</a>.
                         </div>
                         <button type="button" class="btn btn-secondary" id="clearAttachmentsBtn"
-                                style="padding:0.3rem 0.7rem;font-size:0.75rem"
-                                onclick="clearAttachmentSelection()">Clear</button>
+                                style="padding:0.3rem 0.7rem;font-size:0.75rem">Clear</button>
                     </div>
                 </div>
                 <div class="form-group" style="margin-bottom:1rem">
@@ -825,13 +811,12 @@
                 <strong>Dry Run enabled</strong> — emails will be prepared but NOT sent
             </div>
             <label class="toggle" style="flex-shrink:0">
-                <input type="checkbox" name="dry_run" id="dryRun"
-                       onchange="document.getElementById('dry-run-banner').classList.toggle('hidden', !this.checked)">
+                <input type="checkbox" name="dry_run" id="dryRun">
                 <span class="toggle-track"></span>
                 <span class="toggle-label" style="font-weight:600">Dry Run</span>
             </label>
             <div style="flex:1"></div>
-            <a href="/campaigns" class="btn btn-secondary" onclick="clearDraft()">Cancel</a>
+            <a href="/campaigns" class="btn btn-secondary" id="cancelDraftBtn">Cancel</a>
             <button type="submit" class="btn btn-primary" id="submit-btn">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="display:inline;vertical-align:-1px">
                     <polyline points="22 2 15 22 11 13 2 9 22 2"/>
@@ -853,60 +838,60 @@
             {% raw %}
             <div class="ph-group">
                 <div class="ph-group-title">Recipient</div>
-                <span class="ph-code" onclick="insertAtFocus('{{email}}')">{{email}}</span>
-                <span class="ph-code" onclick="insertAtFocus('{{first_name}}')">{{first_name}}</span>
-                <span class="ph-code" onclick="insertAtFocus('{{last_name}}')">{{last_name}}</span>
-                <span class="ph-code" onclick="insertAtFocus('{{full_name}}')">{{full_name}}</span>
-                <span class="ph-code" onclick="insertAtFocus('{{initials}}')">{{initials}}</span>
-                <span class="ph-code" onclick="insertAtFocus('{{company}}')">{{company}}</span>
-                <span class="ph-code" onclick="insertAtFocus('{{domain}}')">{{domain}}</span>
-                <span class="ph-code" onclick="insertAtFocus('{{domain_name}}')">{{domain_name}}</span>
-                <span class="ph-code" onclick="insertAtFocus('{{tld}}')">{{tld}}</span>
-                <span class="ph-code" onclick="insertAtFocus('{{local_part}}')">{{local_part}}</span>
+                <span class="ph-code" data-ph-insert="{{email}}">{{email}}</span>
+                <span class="ph-code" data-ph-insert="{{first_name}}">{{first_name}}</span>
+                <span class="ph-code" data-ph-insert="{{last_name}}">{{last_name}}</span>
+                <span class="ph-code" data-ph-insert="{{full_name}}">{{full_name}}</span>
+                <span class="ph-code" data-ph-insert="{{initials}}">{{initials}}</span>
+                <span class="ph-code" data-ph-insert="{{company}}">{{company}}</span>
+                <span class="ph-code" data-ph-insert="{{domain}}">{{domain}}</span>
+                <span class="ph-code" data-ph-insert="{{domain_name}}">{{domain_name}}</span>
+                <span class="ph-code" data-ph-insert="{{tld}}">{{tld}}</span>
+                <span class="ph-code" data-ph-insert="{{local_part}}">{{local_part}}</span>
             </div>
             <div class="ph-group">
                 <div class="ph-group-title">Date &amp; Time</div>
-                <span class="ph-code" onclick="insertAtFocus('{{date}}')">{{date}}</span>
-                <span class="ph-code" onclick="insertAtFocus('{{date_formatted}}')">{{date_formatted}}</span>
-                <span class="ph-code" onclick="insertAtFocus('{{date_eu}}')">{{date_eu}}</span>
-                <span class="ph-code" onclick="insertAtFocus('{{time}}')">{{time}}</span>
-                <span class="ph-code" onclick="insertAtFocus('{{day_name}}')">{{day_name}}</span>
-                <span class="ph-code" onclick="insertAtFocus('{{month_name}}')">{{month_name}}</span>
-                <span class="ph-code" onclick="insertAtFocus('{{year}}')">{{year}}</span>
-                <span class="ph-code" onclick="insertAtFocus('{{quarter}}')">{{quarter}}</span>
-                <span class="ph-code" onclick="insertAtFocus('{{timestamp}}')">{{timestamp}}</span>
+                <span class="ph-code" data-ph-insert="{{date}}">{{date}}</span>
+                <span class="ph-code" data-ph-insert="{{date_formatted}}">{{date_formatted}}</span>
+                <span class="ph-code" data-ph-insert="{{date_eu}}">{{date_eu}}</span>
+                <span class="ph-code" data-ph-insert="{{time}}">{{time}}</span>
+                <span class="ph-code" data-ph-insert="{{day_name}}">{{day_name}}</span>
+                <span class="ph-code" data-ph-insert="{{month_name}}">{{month_name}}</span>
+                <span class="ph-code" data-ph-insert="{{year}}">{{year}}</span>
+                <span class="ph-code" data-ph-insert="{{quarter}}">{{quarter}}</span>
+                <span class="ph-code" data-ph-insert="{{timestamp}}">{{timestamp}}</span>
             </div>
             <div class="ph-group">
                 <div class="ph-group-title">IDs &amp; Hashes</div>
-                <span class="ph-code" onclick="insertAtFocus('{{uuid}}')">{{uuid}}</span>
-                <span class="ph-code" onclick="insertAtFocus('{{short_id}}')">{{short_id}}</span>
-                <span class="ph-code" onclick="insertAtFocus('{{email_hash}}')">{{email_hash}}</span>
-                <span class="ph-code" onclick="insertAtFocus('{{tracking_id}}')">{{tracking_id}}</span>
+                <span class="ph-code" data-ph-insert="{{uuid}}">{{uuid}}</span>
+                <span class="ph-code" data-ph-insert="{{short_id}}">{{short_id}}</span>
+                <span class="ph-code" data-ph-insert="{{email_hash}}">{{email_hash}}</span>
+                <span class="ph-code" data-ph-insert="{{tracking_id}}">{{tracking_id}}</span>
             </div>
             <div class="ph-group">
                 <div class="ph-group-title">Random</div>
-                <span class="ph-code" onclick="insertAtFocus('{{random_number}}')">{{random_number}}</span>
-                <span class="ph-code" onclick="insertAtFocus('{{random_6}}')">{{random_6}}</span>
-                <span class="ph-code" onclick="insertAtFocus('{{random_name}}')">{{random_name}}</span>
-                <span class="ph-code" onclick="insertAtFocus('{{random_first_name}}')">{{random_first_name}}</span>
-                <span class="ph-code" onclick="insertAtFocus('{{random_last_name}}')">{{random_last_name}}</span>
-                <span class="ph-code" onclick="insertAtFocus('{{random_company}}')">{{random_company}}</span>
-                <span class="ph-code" onclick="insertAtFocus('{{random_city}}')">{{random_city}}</span>
-                <span class="ph-code" onclick="insertAtFocus('{{random_country}}')">{{random_country}}</span>
-                <span class="ph-code" onclick="insertAtFocus('{{random_phone}}')">{{random_phone}}</span>
-                <span class="ph-code" onclick="insertAtFocus('{{random_ip}}')">{{random_ip}}</span>
-                <span class="ph-code" onclick="insertAtFocus('{{random_url}}')">{{random_url}}</span>
-                <span class="ph-code" onclick="insertAtFocus('{{random_user_agent}}')">{{random_user_agent}}</span>
-                <span class="ph-code" onclick="insertAtFocus('{{random_email}}')">{{random_email}}</span>
+                <span class="ph-code" data-ph-insert="{{random_number}}">{{random_number}}</span>
+                <span class="ph-code" data-ph-insert="{{random_6}}">{{random_6}}</span>
+                <span class="ph-code" data-ph-insert="{{random_name}}">{{random_name}}</span>
+                <span class="ph-code" data-ph-insert="{{random_first_name}}">{{random_first_name}}</span>
+                <span class="ph-code" data-ph-insert="{{random_last_name}}">{{random_last_name}}</span>
+                <span class="ph-code" data-ph-insert="{{random_company}}">{{random_company}}</span>
+                <span class="ph-code" data-ph-insert="{{random_city}}">{{random_city}}</span>
+                <span class="ph-code" data-ph-insert="{{random_country}}">{{random_country}}</span>
+                <span class="ph-code" data-ph-insert="{{random_phone}}">{{random_phone}}</span>
+                <span class="ph-code" data-ph-insert="{{random_ip}}">{{random_ip}}</span>
+                <span class="ph-code" data-ph-insert="{{random_url}}">{{random_url}}</span>
+                <span class="ph-code" data-ph-insert="{{random_user_agent}}">{{random_user_agent}}</span>
+                <span class="ph-code" data-ph-insert="{{random_email}}">{{random_email}}</span>
             </div>
             <div class="ph-group">
                 <div class="ph-group-title">Conditional</div>
-                <div class="logic-block" onclick="insertAtFocus('{{if:first_name}}\nHello {{first_name}}\n{{else}}\nHello there\n{{endif}}')">{{if:first_name}}<br>Hello {{first_name}}<br>{{else}}<br>Hello there<br>{{endif}}</div>
+                <div class="logic-block" data-ph-insert="{{if:first_name}}\nHello {{first_name}}\n{{else}}\nHello there\n{{endif}}">{{if:first_name}}<br>Hello {{first_name}}<br>{{else}}<br>Hello there<br>{{endif}}</div>
             </div>
             <div class="ph-group">
                 <div class="ph-group-title">QR Codes</div>
-                <span class="ph-code" onclick="insertAtFocus('{{qrcode:https://link.com}}')">{{qrcode:https://link.com}}</span>
-                <div class="logic-block" onclick="insertAtFocus('{{if:qr_code}}\n&lt;img src=&quot;{{qr_code_url}}&quot;&gt;\n{{endif}}')">{{if:qr_code}}<br>&lt;img src="{{qr_code_url}}"&gt;<br>{{endif}}</div>
+                <span class="ph-code" data-ph-insert="{{qrcode:https://link.com}}">{{qrcode:https://link.com}}</span>
+                <div class="logic-block" data-ph-insert="{{if:qr_code}}\n&lt;img src=&quot;{{qr_code_url}}&quot;&gt;\n{{endif}}">{{if:qr_code}}<br>&lt;img src="{{qr_code_url}}"&gt;<br>{{endif}}</div>
             </div>
             {% endraw %}
         </div>
@@ -1333,6 +1318,7 @@
         _applyFromEmailVisibility(hidden);
     }
 
+
     document.addEventListener('DOMContentLoaded', function() {
         // Restore the hide-from-email preference before anything else
         // populates the form, so the first paint is consistent.
@@ -1358,6 +1344,67 @@
         var form = document.getElementById('campaign-form');
         form.addEventListener('input',  scheduleSaveDraft);
         form.addEventListener('change', scheduleSaveDraft);
+
+        /* ── CSP-safe event wiring (replaces all inline onclick/onchange) ── */
+
+        // Form submit
+        form.addEventListener('submit', function(e) { submitCampaign(e); });
+
+        // Main tab nav (data-tab attribute)
+        document.querySelectorAll('.tab-nav .tab-btn[data-tab]').forEach(function(btn) {
+            btn.addEventListener('click', function() { switchTab(btn.dataset.tab, btn); });
+        });
+
+        // Recipients source toggle buttons (data-src attribute)
+        document.querySelectorAll('[data-src]').forEach(function(btn) {
+            btn.addEventListener('click', function() { setRecipientsSource(btn.dataset.src, btn); });
+        });
+
+        // Template select
+        var tmplSel = document.getElementById('templateSelect');
+        if (tmplSel) tmplSel.addEventListener('change', function() { onTemplateSelect(tmplSel); });
+
+        // Recipient list select
+        var recSel = document.getElementById('recipientListSelect');
+        if (recSel) recSel.addEventListener('change', function() { onRecipientListSelect(); });
+
+        // Test email button
+        var testBtn = document.getElementById('testEmailBtn');
+        if (testBtn) testBtn.addEventListener('click', function() { sendTestEmail(); });
+
+        // Clear attachments button
+        var clearAttBtn = document.getElementById('clearAttachmentsBtn');
+        if (clearAttBtn) clearAttBtn.addEventListener('click', function() { clearAttachmentSelection(); });
+
+        // Cancel (clear draft) button
+        var cancelBtn = document.getElementById('cancelDraftBtn');
+        if (cancelBtn) cancelBtn.addEventListener('click', function() { clearDraft(); });
+
+        // Hide/show from-email links
+        var hideFromEmail = document.getElementById('hideFromEmailLink');
+        if (hideFromEmail) hideFromEmail.addEventListener('click', function(e) { toggleFromEmailVisibility(e); });
+        var showFromEmail = document.getElementById('showFromEmailLink');
+        if (showFromEmail) showFromEmail.addEventListener('click', function(e) { toggleFromEmailVisibility(e); });
+
+        // Dry-run banner toggle
+        var dryRunEl = document.getElementById('dryRun');
+        if (dryRunEl) dryRunEl.addEventListener('change', function() {
+            document.getElementById('dry-run-banner').classList.toggle('hidden', !this.checked);
+        });
+
+        // ph-token spans in Content tab (data-ph-token + data-ph-target)
+        document.querySelectorAll('[data-ph-token]').forEach(function(el) {
+            el.addEventListener('click', function() {
+                insertToken(el.dataset.phTarget, el.dataset.phToken);
+            });
+        });
+
+        // Sidebar ph-code / logic-block (data-ph-insert)
+        document.querySelectorAll('[data-ph-insert]').forEach(function(el) {
+            el.addEventListener('click', function() {
+                insertAtFocus(el.dataset.phInsert);
+            });
+        });
     });
 
     /* ── Pre-fill form from existing campaign data ───────────────────────── */
@@ -1374,15 +1421,23 @@
         set('[name="name"]',        c.name);
         set('[name="description"]', c.description);
         set('[name="type"]',        c.type);
-        set('[name="from_email"]',  c.from_email);
-        set('[name="from_name"]',   c.from_name);
-        set('[name="reply_to"]',    c.reply_to);
-
-        // Rotation from_names / from_emails lists
-        if (c.from_names && c.from_names.length)
-            set('[name="from_names_list"]', c.from_names.join('\n'));
-        if (c.from_emails && c.from_emails.length)
-            set('[name="from_emails_list"]', c.from_emails.join('\n'));
+        // Multi-select lists (from_emails, from_names)
+        if (c.from_emails && c.from_emails.length) {
+            var emailSel = document.getElementById('fromEmailsSelect');
+            if (emailSel) {
+                Array.from(emailSel.options).forEach(function(opt) {
+                    if (c.from_emails.includes(opt.value)) opt.selected = true;
+                });
+            }
+        }
+        if (c.from_names && c.from_names.length) {
+            var nameSel = document.getElementById('fromNamesSelect');
+            if (nameSel) {
+                Array.from(nameSel.options).forEach(function(opt) {
+                    if (c.from_names.includes(opt.value)) opt.selected = true;
+                });
+            }
+        }
 
         // Subject — use first entry from subjects array or fall back
         var subj = (c.subjects && c.subjects.length) ? c.subjects[0] : '';
@@ -1580,7 +1635,7 @@
         }
 
         formData.forEach(function(value, key) {
-            if (key === 'attachment_ids') return;  // handled below
+            if (['attachment_ids', 'from_emails', 'from_names'].includes(key)) return;  // handled below
             if (checkboxFields.includes(key)) data[key] = true;
             else if (intFields.includes(key)) data[key] = parseInt(value) || 0;
             else data[key] = value;
@@ -1594,14 +1649,22 @@
             ? Array.from(_attSel.selectedOptions).map(function(o) { return parseInt(o.value, 10); }).filter(Number.isFinite)
             : [];
 
+        var _emailsSel = document.getElementById('fromEmailsSelect');
+        data.from_emails = _emailsSel
+            ? Array.from(_emailsSel.selectedOptions).map(function(o) { return o.value; })
+            : [];
+
+        var _namesSel = document.getElementById('fromNamesSelect');
+        data.from_names = _namesSel
+            ? Array.from(_namesSel.selectedOptions).map(function(o) { return o.value; })
+            : [];
+
         // Unchecked checkboxes default to false
         checkboxFields.forEach(function(k) { if (data[k] === undefined) data[k] = false; });
 
         // Parse rotation lists
         var listFields = {
             subjects_list:    'subjects',
-            from_names_list:  'from_names',
-            from_emails_list: 'from_emails',
             templates_list:   'templates',
             links_list:       'links',
         };

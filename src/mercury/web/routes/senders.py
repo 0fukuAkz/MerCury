@@ -4,6 +4,8 @@ import logging
 from flask import Blueprint, render_template, request, flash, redirect, url_for
 from flask_login import login_required
 from ...services.identity_service import IdentityService
+from ...data.database import get_session_direct
+from ...data.models.smtp import SMTPServer
 
 senders_bp = Blueprint("senders", __name__, url_prefix="/senders")
 logger = logging.getLogger(__name__)
@@ -16,6 +18,36 @@ def index():
     emails = IdentityService.get_emails()
     names = IdentityService.get_names()
     return render_template("senders.html", emails=emails, names=names)
+
+
+@senders_bp.route("/scan_smtp", methods=["POST"])
+@login_required
+def scan_smtp():
+    """Scan all SMTP servers and extract valid From Emails and Sender Names."""
+    session = get_session_direct()
+    servers = session.query(SMTPServer).all()
+    
+    extracted_emails = 0
+    extracted_names = 0
+
+    for server in servers:
+        if server.from_email:
+            # Check if it already exists
+            try:
+                IdentityService.add_email(server.from_email, tags=["scanned"])
+                extracted_emails += 1
+            except Exception:
+                pass  # Probably already exists or validation failed
+                
+        if server.from_name:
+            try:
+                IdentityService.add_name(server.from_name, tags=["scanned"])
+                extracted_names += 1
+            except Exception:
+                pass
+
+    flash(f"Scan complete. Extracted {extracted_emails} emails and {extracted_names} names from {len(servers)} SMTP servers.", "success")
+    return redirect(url_for("senders.index"))
 
 
 @senders_bp.route("/emails", methods=["POST"])

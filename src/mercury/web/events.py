@@ -275,7 +275,6 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
             try:
                 with app.app_context():
                     with session_scope() as session:
-
                         repo = CampaignRepository(session)
                         c = repo.get(campaign_id)
                         if c is None:
@@ -287,7 +286,6 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
                         errors = _progress_count.get("errors")
                         if errors:
                             from sqlalchemy.orm.attributes import flag_modified
-
                             settings = dict(c.settings or {})
                             settings["error_breakdown"] = dict(errors)
                             c.settings = settings
@@ -316,6 +314,8 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
                 _progress_count["failed"] += 1
                 err_type = progress.get("error_type") or "unknown"
                 _progress_count["errors"][err_type] = _progress_count["errors"].get(err_type, 0) + 1
+                if progress.get("is_bounce"):
+                    _progress_count["bounces"] += 1
 
             if n <= 3 or n % 25 == 0 or n == _progress_total:
                 logger.info(
@@ -356,6 +356,7 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
                     # in transit or the page just loaded.
                     "sent": _progress_count["sent"],
                     "failed": _progress_count["failed"],
+                    "bounces": _progress_count["bounces"],
                     "total": _progress_total,
                     "errors": _progress_count["errors"],
                     "velocity": round(

@@ -107,7 +107,7 @@ def _requeue_item(item_id: int, pinned_smtp_id=None):
             ),
         }
 
-    config = EmailConfig(subject=subject, from_email=from_email, from_name=from_name)
+    config = EmailConfig(subject=subject, from_emails=[from_email] if from_email else [])
     smtp_service = SMTPService()
     smtp_service.load_from_config(smtp_configs)
     service = EmailService(smtp_service)
@@ -221,8 +221,6 @@ def api_requeue_all_dead_letters():
                 status=CampaignStatus.DRAFT,
                 template_id=src.template_id,
                 recipient_list_id=src.recipient_list_id,
-                from_email=src.from_email,
-                from_name=src.from_name,
                 reply_to=src.reply_to,
                 subjects=list(src.subjects or []),
                 subject_rotation_strategy=src.subject_rotation_strategy,

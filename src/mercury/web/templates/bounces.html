@@ -21,6 +21,23 @@
         <div class="stat-label">Soft Bounces</div>
         <div class="stat-value warning" id="soft-bounces">0</div>
     </div>
+    <div class="stat-card">
+        <div class="stat-label">Spam Complaints</div>
+        <div class="stat-value" style="color:var(--neon-pink);" id="complaints">0</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Unsubscribes</div>
+        <div class="stat-value" style="color:var(--neon-cyan);" id="unsubscribes">0</div>
+    </div>
+</div>
+
+<div class="card mb-4" id="category-metrics" style="display:none;">
+    <div class="card-header">
+        <h2 class="card-title">Bounce Breakdown</h2>
+    </div>
+    <div id="category-bars" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem;">
+        <!-- Filled via JS -->
+    </div>
 </div>
 
 <!-- Recent Bounces -->
@@ -61,6 +78,37 @@
             document.getElementById('total-bounces').textContent = statsData.total_bounces || 0;
             document.getElementById('hard-bounces').textContent = statsData.hard_bounces || 0;
             document.getElementById('soft-bounces').textContent = statsData.soft_bounces || 0;
+            document.getElementById('complaints').textContent = statsData.complaints || 0;
+            document.getElementById('unsubscribes').textContent = statsData.unsubscribes || 0;
+            
+            const total = statsData.total_bounces || 0;
+            const categoryBars = document.getElementById('category-bars');
+            const categoryMetrics = document.getElementById('category-metrics');
+            
+            if (total > 0 && statsData.by_category) {
+                categoryMetrics.style.display = 'block';
+                let barsHtml = '';
+                for (const [cat, count] of Object.entries(statsData.by_category)) {
+                    if (count > 0) {
+                        const pct = Math.round((count / total) * 100);
+                        barsHtml += `
+                            <div style="background:var(--bg-tertiary); padding:1rem; border-radius:var(--radius); border:1px solid var(--border-color);">
+                                <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem; font-size:0.875rem;">
+                                    <span style="text-transform:capitalize; color:var(--text-secondary);">${cat.replace('_', ' ')}</span>
+                                    <span class="font-mono" style="color:var(--text-primary);">${count} (${pct}%)</span>
+                                </div>
+                                <div class="progress">
+                                    <div class="progress-bar" style="width:${pct}%; background:var(--accent-secondary);"></div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                }
+                categoryBars.innerHTML = barsHtml;
+            } else {
+                categoryMetrics.style.display = 'none';
+            }
+
             const bounces = bouncesData.bounces || [];
             const tbody = document.getElementById('bounces-table');
 

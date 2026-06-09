@@ -16,10 +16,28 @@ logger = logging.getLogger(__name__)
 @login_required
 def index():
     """Templates management page."""
+    from ...data.models.placeholder import CustomPlaceholder
+    from ...features.placeholders import PlaceholderProcessor
     with session_scope() as session:
         repo = TemplateRepository(session)
         templates = repo.get_all()
-        return render_template("templates.html", templates=templates)
+        custom_placeholders = session.query(CustomPlaceholder).filter_by(is_active=True).all()
+        catalog = PlaceholderProcessor.get_builtin_placeholder_catalog()
+        
+        # Group catalog by category
+        grouped_catalog = {}
+        for item in catalog:
+            cat = item["category"]
+            if cat not in grouped_catalog:
+                grouped_catalog[cat] = []
+            grouped_catalog[cat].append(item)
+            
+        return render_template(
+            "templates.html", 
+            templates=templates, 
+            custom_placeholders=custom_placeholders, 
+            grouped_catalog=grouped_catalog
+        )
 
 
 @templates_bp.route("/save", methods=["POST"])

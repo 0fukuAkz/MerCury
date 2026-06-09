@@ -132,14 +132,22 @@ class LogRepository(BaseRepository[EmailLog]):
             out.setdefault(email, (ip or "", ua or ""))
         return out
 
-    def get_global_stats(self) -> Dict[str, int]:
+    def get_global_stats(self) -> Dict[str, Any]:
         """Get global sending statistics efficiently."""
 
         # We use a single query to group by status and count
-        stmt = select(EmailLog.status, func.count(EmailLog.id)).group_by(EmailLog.status)
+        stmt = select(
+            EmailLog.status, 
+            func.count(EmailLog.id),
+            func.sum(EmailLog.open_count),
+            func.sum(EmailLog.click_count)
+        ).group_by(EmailLog.status)
 
         results = self.session.execute(stmt).all()
         status_counts = {r[0]: r[1] for r in results}
+
+        total_opens = sum(r[2] or 0 for r in results)
+        total_clicks = sum(r[3] or 0 for r in results)
 
         total_sent = sum(
             status_counts.get(s.value, 0)
@@ -151,9 +159,8 @@ class LogRepository(BaseRepository[EmailLog]):
             ]
         )
 
-        total_failed = sum(
-            status_counts.get(s.value, 0) for s in [EmailStatus.FAILED, EmailStatus.BOUNCED]
-        )
+        total_failed = status_counts.get(EmailStatus.FAILED.value, 0)
+        total_bounced = status_counts.get(EmailStatus.BOUNCED.value, 0)
 
         # Pending/queued/retrying are considered "in progress" or just total attempts
         total_attempts = sum(status_counts.values())
@@ -161,6 +168,9 @@ class LogRepository(BaseRepository[EmailLog]):
         return {
             "total_sent": total_sent,
             "total_failed": total_failed,
+            "total_bounced": total_bounced,
+            "total_opens": total_opens,
+            "total_clicks": total_clicks,
             "total_attempts": total_attempts,
             "success_rate": round(total_sent / total_attempts * 100, 2)
             if total_attempts > 0

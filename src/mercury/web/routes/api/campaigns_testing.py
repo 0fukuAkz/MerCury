@@ -165,8 +165,7 @@ def api_send_test_email():
 
         config = EmailConfig(
             subject=subject,
-            from_email=from_email,
-            from_name=from_name,
+            from_emails=[from_email] if from_email else [],
             reply_to=data.get("reply_to") or None,
             placeholders_path=data.get("placeholders_path") or None,
             enable_tracking=enable_tracking,
