@@ -164,19 +164,21 @@ def test_api_preview_template(client):
 def test_api_logs(client):
     with patch("mercury.web.routes.api.logs_stats.LogRepository") as MockRepo:
         MockRepo.return_value.get_recent_success.return_value = [
-            MagicMock(recipient_email="a"),
-            MagicMock(recipient_email="b"),
+            MagicMock(recipient_email="a", sent_at=None, open_count=0, click_count=0, status="sent"),
+            MagicMock(recipient_email="b", sent_at=None, open_count=0, click_count=0, status="sent"),
         ]
         MockRepo.return_value.get_recent_failed.return_value = [
             MagicMock(
                 recipient_email="x",
                 error_message="err",
                 failed_at=MagicMock(isoformat=lambda: "now"),
+                status="failed",
             ),
             MagicMock(
                 recipient_email="y",
                 error_message="err",
                 failed_at=MagicMock(isoformat=lambda: "now"),
+                status="failed",
             ),
         ]
 

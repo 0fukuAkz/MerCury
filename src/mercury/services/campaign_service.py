@@ -129,6 +129,8 @@ class CampaignConfig:
     # Email settings
     subject: str = ""
     subjects: Optional[List[str]] = None
+    from_email: Optional[str] = None
+    from_name: Optional[str] = None
     from_names: Optional[List[str]] = None
     from_emails: Optional[List[str]] = None
     reply_to: str = ""
@@ -206,6 +208,17 @@ class CampaignConfig:
     # Mail priority ('1' = high, '3' = normal, '5' = low)
     mail_priority: str = "3"
 
+    def __post_init__(self):
+        if self.from_email and not self.from_emails:
+            self.from_emails = [self.from_email]
+        elif self.from_emails and not self.from_email:
+            self.from_email = self.from_emails[0]
+
+        if self.from_name and not self.from_names:
+            self.from_names = [self.from_name]
+        elif self.from_names and not self.from_name:
+            self.from_name = self.from_names[0]
+
 
 class CampaignService:
     """Service for managing and executing email campaigns."""
@@ -277,13 +290,19 @@ class CampaignService:
             active_emails = IdentityService.get_emails(active_only=True)
             if active_emails:
                 config.from_emails = [e.email for e in active_emails]
+                config.from_email = config.from_emails[0]
                 logger.info(f"Using {len(active_emails)} From-Emails from identity pool")
+        else:
+            config.from_email = config.from_emails[0] if config.from_emails else None
 
         if not config.from_names:
             active_names = IdentityService.get_names(active_only=True)
             if active_names:
                 config.from_names = [n.name for n in active_names]
+                config.from_name = config.from_names[0]
                 logger.info(f"Using {len(active_names)} Sender Names from identity pool")
+        else:
+            config.from_name = config.from_names[0] if config.from_names else None
 
         if not config.reply_to and global_settings.default_reply_to:
             config.reply_to = global_settings.default_reply_to
@@ -614,7 +633,8 @@ class CampaignService:
                         repo = CampaignRepository(session)
                         db_cam = repo.get(self._current_campaign.id)
                         if db_cam:
-                            db_cam.status = "error"
+                            db_cam.status = "failed"
+                            session.commit()
                 except Exception as e:
                     logger.error(f"Failed to update campaign state after pre-flight: {e}")
 

@@ -147,3 +147,19 @@ def test_delete_name(client_no_login, db_session):
     response = client_no_login.post(f"/senders/names/{ident_id}/delete", follow_redirects=True)
     assert response.status_code == 200
     assert b"Name deleted." in response.data
+
+
+def test_scan_smtp(client_no_login, db_session):
+    """Test SMTP scanning route."""
+    from mercury.data.models.smtp import SMTPServer
+    
+    server1 = SMTPServer(name="S1", host="s1.com", from_email="email1@s1.com", from_name="Name1", is_enabled=True)
+    server2 = SMTPServer(name="S2", host="s2.com", from_email="", from_name="", is_enabled=True)
+    
+    db_session.add(server1)
+    db_session.add(server2)
+    db_session.commit()
+    
+    response = client_no_login.post("/senders/scan_smtp", follow_redirects=True)
+    assert response.status_code == 200
+    assert b"Extracted 1 emails and 1 names" in response.data

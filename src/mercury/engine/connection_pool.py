@@ -142,7 +142,7 @@ class SMTPServerConfig:
 
     # Mutable runtime state — initialized in __post_init__ so callers don't
     # have to construct it explicitly.
-    runtime: SMTPServerRuntime = field(default=None)
+    runtime: Optional[SMTPServerRuntime] = field(default=None)
 
     def __post_init__(self):
         """Initialize the runtime companion (circuit breaker + counters)."""
@@ -178,7 +178,7 @@ class SMTPServerConfig:
                     f"'none', 'starttls', 'ssl' (got: {raw!r})"
                 )
         return cls(
-            name=data.get("name", data.get("host", "default")),
+            name=str(data.get("name", data.get("host", "default"))),
             host=data["host"],
             port=data.get("port", 587),
             username=data.get("username", ""),
@@ -222,8 +222,9 @@ class SMTPServerConfig:
 
     def check_rate_limits(self, ip_warmup_mode: bool = False) -> bool:
         """Check if within rate limits."""
-        now = datetime.now(UTC)
         rt = self.runtime
+        assert rt is not None, "SMTPServerRuntime not initialized"
+        now = datetime.now(UTC)
 
         effective_max_minute = self.max_per_minute
         effective_max_hour = self.max_per_hour
@@ -262,11 +263,14 @@ class SMTPServerConfig:
     def increment_counters(self):
         """Increment rate limit counters."""
         rt = self.runtime
+        assert rt is not None, "SMTPServerRuntime not initialized"
         rt.current_minute_count += 1
         rt.current_hour_count += 1
 
     def can_execute(self, ip_warmup_mode: bool = False) -> bool:
         """Check if server can accept requests (circuit breaker + rate limits)."""
+        if self.runtime is None:
+            return False
         return self.runtime.circuit_breaker.is_available() and self.check_rate_limits(
             ip_warmup_mode
         )
@@ -344,6 +348,7 @@ class AsyncSMTPConnection:
             await self.connect()
 
         _start = time.monotonic()
+        assert self.client is not None
         try:
             response = await self.client.send_message(msg)
             _duration = time.monotonic() - _start
@@ -402,6 +407,8 @@ class AsyncConnectionPool:
         # will happily GC a still-pending task — producing "Task was destroyed
         # but it is pending!" warnings and silently dropping the replenish.
         self._background_tasks: "set[asyncio.Task]" = set()
+        self._waiters = []
+        self._waiter_counter = 0
 
     async def initialize(self):
         """Initialize the pool with connections."""
@@ -454,14 +461,22 @@ class AsyncConnectionPool:
                 conn = AsyncSMTPConnection(self.config)
                 await conn.connect()
                 self.connections.append(conn)
-                await self.available.put(conn)
+                
+                # Clean up done/cancelled waiters
+                self._waiters = [w for w in self._waiters if not w[2].done()]
+                if self._waiters:
+                    self._waiters.sort(key=lambda x: (x[0], x[1]))
+                    priority, counter, future = self._waiters.pop(0)
+                    future.set_result(conn)
+                else:
+                    await self.available.put(conn)
                 logger.debug(f"Replenished connection pool for {self.config.name}")
             except Exception as e:
                 logger.warning(f"Failed to replenish connection: {e}")
                 # Don't raise, we'll try again later naturally
 
-    async def get_connection(self, timeout: float = 10.0) -> AsyncSMTPConnection:
-        """Get a connection from the pool.
+    async def get_connection(self, timeout: float = 10.0, priority: int = 2) -> AsyncSMTPConnection:
+        """Get a connection from the pool, with priority queuing.
 
         Operates against a single deadline computed at entry. The previous
         implementation recursed with the same ``timeout`` on stale-replace
@@ -488,15 +503,12 @@ class AsyncConnectionPool:
                     f"get_connection timed out for {self.config.name} after {timeout:.1f}s"
                 )
 
-            # Split the remaining budget so neither branch can starve the
-            # other: spend up to half waiting for a queued connection, leave
-            # the other half for opening one if the pool has headroom.
-            try:
-                conn = await asyncio.wait_for(
-                    self.available.get(), timeout=max(0.05, remaining / 2)
-                )
-            except asyncio.TimeoutError:
-                conn = None
+            conn = None
+            async with self.lock:
+                self._waiters = [w for w in self._waiters if not w[2].done()]
+                has_higher_priority_waiter = any(w[0] < priority for w in self._waiters)
+                if not self.available.empty() and not has_higher_priority_waiter:
+                    conn = self.available.get_nowait()
 
             if conn is not None:
                 # Stale connection — discard and try again. Continuing the
@@ -531,8 +543,35 @@ class AsyncConnectionPool:
                         raise
                     self.connections.append(conn)
                     return conn
-            # Pool is full and the queue starved — fall through to retry
-            # the queue wait on the remaining budget.
+
+            # Pool is full — wait for a connection to be released with priority.
+            future = loop.create_future()
+            async with self.lock:
+                self._waiter_counter += 1
+                waiter_item = (priority, self._waiter_counter, future)
+                self._waiters.append(waiter_item)
+
+            try:
+                conn = await asyncio.wait_for(future, timeout=remaining)
+                if (
+                    not conn.is_connected
+                    or conn.age_seconds > self.max_connection_age
+                    or conn.idle_seconds > self.max_idle_time
+                ):
+                    await conn.close()
+                    async with self.lock:
+                        if conn in self.connections:
+                            self.connections.remove(conn)
+                    continue
+                return conn
+            except asyncio.TimeoutError:
+                future.cancel()
+                async with self.lock:
+                    if waiter_item in self._waiters:
+                        self._waiters.remove(waiter_item)
+                raise asyncio.TimeoutError(
+                    f"get_connection timed out for {self.config.name} after {timeout:.1f}s"
+                )
 
     async def release_connection(self, conn: AsyncSMTPConnection):
         """Return connection to pool."""
@@ -541,6 +580,14 @@ class AsyncConnectionPool:
             and conn.age_seconds < self.max_connection_age
             and conn.idle_seconds < self.max_idle_time
         ):
+            async with self.lock:
+                # Clean up done/cancelled waiters
+                self._waiters = [w for w in self._waiters if not w[2].done()]
+                if self._waiters:
+                    self._waiters.sort(key=lambda x: (x[0], x[1]))
+                    priority, counter, future = self._waiters.pop(0)
+                    future.set_result(conn)
+                    return
             await self.available.put(conn)
             return
 
@@ -752,7 +799,7 @@ class SMTPConnectionPool:
         else:
             return self._select_server_weighted(candidates)
 
-    def select_server_for_from(self, from_email: str) -> Optional[SMTPServerConfig]:
+    def select_server_for_from(self, from_email: Optional[str]) -> Optional[SMTPServerConfig]:
         """Pick a healthy server that declares ownership of ``from_email``.
 
         Each SMTPServerConfig.from_email declares the address that server
@@ -791,7 +838,7 @@ class SMTPConnectionPool:
         return self.select_server(candidates=owners)
 
     async def acquire(
-        self, preferred_server: str = None, timeout: float = 10.0
+        self, preferred_server: Optional[str] = None, timeout: float = 10.0, priority: int = 2
     ) -> Tuple[AsyncSMTPConnection, SMTPServerConfig]:
         """Acquire connection from pool.
 
@@ -814,7 +861,7 @@ class SMTPConnectionPool:
                     f"Preferred SMTP server '{preferred_server}' is unavailable "
                     f"(rate-limited or circuit open)"
                 )
-            conn = await self.pools[preferred_server].get_connection(timeout)
+            conn = await self.pools[preferred_server].get_connection(timeout, priority)
             return conn, config
 
         config = self.select_server()
@@ -830,6 +877,8 @@ class SMTPConnectionPool:
             details = []
             for c in self.configs:
                 try:
+                    if c.runtime is None:
+                        continue
                     cb_stats = c.runtime.circuit_breaker.get_stats()
                     if cb_stats.get("state") == "open":
                         msgs = cb_stats.get("last_error_messages") or []
@@ -844,7 +893,7 @@ class SMTPConnectionPool:
             raise RuntimeError("No SMTP servers available")
 
         pool = self.pools[config.name]
-        conn = await pool.get_connection(timeout)
+        conn = await pool.get_connection(timeout, priority)
         return conn, config
 
     async def release(self, conn: AsyncSMTPConnection, config: SMTPServerConfig):
@@ -855,6 +904,7 @@ class SMTPConnectionPool:
     def record_success(self, config: SMTPServerConfig):
         """Record successful send."""
         rt = config.runtime
+        assert rt is not None, "SMTPServerRuntime not initialized"
         rt.circuit_breaker.record_success()
         rt.total_sent += 1
         rt.consecutive_failures = 0
@@ -862,6 +912,7 @@ class SMTPConnectionPool:
     def record_failure(self, config: SMTPServerConfig, error: Exception):
         """Record failed send."""
         rt = config.runtime
+        assert rt is not None, "SMTPServerRuntime not initialized"
         rt.circuit_breaker.record_failure(error)
         rt.total_failures += 1
         rt.consecutive_failures += 1
@@ -891,6 +942,9 @@ class SMTPConnectionPool:
         status = {}
         for c in self.configs:
             rt = c.runtime
+            if rt is None:
+                status[c.name] = {"host": c.host, "circuit_state": "unknown", "available": False}
+                continue
             stats = rt.circuit_breaker.get_stats()
             status[c.name] = {
                 "host": c.host,

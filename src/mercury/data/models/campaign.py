@@ -13,7 +13,7 @@ from sqlalchemy import (
     Float,
     Boolean,
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, validates
 
 from ..database import Base
 from .base import BaseModel
@@ -179,6 +179,61 @@ class Campaign(Base, BaseModel):
     def is_active(self) -> bool:
         """Check if campaign is currently active."""
         return self.status == CampaignStatus.SENDING
+
+    @property
+    def from_emails(self):
+        return (self.settings or {}).get("from_emails") or []
+
+    @from_emails.setter
+    def from_emails(self, value):
+        if self.settings is None:
+            self.settings = {}
+        # Ensure we work with a copy or dict update to trigger SQLAlchemy tracked mutations
+        s = dict(self.settings)
+        s["from_emails"] = list(value) if value is not None else []
+        self.settings = s
+
+    @property
+    def from_names(self):
+        return (self.settings or {}).get("from_names") or []
+
+    @from_names.setter
+    def from_names(self, value):
+        if self.settings is None:
+            self.settings = {}
+        s = dict(self.settings)
+        s["from_names"] = list(value) if value is not None else []
+        self.settings = s
+
+    @property
+    def from_email(self) -> str:
+        emails = self.from_emails
+        return emails[0] if emails else ""
+
+    @from_email.setter
+    def from_email(self, value: str):
+        self.from_emails = [value] if value else []
+
+    @property
+    def from_name(self) -> str:
+        names = self.from_names
+        return names[0] if names else ""
+
+    @from_name.setter
+    def from_name(self, value: str):
+        self.from_names = [value] if value else []
+
+    @validates('settings')
+    def validate_settings(self, key, value):
+        if value is None:
+            value = {}
+        else:
+            value = dict(value)
+        if self.settings:
+            for k in ["from_emails", "from_names"]:
+                if k in self.settings and k not in value:
+                    value[k] = self.settings[k]
+        return value
 
     def __repr__(self):
         return f"<Campaign(id={self.id}, name='{self.name}', status={self.status.value})>"

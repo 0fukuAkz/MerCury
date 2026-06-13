@@ -123,29 +123,31 @@ class EmailService:
         #   - Only emails → register 'from_emails' for address rotation;
         #     from_name stays static.
         #   - Neither → both are static (no rotation).
-        _has_names = bool(config.from_names)
-        _has_emails = bool(config.from_emails)
+        from_names = config.from_names or []
+        from_emails = config.from_emails or []
+        _has_names = len(from_names) > 0
+        _has_emails = len(from_emails) > 0
 
         if _has_names and _has_emails:
             # Paired rotation: (name, email) tuples advance atomically.
-            paired = list(zip(config.from_names, config.from_emails))
+            paired = list(zip(from_names, from_emails))
             self._rotation_manager.register("sender_identity", paired, strategy)
             # Warn about address-ownership mismatches in the paired set.
-            self._warn_unowned_from_emails(config.from_emails)
-            if len(config.from_names) != len(config.from_emails):
+            self._warn_unowned_from_emails(from_emails)
+            if len(from_names) != len(from_emails):
                 logger.warning(
                     "from_names (%d entries) and from_emails (%d entries) differ "
                     "in length — paired rotation uses the shorter list (%d pairs). "
                     "Extra entries in the longer list are ignored.",
-                    len(config.from_names),
-                    len(config.from_emails),
+                    len(from_names),
+                    len(from_emails),
                     len(paired),
                 )
         elif _has_names:
-            self._rotation_manager.register("from_names", config.from_names, strategy)
+            self._rotation_manager.register("from_names", from_names, strategy)
         elif _has_emails:
-            self._rotation_manager.register("from_emails", config.from_emails, strategy)
-            self._warn_unowned_from_emails(config.from_emails)
+            self._rotation_manager.register("from_emails", from_emails, strategy)
+            self._warn_unowned_from_emails(from_emails)
 
         if config.templates and len(config.templates) > 1:
             self._rotation_manager.register("templates", config.templates, strategy)
@@ -199,7 +201,7 @@ class EmailService:
 
     async def send_single(
         self,
-        recipient: str,
+        recipient: Optional[str],
         subject: Optional[str] = None,
         html_body: Optional[str] = None,
         from_email: Optional[str] = None,
@@ -208,6 +210,7 @@ class EmailService:
         placeholders: Optional[Dict[str, Any]] = None,
         link: Optional[str] = None,
         attachments: Optional[List[Dict[str, Any]]] = None,
+        priority: int = 1,
     ) -> EmailResult:
         """
         Send single email with all features.
@@ -226,9 +229,6 @@ class EmailService:
         Returns:
             EmailResult with send status
         """
-        placeholders = placeholders or {}
-        placeholders["email"] = recipient
-
         # Validate the recipient at the boundary. An address without '@' is
         # invalid by definition, and several downstream helpers (branding,
         # domain-derived placeholders, logo auto-fetch) parse it by splitting
@@ -246,6 +246,10 @@ class EmailService:
                 error_type="invalid_recipient",
                 is_transient=False,
             )
+
+        placeholders = placeholders or {}
+        placeholders["email"] = recipient
+
 
         # Resolve rotating header values (caller wins if explicit).
         subject = self._resolve_rotated("subjects", subject, self.config.subject)
@@ -312,7 +316,7 @@ class EmailService:
         self.last_send_diagnostics: Dict[str, Any] = {
             "qr_code_referenced_in_body": qr_referenced,
             "qr_code_resolved": qr_data_url is not None,
-            "enable_qr_code": bool(self.config.enable_qr_code),
+            "enable_qr_code": self.config.enable_qr_code,
             "link_present": bool(link),
         }
 
@@ -460,6 +464,7 @@ class EmailService:
             headers=priority_headers or None,
             correlation_id=tracking_email_id,
             force_base64_body=force_base64,
+            priority=priority,
         )
 
         # On failure: add to dead letter queue. Skip for server-side errors
@@ -520,7 +525,7 @@ class EmailService:
             with session_scope() as session:
                 rows = CustomPlaceholderRepository(session).list_active()
                 for row in rows:
-                    self._placeholder_processor.static_placeholders[row.name] = row.value or ""
+                    self._placeholder_processor.static_placeholders[str(row.name)] = str(row.value or "")
         except Exception as e:
             logger.warning(
                 "Could not load custom placeholders (sends will skip them): %s",
@@ -691,6 +696,7 @@ class EmailService:
                                 html_body=None,  # Force template rendering
                                 placeholders=recipient_data,
                                 link=link_to_use,
+                                priority=2,
                             )
             except Exception as e:
                 import traceback
@@ -729,14 +735,15 @@ class EmailService:
         tasks = [send_wrapper(i, r) for i, r in enumerate(recipients)]
 
         # Execute
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        results_raw = await asyncio.gather(*tasks, return_exceptions=True)
+        results: list[EmailResult | BaseException] = list(results_raw)
 
         # Process results
         processed_results = []
         success_count = 0
 
         for recipient_data, r in zip(recipients, results):
-            if isinstance(r, Exception):
+            if isinstance(r, BaseException):
                 import traceback
 
                 logger.error(

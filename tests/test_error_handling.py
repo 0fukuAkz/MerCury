@@ -22,7 +22,7 @@ def valid_config():
     return CampaignConfig(
         name="Test Campaign",
         subject="Subject",
-        from_email="test@example.com",
+        from_emails=["test@example.com"],
         recipients_path="test.csv",
     )
 

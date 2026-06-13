@@ -268,3 +268,163 @@ def test_main():
     with patch("mercury.cli.main.cli") as mock_cli:
         main()
         mock_cli.assert_called()
+
+
+# Test additional CLI paths to bring coverage to 100%
+
+def test_generate_qr(runner):
+    with runner.isolated_filesystem():
+        with patch("mercury.features.generators.QRCodeGenerator") as MockGen:
+            result = runner.invoke(cli, ["generate", "qr", "test_data", "test_qr.png"])
+            assert result.exit_code == 0
+            assert "Generating QR code for" in result.output
+            MockGen.return_value.generate_to_file.assert_called_once_with("test_data", "test_qr.png")
+
+def test_generate_pdf(runner):
+    with runner.isolated_filesystem():
+        with open("input.html", "w") as f:
+            f.write("hello")
+        with patch("mercury.features.generators.PDFGenerator") as MockGen:
+            result = runner.invoke(cli, ["generate", "pdf", "input.html", "output.pdf"])
+            assert result.exit_code == 0
+            assert "Converting input.html to PDF" in result.output
+            MockGen.return_value.generate_from_html.assert_called_once()
+
+def test_generate_image(runner):
+    with runner.isolated_filesystem():
+        with open("input.html", "w") as f:
+            f.write("hello")
+        with patch("mercury.features.generators.ImageGenerator") as MockGen:
+            result = runner.invoke(cli, ["generate", "image", "input.html", "output.png"])
+            assert result.exit_code == 0
+            assert "Converting input.html to Image" in result.output
+            MockGen.return_value.generate_from_html.assert_called_once()
+
+def test_db_migrate_success(runner):
+    with patch("os.path.isfile", return_value=True), \
+         patch("alembic.config.Config") as MockAlembicConfig, \
+         patch("alembic.command.upgrade") as mock_upgrade:
+        result = runner.invoke(cli, ["db", "migrate", "--revision", "head"])
+        assert result.exit_code == 0
+        assert "Applying migrations" in result.output
+        mock_upgrade.assert_called_once()
+
+def test_db_migrate_missing_ini(runner):
+    with patch("os.path.isfile", return_value=False):
+        result = runner.invoke(cli, ["db", "migrate"])
+        assert result.exit_code == 1
+        assert "alembic.ini not found" in result.output
+
+def test_db_migrate_failed(runner):
+    with patch("os.path.isfile", return_value=True), \
+         patch("alembic.config.Config"), \
+         patch("alembic.command.upgrade", side_effect=Exception("Migration crash")):
+        result = runner.invoke(cli, ["db", "migrate"])
+        assert result.exit_code == 1
+        assert "Migration failed: Migration crash" in result.output
+
+def test_db_current(runner):
+    with patch("os.path.isfile", return_value=True), \
+         patch("alembic.config.Config"), \
+         patch("alembic.command.current") as mock_current:
+        result = runner.invoke(cli, ["db", "current"])
+        assert result.exit_code == 0
+        mock_current.assert_called_once()
+
+def test_cli_options(runner):
+    with runner.isolated_filesystem():
+        # Test verbose
+        result = runner.invoke(cli, ["-v", "new", "config"])
+        assert result.exit_code == 0
+        # Test quiet
+        result = runner.invoke(cli, ["-q", "new", "config"])
+        assert result.exit_code == 0
+
+def test_show_nonexistent_file(runner):
+    result = runner.invoke(cli, ["show", "logs", "--file", "nonexistent.txt"])
+    assert result.exit_code == 0
+    assert "No file: nonexistent.txt" in result.output
+
+def test_check_load_exception(runner):
+    with runner.isolated_filesystem():
+        with open("c.yaml", "w") as f:
+            f.write("")
+        with patch("mercury.services.campaign_service.load_campaign_from_yaml", side_effect=ValueError("Invalid config syntax")):
+            result = runner.invoke(cli, ["check", "c.yaml"])
+            assert result.exit_code == 1
+            assert "Invalid config syntax" in result.output
+
+def test_test_smtp_failure(runner):
+    with runner.isolated_filesystem():
+        with open("c.yaml", "w") as f:
+            f.write("")
+        with patch("mercury.services.campaign_service.load_campaign_from_yaml") as mock_load, \
+             patch("mercury.services.smtp_service.SMTPService") as MockService, \
+             patch("asyncio.run") as mock_async_run:
+            config = Mock()
+            config.smtp_configs = [Mock(name="s1")]
+            mock_load.return_value = config
+            
+            # Make asyncio.run return False (failure in connections)
+            mock_async_run.return_value = False
+            
+            result = runner.invoke(cli, ["test", "c.yaml"])
+            assert result.exit_code == 1
+            assert "Some connections failed" in result.output
+
+def test_send_no_recipients(runner):
+    with runner.isolated_filesystem():
+        with open("c.yaml", "w") as f:
+            f.write("")
+        with patch("mercury.services.campaign_service.load_campaign_from_yaml") as mock_load, \
+             patch("mercury.services.campaign_service.CampaignService") as MockService:
+            config = Mock()
+            config.recipients_path = None
+            mock_load.return_value = config
+            
+            result = runner.invoke(cli, ["send", "c.yaml"])
+            assert result.exit_code == 1
+            assert "No recipients file" in result.output
+
+def test_send_limit_and_txt_source(runner):
+    with runner.isolated_filesystem():
+        with open("c.yaml", "w") as f:
+            f.write("")
+        with patch("mercury.services.campaign_service.load_campaign_from_yaml") as mock_load, \
+             patch("mercury.services.campaign_service.CampaignService") as MockService, \
+             patch("asyncio.run") as mock_run:
+            config = Mock()
+            config.recipients_path = "r.txt" # ends with text
+            config.email_column = "email"
+            mock_load.return_value = config
+            
+            service = MockService.return_value
+            service.load_recipients_from_text.return_value = [
+                {"email": "1@b.com"}, {"email": "2@b.com"}, {"email": "3@b.com"}
+            ]
+            mock_run.return_value = {"sent": 2, "failed": 0}
+            
+            result = runner.invoke(cli, ["send", "c.yaml", "--to", "2", "--yes"])
+            assert result.exit_code == 0
+            assert "Sent: 2" in result.output
+            service.load_recipients_from_text.assert_called_once_with("r.txt")
+
+def test_send_failures_warning(runner):
+    with runner.isolated_filesystem():
+        with open("c.yaml", "w") as f:
+            f.write("")
+        with patch("mercury.services.campaign_service.load_campaign_from_yaml") as mock_load, \
+             patch("mercury.services.campaign_service.CampaignService") as MockService, \
+             patch("asyncio.run") as mock_run:
+            config = Mock()
+            config.recipients_path = "r.csv"
+            config.email_column = "email"
+            mock_load.return_value = config
+            
+            service = MockService.return_value
+            service.load_recipients_from_csv.return_value = [{"email": "1@b.com"}]
+            mock_run.return_value = {"sent": 0, "failed": 1}
+            
+            result = runner.invoke(cli, ["send", "c.yaml", "--yes"])
+            assert result.exit_code == 0
+            assert "Check logs/failed-emails.txt" in result.output

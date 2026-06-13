@@ -25,20 +25,26 @@ def patch_session(db_engine):
 def mock_campaign_config():
     return CampaignConfig(
         name="Test",
-        from_email="test@example.com",
+        from_emails=["test@example.com"],
         subject="Test",
         recipients_path="/tmp/does-not-exist.csv",
     )
 
 
 def test_campaign_load_config_defaults(db_session):
+    from mercury.services.identity_service import IdentityService
+    IdentityService.add_email("test@example.com")
+    IdentityService.add_name("Test Name")
+
     service = CampaignService()
     service.initialize()
     config = CampaignConfig(name="Test")
     # Will fallback to defaults
     service.load_config(config)
 
-    assert config.from_email is not None
+    assert config.from_emails is not None
+    assert config.from_email == "test@example.com"
+    assert config.from_name == "Test Name"
 
 
 def test_campaign_pause_resume():

@@ -244,6 +244,7 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
             "n": 0,
             "sent": 0,
             "failed": 0,
+            "bounces": 0,
             "errors": {},
             "start_time": time.monotonic(),
         }

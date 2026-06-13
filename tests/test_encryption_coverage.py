@@ -1,5 +1,6 @@
 """Tests for encryption.py coverage."""
 
+import os
 import pytest
 from unittest.mock import patch
 from mercury.security.encryption import EncryptionService, get_encryption_service
@@ -60,3 +61,41 @@ def test_encryption_empty_values():
     assert svc.encrypt("") == ""
     assert svc.decrypt("") == ""
     assert svc.is_encrypted(None) is False
+
+
+def test_encryption_set_service():
+    from mercury.security.encryption import set_encryption_service
+    fake = EncryptionService(password="fake")
+    set_encryption_service(fake)
+    assert get_encryption_service() is fake
+
+
+def test_is_encrypted_exception():
+    svc = EncryptionService(password="test")
+    class BadValue:
+        def startswith(self, val):
+            raise TypeError("boom")
+    assert svc.is_encrypted(BadValue()) is False
+
+
+def test_load_or_create_key_file_chmod_oserror(tmp_path):
+    with patch("mercury.utils.app_dirs.get_data_dir", return_value=tmp_path):
+        with patch("os.chmod", side_effect=OSError("Permission error")):
+            key = EncryptionService._load_or_create_key_file()
+            assert len(key) > 0
+            assert os.path.exists(tmp_path / ".encryption.key")
+
+
+def test_derive_key_salt_generation(tmp_path, monkeypatch):
+    monkeypatch.delenv("ENCRYPTION_SALT", raising=False)
+    with patch("mercury.utils.app_dirs.get_data_dir", return_value=tmp_path):
+        with patch("os.chmod", side_effect=OSError("Permission error")):
+            key = EncryptionService._derive_key("password", salt=None)
+            assert len(key) > 0
+            assert os.path.exists(tmp_path / ".encryption.salt")
+
+
+def test_derive_key_salt_from_env(monkeypatch):
+    monkeypatch.setenv("ENCRYPTION_SALT", "my_custom_salt")
+    key = EncryptionService._derive_key("password", salt=None)
+    assert len(key) > 0

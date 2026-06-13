@@ -61,6 +61,19 @@ class EmailConfig:
     templates: Optional[List[str]] = None
     links: Optional[List[str]] = None
     rotation_strategy: str = "round_robin"
+    from_email: Optional[str] = None
+    from_name: Optional[str] = None
+
+    def __post_init__(self):
+        if self.from_email and not self.from_emails:
+            self.from_emails = [self.from_email]
+        elif self.from_emails and not self.from_email:
+            self.from_email = self.from_emails[0]
+
+        if self.from_name and not self.from_names:
+            self.from_names = [self.from_name]
+        elif self.from_names and not self.from_name:
+            self.from_name = self.from_names[0]
 
     @classmethod
     def from_campaign_config(cls, config: "Any") -> "EmailConfig":

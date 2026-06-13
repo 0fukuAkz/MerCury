@@ -216,6 +216,7 @@ class AsyncEmailSender:
         correlation_id: Optional[str] = None,
         preferred_smtp: Optional[str] = None,
         force_base64_body: bool = False,
+        priority: int = 2,
     ) -> EmailResult:
         """
         Send single email asynchronously.
@@ -231,6 +232,7 @@ class AsyncEmailSender:
             headers: Additional email headers
             correlation_id: Tracking ID
             preferred_smtp: Preferred SMTP server name
+            priority: Queue priority (higher numbers are lower priority, 1=HIGH, 2=DEFAULT)
 
         Returns:
             EmailResult with send status
@@ -287,7 +289,7 @@ class AsyncEmailSender:
 
             # Acquire connection and send
             conn, smtp_config = await self.connection_pool.acquire(
-                preferred_server=preferred_smtp, timeout=30.0
+                preferred_server=preferred_smtp, timeout=30.0, priority=priority
             )
 
             # Pull From defaults off the server config when the caller
@@ -486,6 +488,16 @@ class AsyncEmailSender:
 
         async def send_with_semaphore(recipient_data: Dict[str, Any], index: int) -> EmailResult:
             recipient_email = recipient_data.get("email")
+            if not isinstance(recipient_email, str):
+                return EmailResult(
+                    success=False,
+                    recipient=str(recipient_email) if recipient_email is not None else "unknown",
+                    correlation_id=str(uuid.uuid4()),
+                    timestamp=datetime.now(UTC),
+                    error="Recipient email is missing or not a string",
+                    error_type="invalid_recipient",
+                    is_transient=False,
+                )
             try:
                 async with semaphore:
                     subject = processor.process(subject_template, recipient_data, {})
@@ -526,7 +538,8 @@ class AsyncEmailSender:
 
         # Send all emails concurrently
         tasks = [send_with_semaphore(r, i) for i, r in enumerate(recipients)]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        results_raw = await asyncio.gather(*tasks, return_exceptions=True)
+        results: list[EmailResult | BaseException] = list(results_raw)
 
         # Process results
         processed_results = []

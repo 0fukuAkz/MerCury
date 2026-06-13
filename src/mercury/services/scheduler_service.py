@@ -123,7 +123,8 @@ class SchedulerService:
     def _on_job_error(self, event: JobEvent) -> None:
         """Handle job error event."""
         job_id = event.job_id
-        logger.error(f"Job error: {job_id} - {event.exception}")
+        exception = getattr(event, "exception", None)
+        logger.error(f"Job error: {job_id} - {exception}")
 
     def start(self) -> None:
         """Start the scheduler."""
@@ -299,7 +300,7 @@ class SchedulerService:
         self._jobs[job_id] = job
         self._callbacks[job_id] = callback
 
-        trigger_kwargs = dict(seconds=interval_seconds)
+        trigger_kwargs: dict[str, Any] = dict(seconds=interval_seconds)
         if timezone:
             trigger_kwargs["timezone"] = timezone
         trigger = IntervalTrigger(**trigger_kwargs)
@@ -334,21 +335,43 @@ class SchedulerService:
 
         logger.debug(f"Executing job: {job.name if job else job_id}")
 
+        from ..utils.lock_manager import LockManager
+
+        lock = LockManager(f"job_{job_id}", timeout=1800)
+        if not lock.acquire(blocking=False):
+            logger.info(f"Job {job_id} is already being executed by another process/worker. Skipping.")
+            return
+
+        def release_lock_callback(task):
+            lock.release()
+
         try:
-            if asyncio.iscoroutinefunction(callback):
+            import inspect
+            if inspect.iscoroutinefunction(callback):
                 # Run async callback
                 if self.use_async:
-                    asyncio.create_task(callback(**job.metadata if job else {}))
+                    task = asyncio.create_task(callback(**job.metadata if job else {}))
+                    task.add_done_callback(release_lock_callback)
                 else:
                     from ..web.extensions import run_async
 
-                    run_async(callback(**job.metadata if job else {}))
+                    async def run_and_release():
+                        try:
+                            await callback(**job.metadata if job else {})
+                        finally:
+                            lock.release()
+
+                    run_async(run_and_release())
             else:
-                # Run sync callback
-                callback(**job.metadata if job else {})
+                try:
+                    # Run sync callback
+                    callback(**job.metadata if job else {})
+                finally:
+                    lock.release()
 
         except Exception as e:
             logger.error(f"Job execution failed: {job_id} - {e}")
+            lock.release()
             raise
 
     def cancel_job(self, job_id: str) -> bool:

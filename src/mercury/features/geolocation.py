@@ -60,6 +60,8 @@ class GeoResolver:
         self._reader = None
         self._available: Optional[bool] = None
         self._lock = threading.Lock()
+        self._cache = {}
+        self._cache_keys = []
 
     def _load(self) -> bool:
         """Open the .mmdb on first use. Returns True if usable."""
@@ -129,28 +131,47 @@ class GeoResolver:
         ):
             return dict(_EMPTY)
 
+        # Lock cache access to ensure thread-safety
+        with self._lock:
+            if ip in self._cache:
+                # Move to end of key list (MRU)
+                try:
+                    self._cache_keys.remove(ip)
+                except ValueError:
+                    pass
+                self._cache_keys.append(ip)
+                return dict(self._cache[ip])
+
         try:
             r = self._reader.city(ip)  # type: ignore[union-attr]
+            res = {
+                "country": (r.country.name or "") if r.country else "",
+                "country_code": (r.country.iso_code or "") if r.country else "",
+                "city": (r.city.name or "") if r.city else "",
+                "region": (r.subdivisions.most_specific.name or "") if r.subdivisions else "",
+                "region_code": (r.subdivisions.most_specific.iso_code or "") if r.subdivisions else "",
+                "timezone": (r.location.time_zone or "") if r.location else "",
+                "continent": (r.continent.name or "") if r.continent else "",
+                "postal": (r.postal.code or "") if r.postal else "",
+            }
         except Exception:
-            # AddressNotFoundError, ValueError on bad IP strings, etc. —
-            # all map to "no geo info".
-            return dict(_EMPTY)
+            res = dict(_EMPTY)
 
-        # MaxMind returns localized names; default to English. ``or ""``
-        # protects against fields that are sometimes present on the record
-        # but with a None value (postal for some city blocks).
-        return {
-            "country": (r.country.name or "") if r.country else "",
-            "country_code": (r.country.iso_code or "") if r.country else "",
-            "city": (r.city.name or "") if r.city else "",
-            "region": (r.subdivisions.most_specific.name or "") if r.subdivisions else "",
-            "region_code": (r.subdivisions.most_specific.iso_code or "") if r.subdivisions else "",
-            "timezone": (r.location.time_zone or "") if r.location else "",
-            "continent": (r.continent.name or "") if r.continent else "",
-            "postal": (r.postal.code or "") if r.postal else "",
-        }
+        with self._lock:
+            # Evict oldest if cache size exceeded
+            if len(self._cache) >= 1024:
+                if self._cache_keys:
+                    oldest = self._cache_keys.pop(0)
+                    self._cache.pop(oldest, None)
+
+            self._cache[ip] = res
+            self._cache_keys.append(ip)
+            return dict(res)
 
     def close(self) -> None:
+        with self._lock:
+            self._cache.clear()
+            self._cache_keys.clear()
         if self._reader is not None:
             try:
                 self._reader.close()

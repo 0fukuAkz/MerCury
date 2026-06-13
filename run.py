@@ -102,13 +102,15 @@ def kill_existing_instances():
             # Try to kill old process
             try:
                 import ctypes
-                kernel32 = ctypes.windll.kernel32
-                PROCESS_TERMINATE = 1
-                handle = kernel32.OpenProcess(PROCESS_TERMINATE, False, old_pid)
-                if handle:
-                    kernel32.TerminateProcess(handle, 0)
-                    kernel32.CloseHandle(handle)
-                    print(f"Cleaned up previous instance (PID: {old_pid})")
+                windll = getattr(ctypes, 'windll', None)
+                if windll:
+                    kernel32 = windll.kernel32
+                    PROCESS_TERMINATE = 1
+                    handle = kernel32.OpenProcess(PROCESS_TERMINATE, False, old_pid)
+                    if handle:
+                        kernel32.TerminateProcess(handle, 0)
+                        kernel32.CloseHandle(handle)
+                        print(f"Cleaned up previous instance (PID: {old_pid})")
             except Exception:
                 pass
         
@@ -165,7 +167,6 @@ def graceful_shutdown(signum=None, frame=None):
     if sys.platform == "win32":
         try:
             # Kill any child processes
-            import ctypes
             current_pid = os.getpid()
             subprocess.run(
                 f'wmic process where (ParentProcessId={current_pid}) delete',
@@ -192,21 +193,23 @@ def setup_signal_handlers():
     if sys.platform == "win32":
         try:
             import ctypes
-            kernel32 = ctypes.windll.kernel32
-            
-            # Set console control handler
-            CTRL_C_EVENT = 0
-            CTRL_BREAK_EVENT = 1
-            CTRL_CLOSE_EVENT = 2
-            
-            @ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_uint)
-            def console_handler(event):
-                if event in (CTRL_C_EVENT, CTRL_BREAK_EVENT, CTRL_CLOSE_EVENT):
-                    graceful_shutdown()
-                    return True
-                return False
-            
-            kernel32.SetConsoleCtrlHandler(console_handler, True)
+            windll = getattr(ctypes, 'windll', None)
+            if windll:
+                kernel32 = windll.kernel32
+                
+                # Set console control handler
+                CTRL_C_EVENT = 0
+                CTRL_BREAK_EVENT = 1
+                CTRL_CLOSE_EVENT = 2
+                
+                @ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_uint)
+                def console_handler(event):
+                    if event in (CTRL_C_EVENT, CTRL_BREAK_EVENT, CTRL_CLOSE_EVENT):
+                        graceful_shutdown()
+                        return True
+                    return False
+                
+                kernel32.SetConsoleCtrlHandler(console_handler, True)
         except Exception:
             pass
     
@@ -245,7 +248,7 @@ def main():
             print("Please delete the 'venv' folder and try again.")
             sys.exit(1)
 
-        print(f"Re-launching in virtual environment...")
+        print("Re-launching in virtual environment...")
         try:
             sys.exit(subprocess.call([str(venv_python), __file__] + sys.argv[1:]))
         except KeyboardInterrupt:
@@ -267,7 +270,7 @@ def main():
     if str(src_dir) not in sys.path:
         sys.path.insert(0, str(src_dir))
 
-    print(f"""
+    print("""
 ╔══════════════════════════════════════════════════════════╗
 ║                                                          ║
 ║   🚀 MerCury Email Platform                              ║
