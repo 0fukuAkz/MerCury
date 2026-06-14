@@ -92,12 +92,13 @@ class DeadLetterWorker:
 
     def _is_retryable(self, error_type: str) -> bool:
         """Determine if an error type should be automatically retried."""
-        # Typically permanent errors shouldn't be auto-retried.
+        # Error types are produced by categorize_smtp_error() in async_sender.py.
+        # "permanent", "mailbox_error", "invalid_recipient" are not retried.
         retryable_types = {
-            "connection_error",
-            "timeout_error",
-            "rate_limit_error",
-            "transient_error",
-            "authentication_error",  # auth errors might be fixed by operators without changing message
+            "connection_error",   # SMTPServerDisconnected / ConnectionError / TimeoutError
+            "rate_limit",         # 4xx rate-limit codes or keyword heuristic
+            "transient",          # generic 4xx or keyword heuristic (try again, busy…)
+            "unknown",            # default bucket — transient by assumption
+            "authentication_error",  # auth errors may be fixed by operators reconfiguring SMTP
         }
         return error_type in retryable_types

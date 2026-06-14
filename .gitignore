@@ -74,6 +74,8 @@ data/.encryption.key
 logs/*.log
 logs/*.txt
 logs/*.json
+# LockManager creates .lock files in the log dir during normal operation
+logs/*.lock
 
 # Operator-supplied runtime data (recipient lists, generated attachments,
 # rendered preview HTML). These belong to the deployment, not the repo.
@@ -89,3 +91,8 @@ data/recipients/*
 # templates package_data and MUST stay tracked.
 templates/attachment.html
 templates/redirect.html
+
+# Adhoc debugging / exploration scripts (not part of the project)
+fix_*.py
+patch_*.py
+setup_worker.py
