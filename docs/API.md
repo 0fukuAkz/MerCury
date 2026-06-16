@@ -99,11 +99,10 @@ List all email campaigns.
       "id": 1,
       "name": "Welcome Campaign",
       "status": "completed",
-      "type": "marketing",
       "total_recipients": 1000,
       "sent_count": 995,
       "failed_count": 5,
-      "success_rate": 99.5,
+      "send_rate": 99.5,
       "created_at": "2024-01-15T10:00:00Z",
       "completed_at": "2024-01-15T10:30:00Z"
     }
@@ -164,6 +163,42 @@ Create a new email campaign.
 }
 ```
 
+#### GET /api/campaigns/{id}
+Get a single campaign by ID.
+
+#### PUT /api/campaigns/{id}
+Update a campaign. Accepts the same fields as `POST /api/campaigns`.
+
+#### DELETE /api/campaigns/{id}
+Delete a campaign.
+
+#### POST /api/campaigns/bulk-delete
+Delete multiple campaigns by ID.
+
+**Request Body:**
+
+```json
+{ "ids": [1, 2, 3] }
+```
+
+#### POST /api/campaigns/{id}/clone
+Clone an existing campaign.
+
+#### POST /api/campaigns/{id}/start
+Start sending a campaign.
+
+#### GET /api/campaigns/{id}/stats/engagement
+Engagement metrics (opens, clicks, unsubscribes) for a campaign.
+
+#### GET /api/campaigns/{id}/stats/smtp
+Per-SMTP-server send stats for a campaign.
+
+#### GET /api/campaigns/{id}/stats/geo
+Geolocation breakdown of opens for a campaign.
+
+#### GET /api/campaigns/{id}/stats/timeline
+Time-series open/click activity for a campaign.
+
 ---
 
 ### SMTP Servers
@@ -183,10 +218,14 @@ List all configured SMTP servers.
       "name": "primary",
       "host": "smtp.gmail.com",
       "port": 587,
-      "use_tls": true,
-      "is_active": true,
+      "tls_mode": "starttls",
+      "is_enabled": true,
       "max_per_minute": 30,
-      "max_per_hour": 500
+      "max_per_hour": 500,
+      "has_password": true,
+      "current_minute_count": 0,
+      "avg_handshake_latency": null,
+      "avg_send_latency": null
     }
   ]
 }
@@ -208,7 +247,7 @@ Add a new SMTP server.
   "port": 587,
   "username": "apikey",
   "password": "SG.xxxxx",
-  "use_tls": true
+  "tls_mode": "starttls"
 }
 ```
 
@@ -219,7 +258,7 @@ Add a new SMTP server.
 | port | integer | | 587 | SMTP port |
 | username | string | | | SMTP username |
 | password | string | | | SMTP password |
-| use_tls | boolean | | true | Enable STARTTLS |
+| tls_mode | string | | `"starttls"` | TLS mode: `"none"`, `"starttls"`, or `"ssl"`. The legacy `use_tls`/`use_ssl` booleans are rejected with a 400 error. |
 
 **Response (201 Created):**
 
@@ -234,6 +273,12 @@ Add a new SMTP server.
   }
 }
 ```
+
+#### PUT /api/smtp/{name}
+Update an existing SMTP server. Accepts the same fields as `POST /api/smtp` (all optional).
+
+#### DELETE /api/smtp/{name}
+Remove an SMTP server.
 
 #### POST /api/smtp/test/{name}
 Test connection to a specific SMTP server.
@@ -266,6 +311,12 @@ Test connection to a specific SMTP server.
   "error": "Authentication failed"
 }
 ```
+
+#### GET /api/smtp/health
+Latest health-check status for all SMTP servers. Returns `name`, `host`, `port`, `status`, `is_enabled`, `last_checked_at`, `health_error`, `health_error_type` per server.
+
+#### POST /api/smtp/health/check
+Manually trigger health checks on all enabled SMTP servers. **Rate Limit:** 5/minute.
 
 ---
 
@@ -324,7 +375,7 @@ Preview a template with sample data.
 ### Logs
 
 #### GET /api/logs/success
-Get recent successful email sends.
+Get up to 100 recent successful email sends.
 
 **Rate Limit:** 30/minute
 
@@ -333,14 +384,19 @@ Get recent successful email sends.
 ```json
 {
   "emails": [
-    "2024-01-15T10:00:00Z|SUCCESS|user@example.com",
-    "2024-01-15T10:00:01Z|SUCCESS|another@example.com"
+    {
+      "email": "user@example.com",
+      "time": "2024-01-15T10:00:00",
+      "opens": 2,
+      "clicks": 1,
+      "status": "opened"
+    }
   ]
 }
 ```
 
 #### GET /api/logs/failed
-Get recent failed email sends.
+Get up to 100 recent failed email sends.
 
 **Rate Limit:** 30/minute
 
@@ -349,8 +405,12 @@ Get recent failed email sends.
 ```json
 {
   "failures": [
-    "2024-01-15T10:00:00Z|FAILURE|bad@example.com|Mailbox not found",
-    "2024-01-15T10:00:01Z|FAILURE|invalid@test.com|Connection timeout"
+    {
+      "email": "bad@example.com",
+      "error": "Mailbox not found",
+      "time": "2024-01-15T10:00:00",
+      "status": "failed"
+    }
   ]
 }
 ```
@@ -440,6 +500,99 @@ Register a new webhook.
   }
 }
 ```
+
+#### DELETE /api/webhooks/{webhook_id}
+Remove a webhook.
+
+---
+
+### Dead Letter Queue
+
+#### GET /api/dead-letter
+List unresolved dead-letter items (failed messages).
+
+**Rate Limit:** 30/minute
+
+#### POST /api/dead-letter/{id}/retry
+Retry a dead-letter item using the internal retry queue.
+
+#### POST /api/dead-letter/{id}/requeue
+Requeue a dead-letter item by re-sending it immediately.
+
+#### POST /api/dead-letter/requeue-all
+Requeue all eligible unresolved dead-letter items.
+
+#### DELETE /api/dead-letter/{id}
+Discard (mark resolved) a dead-letter item.
+
+#### POST /api/dead-letter/discard-all
+Discard all unresolved dead-letter items.
+
+#### GET /api/dead-letter/stats
+Aggregate stats for the dead-letter queue (counts by error type, resolution rate).
+
+---
+
+### Recipients
+
+#### GET /api/recipients
+List available recipient CSV files.
+
+#### POST /api/recipients/upload
+Upload a recipients CSV file. `multipart/form-data` with a `file` field.
+
+#### GET /api/recipients/{filename}/preview
+Preview the first rows and column names of a recipient file.
+
+#### DELETE /api/recipients/{filename}
+Delete a recipient file.
+
+---
+
+### Scheduling
+
+#### GET /api/scheduling/jobs
+List all scheduled campaign jobs.
+
+#### POST /api/scheduling/jobs
+Create a new scheduled job.
+
+**Request Body:**
+
+```json
+{
+  "campaign_id": 1,
+  "trigger": "cron",
+  "cron_expression": "0 9 * * 1"
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| campaign_id | integer | Campaign to schedule |
+| trigger | string | `"cron"`, `"interval"`, or `"date"` |
+| cron_expression | string | Standard cron expression (for `"cron"` trigger) |
+| interval_hours | number | Interval in hours (for `"interval"` trigger) |
+| run_date | string | ISO datetime (for `"date"` trigger) |
+
+#### DELETE /api/scheduling/jobs/{job_id}
+Remove a scheduled job.
+
+#### POST /api/scheduling/jobs/{job_id}/pause
+Pause a scheduled job.
+
+#### POST /api/scheduling/jobs/{job_id}/resume
+Resume a paused scheduled job.
+
+---
+
+### Bounces
+
+#### GET /api/bounces
+List recorded bounce notifications.
+
+#### GET /api/bounces/stats
+Aggregate bounce statistics by type.
 
 ---
 
@@ -588,9 +741,8 @@ The following placeholders are available in email templates and subjects:
 
 ## OpenAPI Specification
 
-The full OpenAPI 3.0 specification is available at:
-- `/api/docs` - Swagger UI (when enabled)
-- `/api/openapi.json` - Raw OpenAPI JSON
+A static OpenAPI 3.0 spec is available at [`docs/openapi.yaml`](openapi.yaml).
+There is no live Swagger UI or `/api/openapi.json` route served by the application.
 
 ---
 

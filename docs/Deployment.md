@@ -219,6 +219,9 @@ opts into tracking) is missing.
 | `FLASK_DEBUG` | `1` enables verbose debug logging via `run.py --debug` | `0` |
 | `SESSION_COOKIE_SAMESITE` | `Lax` / `Strict` / `None` | `Lax` |
 | `SESSION_COOKIE_SECURE` | Force the `Secure` cookie flag | `True` in production |
+| `SOCKETIO_ASYNC_MODE` | SocketIO backend: `threading` (dev/test) or `eventlet` (production gunicorn). Must agree with the gunicorn worker class. | `threading` |
+| `MERCURY_BOOT_MIGRATIONS` | Set to `1` to force Alembic boot-migrations on in any environment | unset |
+| `MERCURY_SKIP_BOOT_MIGRATIONS` | Set to `1` to force Alembic boot-migrations off in any environment | unset |
 
 ### Boot-time migration toggle
 

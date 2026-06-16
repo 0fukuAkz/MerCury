@@ -93,7 +93,6 @@ your client.
 | **[Deployment.md](docs/Deployment.md)** | Install, configure, run, deploy, troubleshoot — everything operational. |
 | [CHANGELOG.md](CHANGELOG.md) | Release notes, breaking changes, migration paths. |
 | [SECURITY.md](docs/SECURITY.md) | Private vulnerability reporting + production hardening checklist. |
-| [CLAUDE.md](CLAUDE.md) | Contributor / agent guide — architecture map, code conventions, repo conventions. |
 | [docs/API.md](docs/API.md) + [docs/openapi.yaml](docs/openapi.yaml) | REST API reference + OpenAPI spec. |
 
 ---
