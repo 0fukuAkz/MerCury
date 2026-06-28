@@ -81,7 +81,7 @@ class EmailService:
             self._placeholder_processor = self._template_engine.placeholder_processor
         else:
             # Standalone processor when no template engine is configured
-            static_ph = {}
+            static_ph: dict[str, Any] = {}
             if config.placeholders_path:
                 try:
                     import json

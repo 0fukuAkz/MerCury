@@ -60,8 +60,8 @@ class GeoResolver:
         self._reader = None
         self._available: Optional[bool] = None
         self._lock = threading.Lock()
-        self._cache = {}
-        self._cache_keys = []
+        self._cache: dict[str, dict[str, str]] = {}
+        self._cache_keys: list[str] = []
 
     def _load(self) -> bool:
         """Open the .mmdb on first use. Returns True if usable."""

@@ -388,7 +388,7 @@ class LogRepository(BaseRepository[EmailLog]):
         sorted_keys = sorted(timeline.keys())
 
         labels = []
-        datasets = {
+        datasets: dict[str, list[int]] = {
             "sent": [],
             "delivered": [],
             "failed": [],

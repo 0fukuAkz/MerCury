@@ -434,7 +434,7 @@ class AsyncConnectionPool:
         # will happily GC a still-pending task — producing "Task was destroyed
         # but it is pending!" warnings and silently dropping the replenish.
         self._background_tasks: "set[asyncio.Task]" = set()
-        self._waiters = []
+        self._waiters: "list[tuple[int, int, asyncio.Future]]" = []
         self._waiter_counter = 0
 
     async def initialize(self):

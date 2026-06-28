@@ -191,7 +191,9 @@ class DeadLetterRepository(BaseRepository[DeadLetter]):
         stmt = select(DeadLetter.error_type, func.count(DeadLetter.id)).group_by(
             DeadLetter.error_type
         )
-        error_counts = dict(self.session.execute(stmt).all())
+        error_counts: dict[str, int] = {
+            etype: count for etype, count in self.session.execute(stmt).all()
+        }
 
         return {
             "total": total,

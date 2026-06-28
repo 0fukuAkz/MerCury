@@ -155,10 +155,10 @@ def api_preview_recipients(filename: str):
 
     limit = min(int(request.args.get("limit", 20)), 200)
     rows = []
-    fieldnames = []
+    fieldnames: list[str] = []
     with open(fpath, "r", encoding="utf-8", errors="replace") as f:
         reader = csv.DictReader(f)
-        fieldnames = reader.fieldnames or []
+        fieldnames = list(reader.fieldnames or [])
         for i, row in enumerate(reader):
             if i >= limit:
                 break

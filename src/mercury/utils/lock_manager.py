@@ -29,7 +29,7 @@ class LockManager:
     and finally falls back to threading.Lock.
     """
 
-    _mem_locks = {}
+    _mem_locks: dict[str, "threading.Lock"] = {}
     _mem_locks_lock = threading.Lock()
 
     def __init__(self, name: str, timeout: float = 300):
