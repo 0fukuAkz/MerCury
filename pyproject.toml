@@ -97,6 +97,7 @@ dev = [
     "black==24.1.1",
     "mypy==1.8.0",
     "types-pyyaml==6.0.12.12",
+    "types-aiofiles==25.1.0.20260518",
     "ipython==8.20.0",
     "pre-commit==3.6.0",
     "faker==22.5.1",
@@ -197,7 +198,11 @@ module = [
     "docx",
     "eventlet",
     "eventlet.*",
+    "faker",
+    "faker.*",
     "flask_login",
+    "flask_socketio",
+    "flask_socketio.*",
     "flask_wtf.*",
     "qrcode",
     "qrcode.*",
@@ -207,6 +212,7 @@ module = [
 ]
 ignore_missing_imports = true
 
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
-testpaths = ["tests"]
+# NOTE: pytest is configured in pytest.ini (the single source of truth —
+# it also carries the coverage gate and markers). pytest prefers pytest.ini
+# over pyproject.toml, so a [tool.pytest.ini_options] table here would be
+# silently ignored and only cause drift. Keep pytest config in pytest.ini.

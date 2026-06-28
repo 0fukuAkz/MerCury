@@ -6,7 +6,7 @@ from datetime import datetime, UTC
 from flask_socketio import SocketIO, emit
 from flask_login import current_user
 from ..app_context import get_app_context
-from ..data.database import session_scope, get_session_direct
+from ..data.database import session_scope
 from ..data.repositories import CampaignRepository
 from ..data.models import CampaignStatus
 from ..services.campaign_service import CampaignService, CampaignConfig

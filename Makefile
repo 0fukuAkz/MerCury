@@ -79,6 +79,13 @@ format:
 type-check:
 	mypy src/
 
+# Ratchet gate: fails only on NEW type errors over the recorded baseline
+# (.mypy_baseline). Lets CI block regressions while the legacy Column() ->
+# Mapped[] migration chips the existing debt down. Use `make type-check`
+# for the full raw error list.
+type-check-ci:
+	bash scripts/mypy_gate.sh
+
 security:
 	# Gating thresholds match the CI policy: medium+ severity, medium+ confidence.
 	# pip-audit replaces the deprecated `safety check` we used previously.
@@ -89,9 +96,10 @@ pre-commit:
 	pre-commit run --all-files
 
 # Mirror the CI pipeline locally so contributors can reproduce a CI failure
-# without pushing. Mypy and pip-audit currently have known issues — see
-# CHANGELOG.md "Known issues". `make ci` will report them but not block.
-ci: lint type-check security test
+# without pushing. type-check-ci ratchets on NEW mypy errors only (the
+# existing baseline in .mypy_baseline is grandfathered); pip-audit findings
+# are reported but do not block. See CHANGELOG.md "Known issues".
+ci: lint type-check-ci security test
 
 # Build / Release
 

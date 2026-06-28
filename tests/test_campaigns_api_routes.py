@@ -1,9 +1,7 @@
 """Tests for Campaigns API routes."""
 
-import pytest
-import json
 from unittest.mock import patch, MagicMock
-from mercury.data.models import Attachment, SMTPServer, Template
+from mercury.data.models import Attachment, Template
 from mercury.data.models.campaign import Campaign, CampaignStatus
 
 

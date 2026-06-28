@@ -12,7 +12,7 @@ from mercury.services.email.service import EmailService
 from mercury.services.email.config import EmailConfig
 from mercury.services.campaign_service import CampaignService, CampaignConfig, _detect_csv_encoding
 from mercury.services.smtp_service import SMTPService
-from mercury.data.models import SMTPServer, Template, Attachment
+from mercury.data.models import SMTPServer
 from mercury.data.models.campaign import Campaign, CampaignStatus
 from mercury.engine.async_sender import EmailResult
 

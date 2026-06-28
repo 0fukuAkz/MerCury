@@ -1,7 +1,5 @@
 """Tests for SMTP API routes."""
 
-import pytest
-import json
 from unittest.mock import patch, MagicMock
 from mercury.data.models import SMTPServer, EmailLog, EmailStatus
 from mercury.web.routes.api.smtp import _validate_smtp_payload

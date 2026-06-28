@@ -3,7 +3,6 @@
 import os
 import io
 import pytest
-from pathlib import Path
 from unittest.mock import patch, MagicMock
 from flask import json
 from sqlalchemy.orm import sessionmaker

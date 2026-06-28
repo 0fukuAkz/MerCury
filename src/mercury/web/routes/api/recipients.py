@@ -7,6 +7,7 @@ path traversal.
 
 import csv
 import io
+import logging
 import os
 import re
 from datetime import datetime, UTC
@@ -18,6 +19,8 @@ from . import (
     api_key_or_login_required,
     limiter,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _recipients_dir() -> str:
@@ -169,19 +172,18 @@ def api_preview_recipients(filename: str):
 @limiter.limit("10/minute")
 def api_delete_recipient_file(filename: str):
     """Delete a recipient list file."""
-    print(f"API DELETE RECIPIENT FILE REQUESTED: {filename}")
+    logger.info("Recipient file delete requested: %s", filename)
     filename = _safe_filename(filename)
     fpath = os.path.join(_recipients_dir(), filename)
-    print(f"Checking if file exists: {fpath}")
     if not os.path.isfile(fpath):
-        print(f"File not found: {fpath}")
+        logger.warning("Recipient file not found for delete: %s", fpath)
         return jsonify({"error": "File not found"}), 404
 
     try:
         os.remove(fpath)
-        print(f"Successfully deleted {fpath}")
+        logger.info("Deleted recipient file: %s", fpath)
     except Exception as e:
-        print(f"Error deleting {fpath}: {e}")
+        logger.exception("Error deleting recipient file %s", fpath)
         return jsonify({"error": str(e)}), 500
-        
+
     return jsonify({"success": True, "filename": filename})

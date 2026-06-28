@@ -37,10 +37,15 @@ jobs:
       run: |
         ruff check src/ tests/
     
-    - name: Type check with mypy
+    # Ratchet gate: blocks only on NEW type errors over .mypy_baseline, so
+    # the existing (grandfathered) debt doesn't fail CI but new regressions
+    # do. Drops --ignore-missing-imports: the pyproject [tool.mypy] overrides
+    # + installed type stubs now handle missing imports, so this count
+    # matches `make type-check-ci` locally. Regenerate the baseline when the
+    # pinned mypy version changes.
+    - name: Type check with mypy (baseline ratchet)
       run: |
-        mypy src/ --ignore-missing-imports
-      continue-on-error: true
+        bash scripts/mypy_gate.sh
     
     - name: Test with pytest
       run: |

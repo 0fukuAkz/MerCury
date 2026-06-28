@@ -336,7 +336,6 @@ def test_run_campaign_thread_no_recipients(socket_app, socketio_instance):
 
 def test_run_campaign_thread_success_and_callbacks(socket_app, socketio_instance, tmp_path):
     from mercury.web.events import _run_campaign_thread
-    from mercury.data.models import CampaignStatus
     import csv
     
     csv_file = tmp_path / "recipients.csv"
