@@ -1,5 +1,6 @@
 """Database configuration and session management."""
 
+import logging
 import os
 import threading
 from contextlib import contextmanager
@@ -10,7 +11,10 @@ from sqlalchemy.orm import sessionmaker, Session, declarative_base
 
 Base = declarative_base()
 
+logger = logging.getLogger(__name__)
+
 _engine = None
+_engine_url = None
 _SessionLocal = None
 _engine_lock = threading.Lock()
 _session_lock = threading.Lock()
@@ -25,8 +29,16 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
 
 
 def get_engine(db_url: str = None):
-    """Get or create database engine."""
-    global _engine
+    """Get or create database engine.
+
+    Only the first call in a process actually creates the engine; later
+    calls return the cached one. If a later call passes a different
+    ``db_url`` than what's already cached, that argument is silently
+    ignored — log a warning so the mismatch is at least visible instead of
+    failing in surprising ways (e.g. CLI and web app racing to init_db()
+    with different DATABASE_URLs in the same process).
+    """
+    global _engine, _engine_url
 
     if _engine is None:
         with _engine_lock:
@@ -44,6 +56,16 @@ def get_engine(db_url: str = None):
                     connect_args={"check_same_thread": False} if "sqlite" in db_path else {},
                     echo=os.environ.get("SQL_DEBUG", "").lower() == "true",
                 )
+                _engine_url = db_path
+    elif db_url is not None and db_url != _engine_url:
+        logger.warning(
+            "get_engine() called with db_url=%r but the engine is already "
+            "initialized with %r; the requested URL is ignored. Call "
+            "init_db() once, before any other db access, with the URL you "
+            "intend to use for the lifetime of the process.",
+            db_url,
+            _engine_url,
+        )
 
     return _engine
 

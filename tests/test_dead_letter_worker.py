@@ -60,12 +60,17 @@ class TestDeadLetterWorker:
             mock_retry2.assert_called_once()
 
     async def test_is_retryable(self):
-        """Test _is_retryable classification."""
+        """Test _is_retryable classification.
+
+        Error type strings here must match what categorize_smtp_error()
+        in async_sender.py actually produces — see dead_letter_worker.py's
+        _is_retryable() for the mapping.
+        """
         worker = DeadLetterWorker()
         assert worker._is_retryable("connection_error") is True
-        assert worker._is_retryable("timeout_error") is True
-        assert worker._is_retryable("rate_limit_error") is True
-        assert worker._is_retryable("transient_error") is True
+        assert worker._is_retryable("rate_limit") is True
+        assert worker._is_retryable("transient") is True
+        assert worker._is_retryable("unknown") is True
         assert worker._is_retryable("authentication_error") is True
         assert worker._is_retryable("permanent_error") is False
         assert worker._is_retryable("invalid_recipient") is False
@@ -108,7 +113,7 @@ class TestDeadLetterWorker:
         item_retryable = MagicMock()
         item_retryable.id = 3
         item_retryable.retry_count = 1
-        item_retryable.error_type = "timeout_error"
+        item_retryable.error_type = "transient"
 
         mock_repo = MagicMock()
         mock_repo.get_unresolved.return_value = [item_exceeds, item_permanent, item_retryable]

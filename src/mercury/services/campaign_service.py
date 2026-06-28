@@ -10,13 +10,11 @@ from datetime import datetime, UTC
 from dataclasses import dataclass
 
 from ..data.database import get_session_direct, init_db
-from ..data.repositories import (
-    CampaignRepository,
-    LogRepository,
-)
+from ..data.repositories import CampaignRepository
 from ..data.models import Campaign, CampaignStatus, EmailLog, EmailStatus
 from ..utils.async_io import AsyncFileLogger
 from ..utils.validation import is_valid_email
+from .campaign_runner import CampaignLogWriter, preflight_check
 from .email import EmailService, EmailConfig
 from .smtp_service import SMTPService
 
@@ -607,95 +605,18 @@ class CampaignService:
         self._shutdown_event.clear()
 
         # Pre-flight SMTP health check to avoid spinning wheels
-        preflight_results = await self.smtp_service.test_all_connections()
-        if preflight_results and all(not r.get("success", False) for r in preflight_results):
+        try:
+            await preflight_check(self.smtp_service, self._current_campaign)
+        except RuntimeError:
             self._running = False
             self.pause()
-
-            failed_hosts = ", ".join(
-                [
-                    f"{r.get('server', 'unknown')} ({r.get('error', 'unknown error')})"
-                    for r in preflight_results
-                ]
-            )
-            error_msg = (
-                f"Pre-flight block: All attached SMTP servers failed health check: {failed_hosts}"
-            )
-            logger.error(error_msg)
-
-            from mercury.data.database import session_scope
-
-            if self._current_campaign:
-                try:
-                    from mercury.data.repositories.campaign import CampaignRepository
-
-                    with session_scope() as session:
-                        repo = CampaignRepository(session)
-                        db_cam = repo.get(self._current_campaign.id)
-                        if db_cam:
-                            db_cam.status = "failed"
-                            session.commit()
-                except Exception as e:
-                    logger.error(f"Failed to update campaign state after pre-flight: {e}")
-
-            raise RuntimeError(error_msg)
+            raise
 
         os.makedirs(log_path, exist_ok=True)
 
-        # Async DB Log writer queue
-        db_log_queue = asyncio.Queue()
-        writer_task_done = asyncio.Event()
-
-        async def _db_log_writer():
-            try:
-                from mercury.data.database import session_scope
-
-                logs_batch = []
-                while True:
-                    try:
-                        # Wait up to 1 second for logs
-                        log = await asyncio.wait_for(db_log_queue.get(), timeout=1.0)
-                        if log is None:  # Sentinel
-                            db_log_queue.task_done()
-                            break
-                        logs_batch.append(log)
-                        db_log_queue.task_done()
-                    except asyncio.TimeoutError:
-                        pass
-
-                    # Flush if we have reached a good batch size or timed out and have some logs
-                    if len(logs_batch) >= 100 or (logs_batch and db_log_queue.empty()):
-                        batch_to_write = list(logs_batch)
-                        logs_batch.clear()
-
-                        def flush_to_db(logs_to_insert):
-                            with session_scope() as local_session:
-                                try:
-                                    LogRepository(local_session).bulk_create(logs_to_insert)
-                                except Exception as e:
-                                    logger.warning(f"Failed to bulk save email logs: {e}")
-
-                        # Run sync DB operation in a separate thread so we don't block the async loop
-                        await asyncio.to_thread(flush_to_db, batch_to_write)
-
-                # Final flush
-                if logs_batch:
-
-                    def flush_to_db_final(logs_to_insert):
-                        with session_scope() as local_session:
-                            try:
-                                LogRepository(local_session).bulk_create(logs_to_insert)
-                            except Exception as e:
-                                logger.warning(f"Failed to bulk save email logs (final): {e}")
-
-                    await asyncio.to_thread(flush_to_db_final, logs_batch)
-
-            except Exception as e:
-                logger.error(f"Async DB Log writer task crashed: {e}")
-            finally:
-                writer_task_done.set()
-
-        asyncio.create_task(_db_log_writer())
+        # Async DB Log writer — batches EmailLog rows off the asyncio loop
+        log_writer = CampaignLogWriter()
+        log_writer.start()
 
         # If recipients is a list, we know the total.
         # If it's an iterator, we might not know unless we counted first.
@@ -823,7 +744,7 @@ class CampaignService:
                     # Batch insert to DB via repository
                     if db_logs:
                         for db_l in db_logs:
-                            db_log_queue.put_nowait(db_l)
+                            log_writer.enqueue(db_l)
 
                     # Batch update SMTPServer metrics
                     if result.results:
@@ -894,11 +815,7 @@ class CampaignService:
                 return total_stats
 
             finally:
-                try:
-                    db_log_queue.put_nowait(None)
-                    await writer_task_done.wait()
-                except Exception:
-                    pass
+                await log_writer.finish()
                 session.close()
                 self._running = False
 

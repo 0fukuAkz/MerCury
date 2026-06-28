@@ -4,8 +4,22 @@ import os
 import logging
 import time
 import threading
+import uuid
 
 logger = logging.getLogger(__name__)
+
+# Lua: delete the key only if its value still matches our token. Returns 1
+# if we deleted our own lock, 0 if it had already expired or been taken
+# over by another holder. Running this server-side makes the
+# compare-and-delete atomic, closing the TOCTOU window a separate
+# GET-then-DELETE would leave open.
+_RELEASE_SCRIPT = """
+if redis.call('get', KEYS[1]) == ARGV[1] then
+    return redis.call('del', KEYS[1])
+else
+    return 0
+end
+"""
 
 
 class LockManager:
@@ -34,14 +48,21 @@ class LockManager:
             except ImportError:
                 logger.debug("redis library not installed; falling back to file locking")
             except Exception as e:
-                logger.debug("Failed to connect to Redis for lock %s: %s; falling back to file locking", name, e)
+                logger.debug(
+                    "Failed to connect to Redis for lock %s: %s; falling back to file locking",
+                    name,
+                    e,
+                )
 
     def acquire(self, blocking: bool = True) -> bool:
         """Acquire the lock."""
         if self._redis_client:
             try:
                 lock_key = f"lock:{self.name}"
-                identifier = str(time.time())
+                # Unique fencing token per acquisition. Must NOT be derived
+                # from the clock: two acquirers in the same tick would get
+                # identical tokens and could then delete each other's lock.
+                identifier = uuid.uuid4().hex
 
                 start_time = time.time()
                 while True:
@@ -52,7 +73,11 @@ class LockManager:
                         return False
                     time.sleep(0.1)
             except Exception as e:
-                logger.warning("Redis lock acquisition failed for %s: %s; falling back to file locking", self.name, e)
+                logger.warning(
+                    "Redis lock acquisition failed for %s: %s; falling back to file locking",
+                    self.name,
+                    e,
+                )
                 self._redis_client = None
 
         # Fallback 1: File locking (Unix-only fcntl)
@@ -72,7 +97,9 @@ class LockManager:
             fcntl.flock(self._file_handle.fileno(), flags)
             return True
         except (ImportError, OSError, IOError) as e:
-            logger.debug("File locking not supported or failed: %s; falling back to threading.Lock", e)
+            logger.debug(
+                "File locking not supported or failed: %s; falling back to threading.Lock", e
+            )
 
         # Fallback 2: Threading Lock
         return self._acquire_memory_lock(blocking)
@@ -96,9 +123,11 @@ class LockManager:
         if self._redis_client and self._lock:
             try:
                 lock_key = f"lock:{self.name}"
-                val = self._redis_client.get(lock_key)
-                if val and val.decode("utf-8") == self._lock:
-                    self._redis_client.delete(lock_key)
+                # Atomic compare-and-delete: only drop the key if we still
+                # own it. A plain GET-then-DELETE would race with TTL
+                # expiry — the lock could be re-acquired by another holder
+                # between the two calls, and we'd delete *their* lock.
+                self._redis_client.eval(_RELEASE_SCRIPT, 1, lock_key, self._lock)
             except Exception as e:
                 logger.warning("Failed to release Redis lock %s: %s", self.name, e)
             finally:

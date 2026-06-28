@@ -16,12 +16,16 @@ def test_lock_manager_redis_success():
         lock = LockManager("test_redis_success", timeout=5)
         assert lock.acquire(blocking=False) is True
         assert lock._lock is not None
-        
-        # Release
-        # Set mock_redis.get return to decode properly to identity
-        lock._lock = "123"
+
+        # Release runs an atomic compare-and-delete via eval(), keyed on the
+        # token we currently hold — no separate get()/delete() round-trip.
+        held = lock._lock
         lock.release()
-        mock_redis.delete.assert_called_with("lock:test_redis_success")
+        eval_args = mock_redis.eval.call_args.args
+        assert eval_args[1] == 1
+        assert eval_args[2] == "lock:test_redis_success"
+        assert eval_args[3] == held
+        mock_redis.delete.assert_not_called()
 
 def test_lock_manager_redis_failure_and_file_fallback():
     mock_redis = MagicMock()

@@ -92,7 +92,7 @@ class TestCampaignServiceErrors:
         with patch(
             "mercury.services.campaign_service.get_session_direct"
         ) as mock_session_cls, patch(
-            "mercury.services.campaign_service.LogRepository"
+            "mercury.services.campaign_runner.LogRepository"
         ) as MockLogRepo, patch("mercury.services.campaign_service.AsyncFileLogger") as MockLogger:
             mock_session = mock_session_cls.return_value
             # Simulate persistence failure inside bulk_create — the new code path.
