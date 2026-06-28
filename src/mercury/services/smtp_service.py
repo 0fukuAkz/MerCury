@@ -39,20 +39,24 @@ class SMTPService:
 
             self._configs = [
                 SMTPServerConfig(
-                    name=server.name,
-                    host=server.host,
-                    port=server.port,
-                    username=server.username,
-                    password=server.password,
+                    name=server.name or "",
+                    host=server.host or "",
+                    port=server.port if server.port is not None else 587,
+                    username=server.username or "",
+                    password=server.password or "",
                     tls_mode=server.tls_mode or "starttls",
-                    use_auth=server.use_auth,
-                    timeout=server.timeout,
+                    use_auth=server.use_auth if server.use_auth is not None else True,
+                    timeout=server.timeout if server.timeout is not None else 30,
                     from_email=server.from_email or "",
                     from_name=server.from_name or "",
-                    weight=server.weight,
-                    priority=server.priority,
-                    max_per_minute=server.max_per_minute,
-                    max_per_hour=server.max_per_hour,
+                    # `is not None` (not `or`) so a deliberate 0 / 0.0 — e.g. weight=0
+                    # to drain a server — is preserved rather than reset to default.
+                    weight=server.weight if server.weight is not None else 1.0,
+                    priority=server.priority if server.priority is not None else 0,
+                    max_per_minute=(
+                        server.max_per_minute if server.max_per_minute is not None else 30
+                    ),
+                    max_per_hour=(server.max_per_hour if server.max_per_hour is not None else 500),
                 )
                 for server in servers
             ]
@@ -483,7 +487,7 @@ class SMTPService:
                         new_cfg_dict = server.get_connection_config()
                         new_cfg = SMTPServerConfig.from_dict(new_cfg_dict)
                         for pool in iter_active_pools():
-                            await pool.invalidate_server(server.name, new_cfg)
+                            await pool.invalidate_server(server.name or "", new_cfg)
 
             session.commit()
 
@@ -561,7 +565,7 @@ class SMTPService:
                     new_cfg_dict = server.get_connection_config()
                     new_cfg = SMTPServerConfig.from_dict(new_cfg_dict)
                     for pool in iter_active_pools():
-                        await pool.invalidate_server(server.name, new_cfg)
+                        await pool.invalidate_server(server.name or "", new_cfg)
 
             session.commit()
 
