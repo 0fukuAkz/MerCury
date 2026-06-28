@@ -135,15 +135,16 @@ class SMTPServer(Base, BaseModel):
     @property
     def success_rate(self) -> float:
         """Calculate success rate percentage."""
-        total = self.total_sent + self.total_failed
+        sent = self.total_sent or 0
+        total = sent + (self.total_failed or 0)
         if total == 0:
             return 100.0
-        return round((self.total_sent / total) * 100, 2)
+        return round((sent / total) * 100, 2)
 
     @property
     def is_available(self) -> bool:
         """Check if server is available for sending."""
-        return (
+        return bool(
             self.is_enabled
             and self.status == SMTPServerStatus.ACTIVE.value
             and not self.circuit_open

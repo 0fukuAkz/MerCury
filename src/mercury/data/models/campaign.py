@@ -120,16 +120,18 @@ class Campaign(Base, BaseModel):
     @property
     def success_rate(self) -> float:
         """Calculate success rate percentage."""
-        if self.sent_count == 0:
+        sent = self.sent_count or 0
+        if sent == 0:
             return 0.0
-        return round((self.delivered_count / self.sent_count) * 100, 2)
+        return round(((self.delivered_count or 0) / sent) * 100, 2)
 
     @property
     def send_rate(self) -> float:
         """Sent / total_recipients as percentage."""
-        if not self.total_recipients:
+        total = self.total_recipients or 0
+        if total == 0:
             return 0.0
-        return round(self.sent_count / self.total_recipients * 100, 1)
+        return round((self.sent_count or 0) / total * 100, 1)
 
     def to_dict(self) -> dict:
         result = super().to_dict()

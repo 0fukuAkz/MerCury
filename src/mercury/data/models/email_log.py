@@ -95,9 +95,11 @@ class EmailLog(Base, BaseModel):
     @property
     def is_retriable(self) -> bool:
         """Check if email can be retried."""
+        retried = self.retry_count or 0
+        max_retries = self.max_retries or 0
         return (
             self.status in [EmailStatus.FAILED.value, EmailStatus.RETRYING.value]
-            and self.retry_count < self.max_retries
+            and retried < max_retries
         )
 
     def __repr__(self):
