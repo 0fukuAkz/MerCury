@@ -108,6 +108,132 @@ async def test_async_pool_get_release(server_config):
     assert pool.available.qsize() == 1
 
 
+# --- Liveness probe (is_alive) + checkout pre-ping ---
+#
+# Regression coverage for "SMTP server not responding to commands": a pooled
+# connection that an idle server / NAT / firewall closed server-side keeps
+# is_connected=True locally, so the old heuristics happily reused it and the
+# next MAIL FROM hit a half-open socket. The pre-ping NOOPs the server before
+# committing a real message.
+
+
+@pytest.mark.asyncio
+async def test_is_alive_true_when_noop_succeeds(server_config):
+    conn = AsyncSMTPConnection(server_config)
+    conn.is_connected = True
+    conn.client = AsyncMock()
+    conn.client.noop = AsyncMock(return_value=(250, b"OK"))
+
+    assert await conn.is_alive() is True
+    conn.client.noop.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_is_alive_false_and_marks_dead_when_noop_fails(server_config):
+    conn = AsyncSMTPConnection(server_config)
+    conn.is_connected = True
+    conn.client = AsyncMock()
+    conn.client.noop = AsyncMock(side_effect=ConnectionResetError("peer closed"))
+
+    assert await conn.is_alive() is False
+    # Marked dead so the pool's reuse check discards it.
+    assert conn.is_connected is False
+
+
+@pytest.mark.asyncio
+async def test_is_alive_false_without_probing_when_not_connected(server_config):
+    conn = AsyncSMTPConnection(server_config)
+    conn.is_connected = False
+    conn.client = AsyncMock()
+
+    assert await conn.is_alive() is False
+    conn.client.noop.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_is_alive_times_out_on_half_open_socket(server_config):
+    """A NOOP that hangs (lost FIN, read blocks) must not hang the pool."""
+    conn = AsyncSMTPConnection(server_config)
+    conn.is_connected = True
+    conn.client = AsyncMock()
+
+    async def _never_returns():
+        await asyncio.sleep(10)
+
+    conn.client.noop = AsyncMock(side_effect=_never_returns)
+
+    assert await conn.is_alive(timeout=0.05) is False
+    assert conn.is_connected is False
+
+
+def _pooled_conn(*, idle: float, alive: bool) -> AsyncMock:
+    conn = AsyncMock(spec=AsyncSMTPConnection)
+    conn.is_connected = True
+    conn.age_seconds = idle
+    conn.idle_seconds = idle
+    conn.is_alive = AsyncMock(return_value=alive)
+    conn.close = AsyncMock()
+    return conn
+
+
+@pytest.mark.asyncio
+async def test_get_connection_discards_dead_idle_connection(server_config):
+    """Stale conn (idle past threshold, NOOP fails) is discarded, not handed out.
+
+    This is the bug: idle_seconds=30 is *under* max_idle_time (60), so the old
+    code reused it. The pre-ping now catches it and the pool opens a fresh one.
+    """
+    pool = AsyncConnectionPool(server_config, pool_size=1, pre_ping_idle_threshold=5.0)
+    pool._initialized = True
+
+    stale = _pooled_conn(idle=30.0, alive=False)
+    pool.connections.append(stale)
+    await pool.available.put(stale)
+
+    fresh = _pooled_conn(idle=0.0, alive=True)
+    fresh.connect = AsyncMock()
+
+    with patch("mercury.engine.connection_pool.AsyncSMTPConnection", return_value=fresh):
+        conn = await pool.get_connection(timeout=5.0)
+
+    assert conn is fresh  # got the healthy replacement
+    stale.is_alive.assert_awaited_once()  # we DID pre-ping the idle conn
+    stale.close.assert_awaited_once()  # ...and discarded the dead one
+    assert stale not in pool.connections
+
+
+@pytest.mark.asyncio
+async def test_get_connection_skips_preping_for_hot_connection(server_config):
+    """A connection idle within the trust window is reused with no NOOP."""
+    pool = AsyncConnectionPool(server_config, pool_size=1, pre_ping_idle_threshold=5.0)
+    pool._initialized = True
+
+    hot = _pooled_conn(idle=0.5, alive=True)
+    pool.connections.append(hot)
+    await pool.available.put(hot)
+
+    conn = await pool.get_connection()
+
+    assert conn is hot
+    hot.is_alive.assert_not_awaited()  # fast path: no round-trip
+
+
+@pytest.mark.asyncio
+async def test_get_connection_reuses_idle_connection_that_passes_preping(server_config):
+    """Idle past the window but still alive → pinged once, then reused."""
+    pool = AsyncConnectionPool(server_config, pool_size=1, pre_ping_idle_threshold=5.0)
+    pool._initialized = True
+
+    warm = _pooled_conn(idle=20.0, alive=True)
+    pool.connections.append(warm)
+    await pool.available.put(warm)
+
+    conn = await pool.get_connection()
+
+    assert conn is warm
+    warm.is_alive.assert_awaited_once()
+
+
 # --- SMTPConnectionPool (Load Balancer) Tests ---
 
 

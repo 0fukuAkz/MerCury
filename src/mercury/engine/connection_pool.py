@@ -372,6 +372,27 @@ class AsyncSMTPConnection:
                 pass
         self.is_connected = False
 
+    async def is_alive(self, timeout: float = 5.0) -> bool:
+        """Liveness probe: NOOP the server to confirm it still responds.
+
+        ``is_connected`` is only a *local* flag — it stays True after a
+        server (or an intervening NAT / firewall / load balancer) silently
+        drops an idle TCP connection. Reusing such a half-open connection
+        means the next real command (MAIL FROM) lands in a dead socket and
+        the server "doesn't respond". A cheap NOOP catches that *before* we
+        commit a message; on any failure we mark the connection dead so the
+        pool discards it. The ``wait_for`` guard bounds the half-open case
+        where the FIN was lost and the response read would otherwise block.
+        """
+        if not self.is_connected or not self.client:
+            return False
+        try:
+            await asyncio.wait_for(self.client.noop(), timeout=timeout)
+            return True
+        except Exception:
+            self.is_connected = False
+            return False
+
     @property
     def age_seconds(self) -> float:
         """Get connection age in seconds."""
@@ -392,11 +413,17 @@ class AsyncConnectionPool:
         pool_size: int = 5,
         max_connection_age: float = 300.0,
         max_idle_time: float = 60.0,
+        pre_ping_idle_threshold: float = 5.0,
     ):
         self.config = config
         self.pool_size = pool_size
         self.max_connection_age = max_connection_age
         self.max_idle_time = max_idle_time
+        # A connection idle longer than this gets a NOOP liveness probe on
+        # checkout (see _is_reusable). Kept small so any realistically-stale
+        # connection is caught, while back-to-back reuse in a tight send
+        # loop (idle well under the window) skips the round-trip.
+        self.pre_ping_idle_threshold = pre_ping_idle_threshold
 
         self.connections: List[AsyncSMTPConnection] = []
         self.available: asyncio.Queue = asyncio.Queue()
@@ -461,7 +488,7 @@ class AsyncConnectionPool:
                 conn = AsyncSMTPConnection(self.config)
                 await conn.connect()
                 self.connections.append(conn)
-                
+
                 # Clean up done/cancelled waiters
                 self._waiters = [w for w in self._waiters if not w[2].done()]
                 if self._waiters:
@@ -474,6 +501,38 @@ class AsyncConnectionPool:
             except Exception as e:
                 logger.warning(f"Failed to replenish connection: {e}")
                 # Don't raise, we'll try again later naturally
+
+    async def _discard(self, conn: AsyncSMTPConnection) -> None:
+        """Close a connection and drop it from the pool's tracking list."""
+        await conn.close()
+        async with self.lock:
+            if conn in self.connections:
+                self.connections.remove(conn)
+
+    async def _is_reusable(self, conn: AsyncSMTPConnection) -> bool:
+        """Decide whether a pooled connection is safe to hand out.
+
+        Returns True if the caller may use ``conn``. Returns False (and has
+        already discarded it) if it is too old, too long idle, or fails a
+        liveness probe — the caller should then continue the acquire loop to
+        get or open another. The NOOP pre-ping (only for connections idle
+        past ``pre_ping_idle_threshold``) is what prevents a server-side or
+        middlebox-closed half-open connection from being used for a real
+        send and surfacing as "SMTP server not responding to commands".
+        """
+        if (
+            not conn.is_connected
+            or conn.age_seconds > self.max_connection_age
+            or conn.idle_seconds > self.max_idle_time
+        ):
+            await self._discard(conn)
+            return False
+
+        if conn.idle_seconds > self.pre_ping_idle_threshold and not await conn.is_alive():
+            await self._discard(conn)
+            return False
+
+        return True
 
     async def get_connection(self, timeout: float = 10.0, priority: int = 2) -> AsyncSMTPConnection:
         """Get a connection from the pool, with priority queuing.
@@ -511,19 +570,11 @@ class AsyncConnectionPool:
                     conn = self.available.get_nowait()
 
             if conn is not None:
-                # Stale connection — discard and try again. Continuing the
-                # loop (rather than recursing) preserves the original
+                # Validate (and liveness-probe) before handing out. Continuing
+                # the loop rather than recursing preserves the original
                 # deadline, so a flurry of stale conns can't shrink the
                 # effective timeout.
-                if (
-                    not conn.is_connected
-                    or conn.age_seconds > self.max_connection_age
-                    or conn.idle_seconds > self.max_idle_time
-                ):
-                    await conn.close()
-                    async with self.lock:
-                        if conn in self.connections:
-                            self.connections.remove(conn)
+                if not await self._is_reusable(conn):
                     continue
                 return conn
 
@@ -552,18 +603,10 @@ class AsyncConnectionPool:
                 self._waiters.append(waiter_item)
 
             try:
-                conn = await asyncio.wait_for(future, timeout=remaining)
-                if (
-                    not conn.is_connected
-                    or conn.age_seconds > self.max_connection_age
-                    or conn.idle_seconds > self.max_idle_time
-                ):
-                    await conn.close()
-                    async with self.lock:
-                        if conn in self.connections:
-                            self.connections.remove(conn)
+                acquired = await asyncio.wait_for(future, timeout=remaining)
+                if not await self._is_reusable(acquired):
                     continue
-                return conn
+                return acquired
             except asyncio.TimeoutError:
                 future.cancel()
                 async with self.lock:
