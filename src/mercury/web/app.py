@@ -232,13 +232,22 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
         "CONTENT_SECURITY_POLICY",
         # default-src 'self' covers scripts/styles/images/fonts.
         # cdn.socket.io is whitelisted because base.html loads the socket.io
-        # client from that CDN. We use a dynamic nonce for scripts.
+        # client from that CDN.
+        #
+        # script-src uses 'unsafe-inline' (NOT a nonce) deliberately: every
+        # dashboard template wires its controls through inline event-handler
+        # attributes (onclick=, onsubmit=). Per the CSP spec a nonce silently
+        # disables 'unsafe-inline', and nonces cannot apply to handler
+        # attributes at all — so a nonce-based script-src blocks every button
+        # in the app. The failure is invisible (no server error; clicks just
+        # do nothing). To tighten this back to a nonce you must first migrate
+        # the templates off inline handlers to addEventListener/delegation.
         "default-src 'self'; "
-        "script-src 'self' 'nonce-{nonce}' https://cdn.socket.io; "
+        "script-src 'self' 'unsafe-inline' https://cdn.socket.io; "
         "style-src 'self' 'unsafe-inline'; "
         "img-src 'self' data: blob:; "
         "connect-src 'self' ws: wss:; "
-        "frame-ancestors 'none'"
+        "frame-ancestors 'none'",
     )
     _hsts_max_age = int(os.environ.get("HSTS_MAX_AGE", "31536000"))  # 1 year
 
@@ -265,7 +274,9 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
         # CSP — opt-out by setting CONTENT_SECURITY_POLICY=''.
         if _csp_template:
             nonce = getattr(g, "csp_nonce", "")
-            response.headers.setdefault("Content-Security-Policy", _csp_template.format(nonce=nonce))
+            response.headers.setdefault(
+                "Content-Security-Policy", _csp_template.format(nonce=nonce)
+            )
         # HSTS — only over HTTPS, only in production. Browsers ignore the
         # header on plain HTTP, but skipping it here keeps logs clean.
         if _is_production and _hsts_max_age > 0:
@@ -284,10 +295,7 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
             theme = s.ui_theme or "dark"
         except Exception:
             theme = "dark"
-        return {
-            "ui_theme": theme,
-            "csp_nonce": getattr(g, "csp_nonce", "")
-        }
+        return {"ui_theme": theme, "csp_nonce": getattr(g, "csp_nonce", "")}
 
     # Initialize Database
     with app.app_context():
