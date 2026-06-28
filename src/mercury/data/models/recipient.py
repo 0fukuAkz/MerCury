@@ -1,11 +1,15 @@
 """Recipient and recipient list models."""
 
 from enum import Enum
+from typing import TYPE_CHECKING, Optional
 from sqlalchemy import Column, String, Integer, ForeignKey, Text, Boolean, JSON
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, relationship
 
 from ..database import Base
 from .base import BaseModel
+
+if TYPE_CHECKING:
+    from .campaign import Campaign
 
 
 class RecipientStatus(str, Enum):
@@ -47,10 +51,10 @@ class RecipientList(Base, BaseModel):
     settings = Column(JSON, default=dict)
 
     # Relationships
-    recipients = relationship(
+    recipients: Mapped[list["Recipient"]] = relationship(
         "Recipient", back_populates="recipient_list", cascade="all, delete-orphan"
     )
-    campaigns = relationship("Campaign", back_populates="recipient_list")
+    campaigns: Mapped[list["Campaign"]] = relationship("Campaign", back_populates="recipient_list")
 
     def __repr__(self):
         return f"<RecipientList(id={self.id}, name='{self.name}', count={self.total_count})>"
@@ -84,7 +88,9 @@ class Recipient(Base, BaseModel):
 
     # Relationship
     recipient_list_id = Column(Integer, ForeignKey("recipientlists.id", ondelete="CASCADE"))
-    recipient_list = relationship("RecipientList", back_populates="recipients")
+    recipient_list: Mapped[Optional["RecipientList"]] = relationship(
+        "RecipientList", back_populates="recipients"
+    )
 
     @property
     def full_name(self) -> str:

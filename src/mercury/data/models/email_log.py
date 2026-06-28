@@ -1,11 +1,15 @@
 """Email log model for tracking sent emails."""
 
 from enum import Enum
+from typing import TYPE_CHECKING, Optional
 from sqlalchemy import Column, String, Integer, ForeignKey, DateTime, Text, JSON
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, relationship
 
 from ..database import Base
 from .base import BaseModel
+
+if TYPE_CHECKING:
+    from .campaign import Campaign
 
 
 class EmailStatus(str, Enum):
@@ -76,7 +80,7 @@ class EmailLog(Base, BaseModel):
     extra_data = Column("metadata", JSON, default=dict)
 
     # Relationships
-    campaign = relationship("Campaign", back_populates="email_logs")
+    campaign: Mapped[Optional["Campaign"]] = relationship("Campaign", back_populates="email_logs")
 
     @property
     def is_successful(self) -> bool:

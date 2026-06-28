@@ -2,11 +2,15 @@
 
 import logging
 from enum import Enum
+from typing import TYPE_CHECKING
 from sqlalchemy import Column, String, Integer, Boolean, Float, JSON
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, relationship
 
 from ..database import Base
 from .base import BaseModel
+
+if TYPE_CHECKING:
+    from .campaign import CampaignSMTPConfig
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +72,9 @@ class SMTPServer(Base, BaseModel):
     settings = Column(JSON, default=dict)
 
     # Relationships
-    campaign_configs = relationship("CampaignSMTPConfig", back_populates="smtp_server")
+    campaign_configs: Mapped[list["CampaignSMTPConfig"]] = relationship(
+        "CampaignSMTPConfig", back_populates="smtp_server"
+    )
 
     @property
     def password(self) -> str:

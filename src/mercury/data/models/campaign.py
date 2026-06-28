@@ -1,6 +1,7 @@
 """Campaign model with full feature support."""
 
 from enum import Enum
+from typing import TYPE_CHECKING, Optional
 from sqlalchemy import (
     Column,
     String,
@@ -13,10 +14,16 @@ from sqlalchemy import (
     Float,
     Boolean,
 )
-from sqlalchemy.orm import relationship, validates
+from sqlalchemy.orm import Mapped, relationship, validates
 
 from ..database import Base
 from .base import BaseModel
+
+if TYPE_CHECKING:
+    from .template import Template
+    from .recipient import RecipientList
+    from .email_log import EmailLog
+    from .smtp import SMTPServer
 
 
 class CampaignStatus(str, Enum):
@@ -54,10 +61,14 @@ class Campaign(Base, BaseModel):
     template_id = Column(Integer, ForeignKey("templates.id", ondelete="SET NULL"))
     recipient_list_id = Column(Integer, ForeignKey("recipientlists.id", ondelete="SET NULL"))
 
-    template = relationship("Template", back_populates="campaigns")
-    recipient_list = relationship("RecipientList", back_populates="campaigns")
-    email_logs = relationship("EmailLog", back_populates="campaign", cascade="all, delete-orphan")
-    smtp_configs = relationship(
+    template: Mapped[Optional["Template"]] = relationship("Template", back_populates="campaigns")
+    recipient_list: Mapped[Optional["RecipientList"]] = relationship(
+        "RecipientList", back_populates="campaigns"
+    )
+    email_logs: Mapped[list["EmailLog"]] = relationship(
+        "EmailLog", back_populates="campaign", cascade="all, delete-orphan"
+    )
+    smtp_configs: Mapped[list["CampaignSMTPConfig"]] = relationship(
         "CampaignSMTPConfig", back_populates="campaign", cascade="all, delete-orphan"
     )
 
@@ -223,7 +234,7 @@ class Campaign(Base, BaseModel):
     def from_name(self, value: str):
         self.from_names = [value] if value else []
 
-    @validates('settings')
+    @validates("settings")
     def validate_settings(self, key, value):
         if value is None:
             value = {}
@@ -253,5 +264,7 @@ class CampaignSMTPConfig(Base, BaseModel):
     priority = Column(Integer, default=0)
     enabled = Column(Boolean, default=True)
 
-    campaign = relationship("Campaign", back_populates="smtp_configs")
-    smtp_server = relationship("SMTPServer", back_populates="campaign_configs")
+    campaign: Mapped["Campaign"] = relationship("Campaign", back_populates="smtp_configs")
+    smtp_server: Mapped["SMTPServer"] = relationship(
+        "SMTPServer", back_populates="campaign_configs"
+    )
