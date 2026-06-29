@@ -1,10 +1,14 @@
 """Email template model."""
 
+from typing import TYPE_CHECKING
 from sqlalchemy import Column, String, Text, Boolean, JSON
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, relationship
 
 from ..database import Base
 from .base import BaseModel
+
+if TYPE_CHECKING:
+    from .campaign import Campaign
 
 
 class Template(Base, BaseModel):
@@ -40,7 +44,7 @@ class Template(Base, BaseModel):
     settings = Column(JSON, default=dict)
 
     # Relationships
-    campaigns = relationship("Campaign", back_populates="template")
+    campaigns: Mapped[list["Campaign"]] = relationship("Campaign", back_populates="template")
 
     def get_html(self) -> str:
         """Get HTML content from content or file."""

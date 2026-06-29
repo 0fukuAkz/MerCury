@@ -111,8 +111,8 @@ def upload():
 
     # secure_filename strips curly braces, but operators want placeholders in filenames.
     # The display_name is only used for MIME generation, not file storage paths.
-    raw_name = os.path.basename(file.filename.replace('\\', '/')).strip()
-    display_name = re.sub(r'[\x00-\x1f\x7f]+', '', raw_name) or "upload.bin"
+    raw_name = os.path.basename(file.filename.replace("\\", "/")).strip()
+    display_name = re.sub(r"[\x00-\x1f\x7f]+", "", raw_name) or "upload.bin"
     ext = _split_ext(display_name)
     if ext in _BLOCKED_EXTENSIONS:
         return jsonify({"error": f"Files of type .{ext} are not allowed"}), 400
@@ -127,7 +127,7 @@ def upload():
         return jsonify({"error": "File is empty"}), 400
 
     stored_name = f"{uuid.uuid4().hex}{('.' + ext) if ext else ''}"
-    disk_path = _attachments_dir() / stored_name
+    disk_path = _attachments_dir() / (stored_name or "")
     disk_path.write_bytes(data)
 
     description = (request.form.get("description") or "").strip() or None
@@ -170,7 +170,7 @@ def download(attachment_id: int):
         display = row.filename
         mimetype = row.content_type or "application/octet-stream"
 
-    disk_path = _attachments_dir() / stored_name
+    disk_path = _attachments_dir() / (stored_name or "")
     if not disk_path.is_file():
         abort(404)
 
@@ -194,7 +194,7 @@ def delete(attachment_id: int):
         stored_name = row.stored_name
         repo.delete(row)
 
-    disk_path = _attachments_dir() / stored_name
+    disk_path = _attachments_dir() / (stored_name or "")
     try:
         disk_path.unlink(missing_ok=True)
     except OSError:

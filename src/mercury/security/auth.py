@@ -290,7 +290,7 @@ def authenticate(username: str, password: str) -> Optional[User]:
             logger.warning(f"Authentication failed: User disabled: {username}")
             return None
 
-        if not verify_password(password, db_user.password_hash):
+        if not verify_password(password, db_user.password_hash or ""):
             logger.warning(f"Authentication failed: Invalid credentials for: {username}")
             return None
 
@@ -424,10 +424,10 @@ def _get_unsubscribe_secret() -> bytes:
         )
         # Generate a random secret - tokens won't survive restarts
         if not hasattr(_get_unsubscribe_secret, "_fallback_secret"):
-            _get_unsubscribe_secret._fallback_secret = secrets.token_hex(32)
-        secret = _get_unsubscribe_secret._fallback_secret
+            _get_unsubscribe_secret._fallback_secret = secrets.token_hex(32)  # type: ignore[attr-defined]
+        secret = _get_unsubscribe_secret._fallback_secret  # type: ignore[attr-defined]
 
-    return secret.encode("utf-8")
+    return (secret or "").encode("utf-8")
 
 
 def generate_unsubscribe_token(email: str, email_id: str, expires_days: int = 365) -> str:

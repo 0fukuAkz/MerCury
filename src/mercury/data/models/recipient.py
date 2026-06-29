@@ -96,7 +96,7 @@ class Recipient(Base, BaseModel):
     def full_name(self) -> str:
         """Get full name if available."""
         parts = [self.first_name, self.last_name]
-        return " ".join(p for p in parts if p) or self.local_part.capitalize()
+        return " ".join(p for p in parts if p) or (self.local_part or "").capitalize()
 
     def get_placeholders(self) -> dict:
         """Get all placeholder values for this recipient."""
@@ -105,7 +105,7 @@ class Recipient(Base, BaseModel):
             "local_part": self.local_part,
             "domain": self.domain,
             "domain_name": self.domain_name,
-            "first_name": self.first_name or self.local_part.capitalize(),
+            "first_name": self.first_name or (self.local_part or "").capitalize(),
             "last_name": self.last_name or "",
             "full_name": self.full_name,
             "company": self.company or "",

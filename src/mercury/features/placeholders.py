@@ -94,7 +94,9 @@ class PlaceholderProcessor:
         """Register a custom placeholder generator."""
         self._custom_generators[name] = generator
 
-    def get_builtin_placeholders(self, recipient_data: Dict[str, Any] = None) -> Dict[str, str]:
+    def get_builtin_placeholders(
+        self, recipient_data: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, str]:
         """
         Get all built-in placeholder values.
 

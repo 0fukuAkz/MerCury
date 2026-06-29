@@ -269,8 +269,8 @@ class WebhookService:
         headers = {
             "Content-Type": "application/json",
             "X-Webhook-Event": event.value,
-            "X-Webhook-Timestamp": payload["timestamp"],
-            **webhook.headers,
+            "X-Webhook-Timestamp": str(payload["timestamp"]),
+            **{k: str(v) for k, v in (webhook.headers or {}).items()},
         }
 
         # Add signature if secret is configured

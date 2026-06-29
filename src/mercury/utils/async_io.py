@@ -26,7 +26,7 @@ async def async_write_line(filepath: str, content: str, mode: str = "a") -> None
     if directory:
         os.makedirs(directory, exist_ok=True)
 
-    async with aiofiles.open(filepath, mode=mode, encoding="utf-8") as f:
+    async with aiofiles.open(filepath, mode=mode, encoding="utf-8") as f:  # type: ignore[call-overload]
         await f.write(content + "\n")
 
 

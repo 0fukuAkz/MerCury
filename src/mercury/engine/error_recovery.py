@@ -138,7 +138,7 @@ class ErrorRecoveryManager:
         # Check if we can switch SMTP servers
         if current_smtp and len(self.available_smtp_servers) > 1:
             # Get servers already tried
-            tried_servers = set(self._server_attempts.get(correlation_id, []))
+            tried_servers = set(self._server_attempts.get(correlation_id or "", []))
             tried_servers.add(current_smtp)
 
             # Find untried servers

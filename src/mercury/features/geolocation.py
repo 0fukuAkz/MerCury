@@ -24,7 +24,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
-from typing import Optional
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +57,7 @@ class GeoResolver:
         # Resolve at construction so subsequent env-var changes don't
         # surprise the campaign mid-send.
         self.db_path = db_path or os.environ.get(_GEOIP_DB_ENV, "")
-        self._reader = None
+        self._reader: Any = None
         self._available: Optional[bool] = None
         self._lock = threading.Lock()
         self._cache: dict[str, dict[str, str]] = {}
@@ -143,13 +143,15 @@ class GeoResolver:
                 return dict(self._cache[ip])
 
         try:
-            r = self._reader.city(ip)  # type: ignore[union-attr]
+            r = self._reader.city(ip)
             res = {
                 "country": (r.country.name or "") if r.country else "",
                 "country_code": (r.country.iso_code or "") if r.country else "",
                 "city": (r.city.name or "") if r.city else "",
                 "region": (r.subdivisions.most_specific.name or "") if r.subdivisions else "",
-                "region_code": (r.subdivisions.most_specific.iso_code or "") if r.subdivisions else "",
+                "region_code": (r.subdivisions.most_specific.iso_code or "")
+                if r.subdivisions
+                else "",
                 "timezone": (r.location.time_zone or "") if r.location else "",
                 "continent": (r.continent.name or "") if r.continent else "",
                 "postal": (r.postal.code or "") if r.postal else "",

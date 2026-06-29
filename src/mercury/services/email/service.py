@@ -250,7 +250,6 @@ class EmailService:
         placeholders = placeholders or {}
         placeholders["email"] = recipient
 
-
         # Resolve rotating header values (caller wins if explicit).
         subject = self._resolve_rotated("subjects", subject, self.config.subject)
 
@@ -265,12 +264,22 @@ class EmailService:
             and self._rotation_manager.is_registered("sender_identity")
         ):
             _identity = self._rotation_manager.get_next(
-                "sender_identity", (self.config.from_names[0] if self.config.from_names else "", self.config.from_emails[0] if self.config.from_emails else "")
+                "sender_identity",
+                (
+                    self.config.from_names[0] if self.config.from_names else "",
+                    self.config.from_emails[0] if self.config.from_emails else "",
+                ),
             )
             from_name, from_email = _identity
         else:
-            from_name = self._resolve_rotated("from_names", from_name, self.config.from_names[0] if self.config.from_names else "")
-            from_email = self._resolve_rotated("from_emails", from_email, self.config.from_emails[0] if self.config.from_emails else "")
+            from_name = self._resolve_rotated(
+                "from_names", from_name, self.config.from_names[0] if self.config.from_names else ""
+            )
+            from_email = self._resolve_rotated(
+                "from_emails",
+                from_email,
+                self.config.from_emails[0] if self.config.from_emails else "",
+            )
 
         ctx = SendContext(
             recipient=recipient,
@@ -313,7 +322,7 @@ class EmailService:
 
         # Track per-send diagnostics surfaced via last_send_diagnostics so
         # the API (e.g. test-email route) can include them in the response.
-        self.last_send_diagnostics: Dict[str, Any] = {
+        self.last_send_diagnostics = {
             "qr_code_referenced_in_body": qr_referenced,
             "qr_code_resolved": qr_data_url is not None,
             "enable_qr_code": self.config.enable_qr_code,
@@ -420,7 +429,9 @@ class EmailService:
         # still uses the connection's authenticated user, set by the
         # underlying aiosmtplib send path.
         resolved_from_email = (
-            "" if self.config.hide_from_email_header else (from_email or (self.config.from_emails[0] if self.config.from_emails else ""))
+            ""
+            if self.config.hide_from_email_header
+            else (from_email or (self.config.from_emails[0] if self.config.from_emails else ""))
         )
 
         # Mail priority headers (RFC 2156 / MS extensions).
@@ -476,14 +487,16 @@ class EmailService:
             bounce_type, category = self.bounce_service.categorize_bounce(None, result.error)
             if category.value != "unknown":
                 result.error_type = category.value
-            
+
             if bounce_type.value in {"hard", "soft"}:
                 setattr(result, "is_bounce", True)
                 self.bounce_service.process_bounce(
                     email=recipient,
                     error_message=result.error,
                     smtp_code=None,
-                    campaign_id=str(getattr(self.config, "campaign_id", "")) if getattr(self.config, "campaign_id", None) else None
+                    campaign_id=str(getattr(self.config, "campaign_id", ""))
+                    if getattr(self.config, "campaign_id", None)
+                    else None,
                 )
 
             if self._dead_letter_service and result.error_type not in _SERVER_ERROR_TYPES:
@@ -492,7 +505,8 @@ class EmailService:
                         recipient=recipient,
                         subject=subject or "",
                         html_body=html_body or "",
-                        from_email=from_email or (self.config.from_emails[0] if self.config.from_emails else ""),
+                        from_email=from_email
+                        or (self.config.from_emails[0] if self.config.from_emails else ""),
                         error_type=result.error_type or "send_failure",
                         error_message=result.error or "Unknown error",
                         from_name=from_name,
@@ -525,7 +539,9 @@ class EmailService:
             with session_scope() as session:
                 rows = CustomPlaceholderRepository(session).list_active()
                 for row in rows:
-                    self._placeholder_processor.static_placeholders[str(row.name)] = str(row.value or "")
+                    self._placeholder_processor.static_placeholders[str(row.name)] = str(
+                        row.value or ""
+                    )
         except Exception as e:
             logger.warning(
                 "Could not load custom placeholders (sends will skip them): %s",

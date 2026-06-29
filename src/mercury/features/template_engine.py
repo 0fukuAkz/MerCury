@@ -174,7 +174,7 @@ class TemplateEngine:
             extras["qr_code_url"] = qr_code_data_url
         elif self.config.enable_qr_code and (link or self.config.qr_link):
             qr_link = link or self.config.qr_link
-            qr_data_url = self.qr_generator.generate_data_url(qr_link)
+            qr_data_url = self.qr_generator.generate_data_url(qr_link or "")
             extras["qr_code"] = f'<img src="{qr_data_url}" alt="QR Code" />'
             extras["qr_code_url"] = qr_data_url
 

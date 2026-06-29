@@ -137,10 +137,10 @@ class LogRepository(BaseRepository[EmailLog]):
 
         # We use a single query to group by status and count
         stmt = select(
-            EmailLog.status, 
+            EmailLog.status,
             func.count(EmailLog.id),
             func.sum(EmailLog.open_count),
-            func.sum(EmailLog.click_count)
+            func.sum(EmailLog.click_count),
         ).group_by(EmailLog.status)
 
         results = self.session.execute(stmt).all()
@@ -331,8 +331,9 @@ class LogRepository(BaseRepository[EmailLog]):
             geo_counts[country] = geo_counts.get(country, 0) + 1
 
         # Convert to list and sort by count descending
+        geo_list: list[dict[str, Any]] = [{"country": k, "opens": v} for k, v in geo_counts.items()]
         sorted_geo = sorted(
-            [{"country": k, "opens": v} for k, v in geo_counts.items()],
+            geo_list,
             key=lambda x: x["opens"],
             reverse=True,
         )

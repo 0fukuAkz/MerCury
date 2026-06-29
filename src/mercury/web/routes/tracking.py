@@ -32,8 +32,8 @@ def _lookup_recipient(email_id: str) -> str:
             log = session.query(EmailLog).filter(EmailLog.correlation_id == email_id).first()
             if log:
                 # Cache it back in the registry for future fast lookups
-                _email_id_registry[email_id] = log.recipient_email
-                return log.recipient_email
+                _email_id_registry[email_id] = log.recipient_email or ""
+                return log.recipient_email or ""
     except Exception:
         pass
     return ""

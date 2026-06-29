@@ -4,7 +4,7 @@ import os
 import re
 import sys
 import logging
-from typing import Optional
+from typing import Any, Optional
 from datetime import datetime, UTC
 
 import structlog
@@ -66,7 +66,7 @@ def configure_logging(
             logging.getLogger(_noisy).setLevel(logging.WARNING)
 
     # Configure structlog processors (shared between structlog and standard library)
-    shared_processors = [
+    shared_processors: list[Any] = [
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
         structlog.stdlib.add_logger_name,
@@ -79,7 +79,7 @@ def configure_logging(
 
     # Determine the final rendering processor
     if json_output:
-        renderer = structlog.processors.JSONRenderer()
+        renderer: Any = structlog.processors.JSONRenderer()
     else:
         renderer = structlog.dev.ConsoleRenderer(colors=True)
 
@@ -119,7 +119,7 @@ def configure_logging(
         root_logger.addHandler(file_handler)
 
 
-def get_logger(name: str = None) -> structlog.stdlib.BoundLogger:
+def get_logger(name: Optional[str] = None) -> structlog.stdlib.BoundLogger:
     """
     Get a structured logger instance.
 

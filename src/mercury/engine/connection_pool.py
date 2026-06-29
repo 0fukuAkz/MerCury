@@ -785,7 +785,7 @@ class SMTPConnectionPool:
             return random.choice(available)
 
         r = random.uniform(0, total_weight)
-        cumulative = 0
+        cumulative = 0.0
         for config in available:
             cumulative += config.weight
             if r <= cumulative:

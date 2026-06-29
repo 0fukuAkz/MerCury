@@ -51,8 +51,9 @@ def get_db_path() -> str:
     Get the full path to the SQLite database.
     """
     # Allow override via env var for testing/docker
-    if os.environ.get("DATABASE_URL"):
-        return os.environ.get("DATABASE_URL")
+    db_url = os.environ.get("DATABASE_URL")
+    if db_url:
+        return db_url
 
     data_dir = get_data_dir()
     return f"sqlite:///{data_dir}/mercury.db"

@@ -4,7 +4,7 @@ import logging
 import os
 import threading
 from contextlib import contextmanager
-from typing import Generator, Iterator
+from typing import Generator, Iterator, Optional
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker, Session, declarative_base
@@ -28,7 +28,7 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
         cursor.close()
 
 
-def get_engine(db_url: str = None):
+def get_engine(db_url: Optional[str] = None):
     """Get or create database engine.
 
     Only the first call in a process actually creates the engine; later
@@ -86,7 +86,7 @@ def get_session() -> Generator[Session, None, None]:
         session.close()
 
 
-def init_db(db_url: str = None):
+def init_db(db_url: Optional[str] = None):
     """Initialize database tables."""
     engine = get_engine(db_url)
 

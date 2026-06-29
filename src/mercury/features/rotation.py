@@ -164,7 +164,7 @@ class RotationManager:
         if name in self._rotation_sets:
             self._rotation_sets[name].current_index += 1
 
-    def reset(self, name: str = None):
+    def reset(self, name: Optional[str] = None):
         """Reset rotation counter(s)."""
         if name:
             if name in self._rotation_sets:
@@ -187,7 +187,7 @@ class RotationManager:
             return random.choice(items)
 
         r = random.uniform(0, total_weight)
-        cumulative = 0
+        cumulative = 0.0
 
         for item in items:
             cumulative += item.weight
@@ -196,7 +196,7 @@ class RotationManager:
 
         return items[-1]
 
-    def get_statistics(self, name: str = None) -> Dict[str, Any]:
+    def get_statistics(self, name: Optional[str] = None) -> Dict[str, Any]:
         """
         Get rotation statistics.
 

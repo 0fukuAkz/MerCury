@@ -74,8 +74,8 @@ class RetryQueue:
 
     def __init__(
         self,
-        config: RetryConfig = None,
-        handler: Callable[[Dict[str, Any]], Awaitable[bool]] = None,
+        config: Optional[RetryConfig] = None,
+        handler: Optional[Callable[[Dict[str, Any]], Awaitable[bool]]] = None,
         persist_path: Optional[str] = None,
     ):
         """
@@ -241,6 +241,8 @@ class RetryQueue:
                     async def process_item(item: RetryItem):
                         async with semaphore:
                             try:
+                                if self.handler is None:
+                                    return
                                 success = await self.handler(item.data)
                                 if success:
                                     await self.mark_success(item.id)
@@ -284,7 +286,7 @@ class RetryQueue:
                 json.dump(state, f)
             import shutil
 
-            shutil.move(temp_path, self.persist_path)
+            shutil.move(temp_path, self.persist_path or "")
         except Exception as e:
             logger.error(f"Disk write error in retry queue: {e}")
             raise

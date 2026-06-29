@@ -168,7 +168,10 @@ class EmailOperationContext:
             correlation_id: Correlation tracking ID
         """
         self.operation = operation
-        self.context = {"operation": operation, "timestamp": datetime.now(UTC).isoformat()}
+        self.context: Dict[str, Any] = {
+            "operation": operation,
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
 
         if recipient:
             self.context["recipient"] = recipient

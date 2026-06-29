@@ -11,7 +11,7 @@ import logging
 from typing import List, Optional
 
 from ..data.database import session_scope
-from ..data.models import Campaign, EmailLog
+from ..data.models import Campaign, CampaignStatus, EmailLog
 from ..data.repositories import CampaignRepository, LogRepository
 
 logger = logging.getLogger(__name__)
@@ -114,13 +114,13 @@ async def preflight_check(smtp_service, current_campaign: Optional[Campaign]) ->
     error_msg = f"Pre-flight block: All attached SMTP servers failed health check: {failed_hosts}"
     logger.error(error_msg)
 
-    if current_campaign:
+    if current_campaign and current_campaign.id is not None:
         try:
             with session_scope() as session:
                 repo = CampaignRepository(session)
                 db_cam = repo.get(current_campaign.id)
                 if db_cam:
-                    db_cam.status = "failed"
+                    db_cam.status = CampaignStatus.FAILED
                     session.commit()
         except Exception as e:
             logger.error(f"Failed to update campaign state after pre-flight: {e}")

@@ -72,7 +72,7 @@ def _load_pinned_logo(logo_id: int) -> tuple[str, str]:
                     f"[logo] id={logo_id} missing/inactive in DB; " "{{company_logo}} renders empty"
                 )
                 return "", ""
-            disk = get_data_dir() / "attachments" / row.stored_name
+            disk = get_data_dir() / "attachments" / (row.stored_name or "")
             if not disk.is_file():
                 logger.error(f"[logo] id={logo_id} ({row.filename}) missing on disk at {disk}")
                 return "", ""

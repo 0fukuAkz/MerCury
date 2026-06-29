@@ -472,7 +472,6 @@ class AsyncEmailSender:
             BulkSendResult with statistics
         """
         semaphore = asyncio.Semaphore(max(1, concurrency))
-        results: List[EmailResult] = []
         start_time = datetime.now(UTC)
 
         # Render through the project's PlaceholderProcessor — the single

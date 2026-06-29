@@ -121,7 +121,7 @@ class TokenBucket:
 class RateLimiter:
     """Composite rate limiter supporting multiple time windows."""
 
-    def __init__(self, config: RateLimiterConfig = None):
+    def __init__(self, config: Optional[RateLimiterConfig] = None):
         """
         Initialize rate limiter.
 
@@ -215,7 +215,7 @@ class RateLimiter:
 class AdaptiveRateLimiter(RateLimiter):
     """Rate limiter that adapts based on server responses."""
 
-    def __init__(self, config: RateLimiterConfig = None):
+    def __init__(self, config: Optional[RateLimiterConfig] = None):
         super().__init__(config)
         self.adjustment_factor = 1.0
         self.min_factor = 0.1

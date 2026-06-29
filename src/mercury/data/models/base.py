@@ -29,7 +29,7 @@ class BaseModel:
     def to_dict(self) -> dict:
         """Convert model to dictionary."""
         result = {}
-        for column in self.__table__.columns:
+        for column in self.__table__.columns:  # type: ignore[attr-defined]  # mixin; subclasses are mapped
             value = getattr(self, column.name)
             if isinstance(value, datetime):
                 value = value.isoformat()

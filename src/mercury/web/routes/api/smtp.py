@@ -228,7 +228,7 @@ def api_test_smtp(name: str):
         service = SMTPService()
         service.load_from_config([s.get_connection_config() for s in servers])
 
-        result = run_async(service.check_server_health(server.name))
+        result = run_async(service.check_server_health(server.name or ""))
         return jsonify(result)
 
 
