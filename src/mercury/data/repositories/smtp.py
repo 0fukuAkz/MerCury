@@ -41,20 +41,20 @@ class SMTPRepository(BaseRepository[SMTPServer]):
         """Record successful send."""
         server = self.get(server_id)
         if server:
-            server.total_sent += 1
+            server.total_sent = (server.total_sent or 0) + 1
             server.failure_count = 0
             server.circuit_open = False
             self.session.commit()
         return server
 
-    def record_failure(self, server_id: int, error_msg: str = None) -> Optional[SMTPServer]:
+    def record_failure(self, server_id: int, error_msg: Optional[str] = None) -> Optional[SMTPServer]:
         """Record failed send."""
         from datetime import datetime, UTC
 
         server = self.get(server_id)
         if server:
-            server.total_failed += 1
-            server.failure_count += 1
+            server.total_failed = (server.total_failed or 0) + 1
+            server.failure_count = (server.failure_count or 0) + 1
             server.last_failure_at = datetime.now(UTC).isoformat()
 
             # Open circuit breaker after 5 consecutive failures

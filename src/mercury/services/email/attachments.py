@@ -56,7 +56,7 @@ def materialize_library_attachments(
             if row is None or not row.is_active:
                 logger.warning(f"[attach] id={att_id} missing/inactive in DB; skipping")
                 continue
-            disk_path = lib_dir / row.stored_name
+            disk_path = lib_dir / (row.stored_name or "")
             if not disk_path.is_file():
                 logger.error(
                     f"[attach] id={att_id} ({row.filename}) missing on disk at {disk_path}"
@@ -65,7 +65,7 @@ def materialize_library_attachments(
 
             blob = disk_path.read_bytes()
             src_ctype = row.content_type or "application/octet-stream"
-            final_filename = row.filename
+            final_filename = row.filename or ""
             final_ctype = src_ctype
             final_data: Any = blob
 
@@ -125,7 +125,7 @@ def materialize_library_attachments(
                             gen_filename,
                             gen_ctype,
                         ) = attachment_generator.generate_attachment(
-                            attachment_type=convert_to,
+                            attachment_type=convert_to or "",
                             content=html_source,
                             placeholders=ctx.placeholders,
                             template_path=None,

@@ -5,6 +5,7 @@ import logging
 import time
 import threading
 import uuid
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -35,9 +36,11 @@ class LockManager:
     def __init__(self, name: str, timeout: float = 300):
         self.name = name
         self.timeout = timeout
-        self._redis_client = None
-        self._lock = None
-        self._file_handle = None
+        # str (redis token) | threading.Lock | redis client | None over the
+        # object's life — Any keeps the multi-tier fallback assignments typed.
+        self._redis_client: Any = None
+        self._lock: Any = None
+        self._file_handle: Any = None
 
         redis_url = os.environ.get("REDIS_URL") or os.environ.get("RATE_LIMIT_STORAGE")
         if redis_url and redis_url.startswith("redis"):

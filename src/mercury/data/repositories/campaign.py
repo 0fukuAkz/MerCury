@@ -61,9 +61,9 @@ class CampaignRepository(BaseRepository[Campaign]):
         """Increment campaign counters."""
         campaign = self.get(campaign_id)
         if campaign:
-            campaign.sent_count += sent
-            campaign.delivered_count += delivered
-            campaign.failed_count += failed
+            campaign.sent_count = (campaign.sent_count or 0) + sent
+            campaign.delivered_count = (campaign.delivered_count or 0) + delivered
+            campaign.failed_count = (campaign.failed_count or 0) + failed
             self.session.commit()
         return campaign
 

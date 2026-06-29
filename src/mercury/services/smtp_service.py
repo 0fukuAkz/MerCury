@@ -374,9 +374,11 @@ class SMTPService:
                 host=host,
                 port=port,
                 username=username,
-                password=password,
                 **kwargs,
             )
+            # password is a property setter (encrypts into _password), not a
+            # mapped column — assign it after construction.
+            server.password = password
             server.set_tls_mode(tls_mode)
             repo = SMTPRepository(session)
             return repo.create(server)
@@ -398,21 +400,26 @@ class SMTPService:
 
     def get_server_status(self) -> List[Dict[str, Any]]:
         """Get status of all configured servers."""
-        return [
-            {
-                "name": config.name,
-                "host": config.host,
-                "port": config.port,
-                "circuit_state": config.runtime.circuit_breaker.get_stats()["state"],
-                "available": config.can_execute(),
-                "minute_count": config.runtime.current_minute_count,
-                "max_per_minute": config.max_per_minute,
-                "hour_count": config.runtime.current_hour_count,
-                "max_per_hour": config.max_per_hour,
-                "circuit_breaker_stats": config.runtime.circuit_breaker.get_stats(),
-            }
-            for config in self._configs
-        ]
+        status = []
+        for config in self._configs:
+            rt = config.runtime
+            if rt is None:  # always set in __post_init__; guard satisfies the type
+                continue
+            status.append(
+                {
+                    "name": config.name,
+                    "host": config.host,
+                    "port": config.port,
+                    "circuit_state": rt.circuit_breaker.get_stats()["state"],
+                    "available": config.can_execute(),
+                    "minute_count": rt.current_minute_count,
+                    "max_per_minute": config.max_per_minute,
+                    "hour_count": rt.current_hour_count,
+                    "max_per_hour": config.max_per_hour,
+                    "circuit_breaker_stats": rt.circuit_breaker.get_stats(),
+                }
+            )
+        return status
 
     async def close(self):
         """Close connection pool."""

@@ -120,11 +120,15 @@ class EnhancedAsyncEmailSender(AsyncEmailSender):
                     if result.is_transient:
                         from ..exceptions import TransientSMTPError
 
-                        error = TransientSMTPError(result.error, smtp_server=result.smtp_server)
+                        error = TransientSMTPError(
+                            result.error or "", smtp_server=result.smtp_server
+                        )
                     else:
                         from ..exceptions import PermanentSMTPError
 
-                        error = PermanentSMTPError(result.error, smtp_server=result.smtp_server)
+                        error = PermanentSMTPError(
+                            result.error or "", smtp_server=result.smtp_server
+                        )
 
                     # Decide recovery strategy
                     decision = self.error_recovery.decide_recovery(
@@ -226,7 +230,7 @@ class EnhancedAsyncEmailSender(AsyncEmailSender):
 
         # Override send method to collect errors
         async def send_with_aggregation(recipient_data: Dict[str, Any], index: int):
-            recipient_email = recipient_data.get("email")
+            recipient_email = recipient_data.get("email") or ""
             correlation_id = str(uuid.uuid4())
 
             # Prepare email
