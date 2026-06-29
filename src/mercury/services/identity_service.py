@@ -19,7 +19,7 @@ class IdentityService:
             query = select(FromEmail)
             if active_only:
                 query = query.where(FromEmail.is_active == True)
-            return session.scalars(query).all()
+            return list(session.scalars(query).all())
         finally:
             session.close()
 
@@ -31,12 +31,12 @@ class IdentityService:
             query = select(SenderName)
             if active_only:
                 query = query.where(SenderName.is_active == True)
-            return session.scalars(query).all()
+            return list(session.scalars(query).all())
         finally:
             session.close()
 
     @staticmethod
-    def add_email(email: str, tags: list = None) -> FromEmail:
+    def add_email(email: str, tags: Optional[list] = None) -> FromEmail:
         """Add a new From email."""
         session = get_session_direct()
         try:
@@ -54,7 +54,7 @@ class IdentityService:
             session.close()
 
     @staticmethod
-    def add_name(name: str, tags: list = None) -> SenderName:
+    def add_name(name: str, tags: Optional[list] = None) -> SenderName:
         """Add a new Sender name."""
         session = get_session_direct()
         try:
@@ -123,7 +123,7 @@ class IdentityService:
             session.close()
 
     @staticmethod
-    def get_random_identity(tag: str = None) -> tuple[Optional[str], Optional[str]]:
+    def get_random_identity(tag: Optional[str] = None) -> tuple[Optional[str], Optional[str]]:
         """
         Get a random active email and name.
         Returns: (email, name) tuple. Elements can be None if pools are empty.
@@ -149,7 +149,7 @@ class IdentityService:
 
             # Update stats
             if selected_email:
-                selected_email.use_count += 1
+                selected_email.use_count = (selected_email.use_count or 0) + 1
                 selected_email.last_used_at = datetime.now(UTC).isoformat()
                 session.add(selected_email)
 
@@ -169,7 +169,7 @@ class IdentityService:
                     selected_name = random.choice(all_names)
 
             if selected_name:
-                selected_name.use_count += 1
+                selected_name.use_count = (selected_name.use_count or 0) + 1
                 selected_name.last_used_at = datetime.now(UTC).isoformat()
                 session.add(selected_name)
 
