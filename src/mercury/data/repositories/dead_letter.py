@@ -148,7 +148,9 @@ class DeadLetterRepository(BaseRepository[DeadLetter]):
         # (which is exactly how the "discard all reports success but nothing
         # is deleted" bug manifested).
         self.session.commit()
-        return int(result.rowcount or 0)
+        # rowcount lives on CursorResult; the Result base type mypy infers
+        # doesn't expose it, so reach for it defensively.
+        return int(getattr(result, "rowcount", 0) or 0)
 
     def increment_retry_count(self, dead_letter_id: int) -> Optional[DeadLetter]:
         """
@@ -162,7 +164,7 @@ class DeadLetterRepository(BaseRepository[DeadLetter]):
         """
         dead_letter = self.get(dead_letter_id)
         if dead_letter:
-            dead_letter.retry_count += 1
+            dead_letter.retry_count = (dead_letter.retry_count or 0) + 1
             dead_letter.last_retry_at = datetime.now(UTC)
             return self.update(dead_letter)
         return None

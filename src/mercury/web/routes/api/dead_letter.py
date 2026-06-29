@@ -107,7 +107,7 @@ def _requeue_item(item_id: int, pinned_smtp_id=None):
             ),
         }
 
-    config = EmailConfig(subject=subject, from_emails=[from_email] if from_email else [])
+    config = EmailConfig(subject=subject or "", from_emails=[from_email] if from_email else [])
     smtp_service = SMTPService()
     smtp_service.load_from_config(smtp_configs)
     service = EmailService(smtp_service)

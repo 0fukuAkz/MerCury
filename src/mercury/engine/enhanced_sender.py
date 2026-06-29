@@ -152,7 +152,7 @@ class EnhancedAsyncEmailSender(AsyncEmailSender):
                                 from_name=from_name,
                                 campaign_id=campaign_id,
                                 correlation_id=correlation_id,
-                                error_type=result.error_type,
+                                error_type=result.error_type or "unknown",
                                 error_message=result.error or "",
                                 smtp_server=result.smtp_server,
                             )

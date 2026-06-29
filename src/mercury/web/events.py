@@ -181,8 +181,8 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
 
                     repo = CampaignRepository(session)
                     campaign = repo.get(campaign_id)
-                    if campaign and campaign.recipient_list and campaign.recipient_list.file_path:
-                        linked_list_path = campaign.recipient_list.file_path
+                    if campaign and campaign.recipient_list and campaign.recipient_list.source_path:
+                        linked_list_path = campaign.recipient_list.source_path
 
             if linked_list_path:
                 if config_snap.recipients_path and config_snap.recipients_path != linked_list_path:

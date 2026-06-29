@@ -414,7 +414,7 @@ def test_run_campaign_thread_with_linked_list(socket_app, socketio_instance):
     mock_campaign.subjects = ["Subj"]
     mock_campaign.template = None
     mock_campaign.recipient_list = MagicMock()
-    mock_campaign.recipient_list.file_path = "/some/file.csv"
+    mock_campaign.recipient_list.source_path = "/some/file.csv"
     
     with patch("mercury.web.events.CampaignRepository") as MockRepo, \
          patch("mercury.web.events.CampaignService") as MockService, \
