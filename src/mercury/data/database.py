@@ -4,7 +4,7 @@ import logging
 import os
 import threading
 from contextlib import contextmanager
-from typing import Generator, Iterator, Optional
+from typing import Any, Generator, Iterator, Optional
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker, Session, declarative_base
@@ -51,11 +51,28 @@ def get_engine(db_url: Optional[str] = None):
                 else:
                     db_path = db_url
 
-                _engine = create_engine(
-                    db_path,
-                    connect_args={"check_same_thread": False} if "sqlite" in db_path else {},
-                    echo=os.environ.get("SQL_DEBUG", "").lower() == "true",
-                )
+                is_sqlite = "sqlite" in db_path
+                engine_kwargs: dict[str, Any] = {
+                    "echo": os.environ.get("SQL_DEBUG", "").lower() == "true",
+                    # Verify a pooled connection is still alive before handing it
+                    # out (cheap "SELECT 1"). Harmless for SQLite; essential for
+                    # networked engines (Postgres/MySQL) whose connections die on
+                    # server restart, idle timeout, or a proxy (PgBouncer) culling
+                    # the socket — without it the first query after such an event
+                    # raises instead of transparently reconnecting.
+                    "pool_pre_ping": True,
+                }
+                if is_sqlite:
+                    # MerCury's web worker, background asyncio loop, and health
+                    # checks all touch the engine from different threads.
+                    engine_kwargs["connect_args"] = {"check_same_thread": False}
+                else:
+                    # Recycle connections older than 30 min so we stay under
+                    # common server-side idle cutoffs (MySQL wait_timeout,
+                    # managed-Postgres / PgBouncer idle limits) rather than
+                    # handing out a soon-to-be-dropped socket.
+                    engine_kwargs["pool_recycle"] = 1800
+                _engine = create_engine(db_path, **engine_kwargs)
                 _engine_url = db_path
     elif db_url is not None and db_url != _engine_url:
         logger.warning(

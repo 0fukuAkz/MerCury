@@ -196,7 +196,12 @@ FLASK_ENV=production
 
 The app will fail loudly at boot if any of `SECRET_KEY` (non-dev),
 `ADMIN_PASSWORD` (production), or `TRACKING_BASE_URL` (when a campaign
-opts into tracking) is missing.
+opts into tracking) is missing. In production it additionally refuses to
+start on a **SQLite** `DATABASE_URL` or an **in-memory** `RATE_LIMIT_STORAGE`
+— set a `postgresql://` / `redis://` URL, or consciously opt back in with
+`ALLOW_SQLITE_IN_PRODUCTION=1` / `ALLOW_INMEMORY_RATE_LIMIT=1` (which
+downgrade each to a warning). All preflight problems are reported together
+in a single boot so you fix them in one pass.
 
 ---
 
@@ -210,9 +215,11 @@ opts into tracking) is missing.
 | `ADMIN_EMAIL` | First-admin bootstrap email | **required** (no fallback) |
 | `TRACKING_BASE_URL` | Public dashboard URL used to build tracking pixel / click links | **required** if any campaign enables tracking |
 | `FLASK_ENV` | `production` enables prod-only checks (secure cookies, hard-fails) | `development` |
-| `DATABASE_URL` | SQLAlchemy URL — `sqlite:///data/mercury.db` or `postgresql://...` | `sqlite:///data/mercury.db` |
+| `DATABASE_URL` | SQLAlchemy URL. **Production must be non-SQLite** (e.g. `postgresql://...`) unless `ALLOW_SQLITE_IN_PRODUCTION=1`. | `sqlite:///data/mercury.db` |
+| `ALLOW_SQLITE_IN_PRODUCTION` | Consciously accept SQLite in production (tiny single-user installs); downgrades the hard-fail to a warning | unset |
 | `API_KEYS` | Comma-separated keys for `X-API-Key` auth on `/api/*` | unset (API auth disabled) |
-| `RATE_LIMIT_STORAGE` | Flask-Limiter backend; use `redis://...` in prod | `memory://` |
+| `RATE_LIMIT_STORAGE` | Flask-Limiter backend. **Production must be durable** (`redis://...`) unless `ALLOW_INMEMORY_RATE_LIMIT=1`. | `memory://` |
+| `ALLOW_INMEMORY_RATE_LIMIT` | Consciously accept the in-memory limiter in production (low-risk single-process use); downgrades the hard-fail to a warning | unset |
 | `UNSUBSCRIBE_SECRET` | HMAC key for unsubscribe-link signing. Falls back to `SECRET_KEY` if unset. | `SECRET_KEY` |
 | `MERCURY_GEOIP_DB` | Path to GeoLite2-City.mmdb for `{{location.*}}` placeholders | unset (placeholders resolve to empty) |
 | `LOG_LEVEL` | `DEBUG` / `INFO` / `WARNING` / `ERROR` | `INFO` |

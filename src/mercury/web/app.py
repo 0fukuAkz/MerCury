@@ -18,7 +18,7 @@ from alembic import command as alembic_command
 
 from ..app_context import AppContext, get_app_context, set_app_context
 from ..utils.logging_config import configure_logging
-from ..utils.app_dirs import get_log_dir
+from ..utils.app_dirs import get_db_path, get_log_dir
 from ..data.database import init_db
 from ..security.auth import get_user_by_id, init_auth
 
@@ -78,6 +78,15 @@ from .routes.attachments import attachments_bp
 logger = logging.getLogger(__name__)
 
 
+def _env_flag(name: str) -> bool:
+    """True when env var ``name`` is set to a truthy string (1/true/yes/on).
+
+    Used for the production-preflight escape hatches — an operator consciously
+    opting into a sub-optimal-but-supported configuration.
+    """
+    return os.environ.get(name, "").strip().lower() in ("1", "true", "yes", "on")
+
+
 def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] = None) -> Flask:
     """
     Create and configure Flask application.
@@ -118,25 +127,67 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
     # Production env-var preflight: surface common mis-configurations at boot
     # rather than failing in surprising ways much later.
     if _is_production:
-        if "ADMIN_PASSWORD" not in os.environ:
-            raise RuntimeError(
-                "ADMIN_PASSWORD is not set and FLASK_ENV=production. Refusing "
-                "to boot with the default 'admin' bootstrap password."
-            )
+        # Collect every problem before deciding, so the operator sees the full
+        # list in one boot rather than fixing-and-rebooting one at a time. Hard
+        # errors (_prod_errors) block boot; warnings are logged but allowed.
+        _prod_errors: list[str] = []
         _prod_warnings: list[str] = []
-        if not os.environ.get("API_KEYS", "").strip():
-            _prod_warnings.append("API_KEYS not set — programmatic API access will be disabled.")
+
+        if "ADMIN_PASSWORD" not in os.environ:
+            _prod_errors.append(
+                "ADMIN_PASSWORD is not set — refusing to boot with the default "
+                "'admin' bootstrap password."
+            )
+
+        # Data layer. SQLite serializes writers and has no network access or
+        # HA/backup story, which does not suit MerCury's concurrent web +
+        # background-worker write load. Require a networked engine, but leave a
+        # conscious escape hatch (ALLOW_SQLITE_IN_PRODUCTION) for deliberately
+        # tiny single-user installs.
+        _db_url = get_db_path()
+        if _db_url.startswith("sqlite"):
+            if _env_flag("ALLOW_SQLITE_IN_PRODUCTION"):
+                _prod_warnings.append(
+                    "DATABASE is SQLite in production (ALLOW_SQLITE_IN_PRODUCTION "
+                    "set) — acceptable for a tiny single-user install, but it "
+                    "serializes writers and has no HA/backup path."
+                )
+            else:
+                _prod_errors.append(
+                    "DATABASE_URL is unset or SQLite in production. SQLite "
+                    "serializes writers and has no HA/backup path. Set DATABASE_URL "
+                    "to a postgresql:// URL, or set ALLOW_SQLITE_IN_PRODUCTION=1 to "
+                    "consciously accept SQLite."
+                )
+
+        # Rate-limit storage. In-memory limits reset on restart and cannot be
+        # shared — abuse-relevant for a send platform (auth brute-force, runaway
+        # sending). Require durable storage, with an escape hatch
+        # (ALLOW_INMEMORY_RATE_LIMIT) for low-risk internal single-process use.
         _rls = os.environ.get("RATE_LIMIT_STORAGE", "memory://")
         if _rls.startswith("memory://"):
-            _prod_warnings.append(
-                "RATE_LIMIT_STORAGE is in-memory — limits reset on restart and are "
-                "not shared across workers. Use a redis:// URL in production."
-            )
+            if _env_flag("ALLOW_INMEMORY_RATE_LIMIT"):
+                _prod_warnings.append(
+                    "RATE_LIMIT_STORAGE is in-memory (ALLOW_INMEMORY_RATE_LIMIT "
+                    "set) — limits reset on restart and are not shared across "
+                    "processes."
+                )
+            else:
+                _prod_errors.append(
+                    "RATE_LIMIT_STORAGE is in-memory in production — limits reset on "
+                    "restart and cannot be shared. Set RATE_LIMIT_STORAGE to a "
+                    "redis:// URL, or set ALLOW_INMEMORY_RATE_LIMIT=1 to accept it."
+                )
+
+        if not os.environ.get("API_KEYS", "").strip():
+            _prod_warnings.append("API_KEYS not set — programmatic API access will be disabled.")
+
         # Single-worker invariant. The shared asyncio loop, SocketIO emit
         # bridge, and in-memory rate limiters / connection pools are all
-        # per-process and NOT shared across workers — so MerCury is only
-        # correct with one worker. WEB_CONCURRENCY is gunicorn's standard
-        # knob for worker count; flag it loudly if someone bumped it.
+        # per-process and NOT shared across workers — so MerCury is only correct
+        # with one worker. This stays a *warning*, not a hard error: WEB_CONCURRENCY
+        # is only a heuristic (a CLI `-w 1`, which run.py passes, overrides it),
+        # so a stray env value here is not proof of misconfiguration.
         _workers = os.environ.get("WEB_CONCURRENCY", "").strip()
         if _workers and _workers != "1":
             _prod_warnings.append(
@@ -147,8 +198,11 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
                 "SocketIO message_queue + shared redis:// RATE_LIMIT_STORAGE before "
                 "scaling out."
             )
+
         for _w in _prod_warnings:
             logger.warning("Production preflight: %s", _w)
+        if _prod_errors:
+            raise RuntimeError("Production preflight failed:\n  - " + "\n  - ".join(_prod_errors))
     app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16MB max upload
 
     # Session cookie hardening.
