@@ -132,6 +132,21 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
                 "RATE_LIMIT_STORAGE is in-memory — limits reset on restart and are "
                 "not shared across workers. Use a redis:// URL in production."
             )
+        # Single-worker invariant. The shared asyncio loop, SocketIO emit
+        # bridge, and in-memory rate limiters / connection pools are all
+        # per-process and NOT shared across workers — so MerCury is only
+        # correct with one worker. WEB_CONCURRENCY is gunicorn's standard
+        # knob for worker count; flag it loudly if someone bumped it.
+        _workers = os.environ.get("WEB_CONCURRENCY", "").strip()
+        if _workers and _workers != "1":
+            _prod_warnings.append(
+                f"WEB_CONCURRENCY={_workers}: MerCury's shared asyncio loop, SocketIO "
+                "emit bridge, and in-memory rate limiters/connection pools are "
+                "per-process and not shared across workers — it is only correct with "
+                "a single worker. Run gunicorn with -w 1 (run.py does), or add a "
+                "SocketIO message_queue + shared redis:// RATE_LIMIT_STORAGE before "
+                "scaling out."
+            )
         for _w in _prod_warnings:
             logger.warning("Production preflight: %s", _w)
     app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16MB max upload

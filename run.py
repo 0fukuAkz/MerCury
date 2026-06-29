@@ -307,6 +307,12 @@ def main():
         cmd = [
             gunicorn_path,
             "--worker-class", "eventlet",
+            # LOAD-BEARING: single worker only. MerCury's shared asyncio loop,
+            # SocketIO emit bridge, and in-memory rate limiters / connection
+            # pools are per-process and not shared across workers. Scaling past
+            # 1 needs a SocketIO message_queue + shared redis rate-limit storage
+            # first (create_app()'s production preflight warns if you bump
+            # WEB_CONCURRENCY).
             "-w", "1",
             "--bind", f"127.0.0.1:{os.environ.get('PORT', 5050)}",
             *log_args,
