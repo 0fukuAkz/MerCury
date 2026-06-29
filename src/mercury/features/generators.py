@@ -33,7 +33,7 @@ class GeneratorConfig:
 class QRCodeGenerator:
     """Generate QR codes with customizable styling."""
 
-    def __init__(self, config: GeneratorConfig = None):
+    def __init__(self, config: Optional[GeneratorConfig] = None):
         self.config = config or GeneratorConfig()
 
     def generate(
@@ -120,7 +120,7 @@ class QRCodeGenerator:
 class PDFGenerator:
     """Generate PDFs from HTML content using WeasyPrint or ReportLab."""
 
-    def __init__(self, config: GeneratorConfig = None):
+    def __init__(self, config: Optional[GeneratorConfig] = None):
         self.config = config or GeneratorConfig()
         self._weasyprint_available = self._check_weasyprint()
 
@@ -293,7 +293,7 @@ class PDFGenerator:
 class DOCXGenerator:
     """Generate DOCX documents from HTML content."""
 
-    def __init__(self, config: GeneratorConfig = None):
+    def __init__(self, config: Optional[GeneratorConfig] = None):
         self.config = config or GeneratorConfig()
 
     def generate_from_html(self, html_content: str, output_path: Optional[str] = None) -> bytes:
@@ -408,7 +408,7 @@ class DOCXGenerator:
 class ImageGenerator:
     """Generate images from HTML content."""
 
-    def __init__(self, config: GeneratorConfig = None):
+    def __init__(self, config: Optional[GeneratorConfig] = None):
         self.config = config or GeneratorConfig()
 
     def generate_from_html(
@@ -513,7 +513,9 @@ class ImageGenerator:
             try:
                 font = ImageFont.truetype("arial.ttf", 14)
             except (OSError, IOError):
-                font = ImageFont.load_default()
+                # PIL stubs type load_default() and truetype() differently;
+                # both are valid font args to draw.text().
+                font = ImageFont.load_default()  # type: ignore[assignment]
 
             y = padding
             for line in lines:
@@ -544,7 +546,7 @@ class ImageGenerator:
 
         return image_bytes
 
-    def generate_data_url(self, html_content: str, format: str = None, **kwargs) -> str:
+    def generate_data_url(self, html_content: str, format: Optional[str] = None, **kwargs) -> str:
         """Generate image as data URL."""
         format = format or self.config.image_format
         image_bytes = self.generate_from_html(html_content, format=format, **kwargs)
@@ -556,7 +558,7 @@ class ImageGenerator:
 class AttachmentGenerator:
     """Combined generator for email attachments."""
 
-    def __init__(self, config: GeneratorConfig = None):
+    def __init__(self, config: Optional[GeneratorConfig] = None):
         self.config = config or GeneratorConfig()
         self.qr = QRCodeGenerator(config)
         self.pdf = PDFGenerator(config)

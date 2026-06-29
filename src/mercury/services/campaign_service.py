@@ -278,16 +278,16 @@ class CampaignService:
         global_settings = SettingsService.get_settings()
 
         if config.concurrency <= 0:
-            config.concurrency = global_settings.max_concurrency
+            config.concurrency = global_settings.max_concurrency or 100
 
         if config.chunk_size <= 0:
-            config.chunk_size = global_settings.batch_size
+            config.chunk_size = global_settings.batch_size or 10000
 
         # Apply Identity Defaults
         if not config.from_emails:
             active_emails = IdentityService.get_emails(active_only=True)
             if active_emails:
-                config.from_emails = [e.email for e in active_emails]
+                config.from_emails = [e.email for e in active_emails if e.email]
                 config.from_email = config.from_emails[0]
                 logger.info(f"Using {len(active_emails)} From-Emails from identity pool")
         else:
@@ -296,7 +296,7 @@ class CampaignService:
         if not config.from_names:
             active_names = IdentityService.get_names(active_only=True)
             if active_names:
-                config.from_names = [n.name for n in active_names]
+                config.from_names = [n.name for n in active_names if n.name]
                 config.from_name = config.from_names[0]
                 logger.info(f"Using {len(active_names)} Sender Names from identity pool")
         else:
@@ -623,7 +623,7 @@ class CampaignService:
         # Assuming for now caller handles counting if they need progress bar accuracy.
         total_count = len(recipients) if hasattr(recipients, "__len__") else 0
 
-        total_stats = {
+        total_stats: dict[str, Any] = {
             "total": total_count,
             "sent": 0,
             "failed": 0,
@@ -652,7 +652,7 @@ class CampaignService:
                 total_processed_for_pause = 0
 
                 for chunk_num, chunk in enumerate(
-                    self.iterate_recipients(recipients, MICRO_CHUNK_SIZE)
+                    self.iterate_recipients(iter(recipients), MICRO_CHUNK_SIZE)
                 ):
                     # Check for shutdown
                     if not self._running or self._shutdown_event.is_set():
@@ -835,7 +835,7 @@ class CampaignService:
         self._shutdown_event.set()
         logger.info("Campaign stop requested")
 
-    def get_campaign_stats(self, campaign_id: int = None) -> Dict[str, Any]:
+    def get_campaign_stats(self, campaign_id: Optional[int] = None) -> Dict[str, Any]:
         """Get campaign statistics."""
         if self.email_service:
             return self.email_service.get_statistics()

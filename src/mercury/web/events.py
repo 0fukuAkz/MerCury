@@ -2,6 +2,7 @@
 
 import logging
 import threading
+from typing import Any
 from datetime import datetime, UTC
 from flask_socketio import SocketIO, emit
 from flask_login import current_user
@@ -217,8 +218,9 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
 
                     repo = CampaignRepository(session)
                     campaign = repo.get(campaign_id)
-                    campaign.status = CampaignStatus.FAILED
-                    repo.update(campaign)
+                    if campaign:
+                        campaign.status = CampaignStatus.FAILED
+                        repo.update(campaign)
             _emit("campaign_error", {"campaign_id": campaign_id, "error": "No recipients found"})
             with _active_services_lock:
                 _active_services.pop(campaign_id, None)
@@ -240,7 +242,7 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
         # confirming the chain is alive.
         import time
 
-        _progress_count = {
+        _progress_count: dict[str, Any] = {
             "n": 0,
             "sent": 0,
             "failed": 0,
