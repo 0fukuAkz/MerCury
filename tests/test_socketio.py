@@ -12,6 +12,14 @@ def socketio_instance():
     return socketio
 
 
+def test_socketio_message_queue_defaults_to_in_process():
+    """Unset SOCKETIO_MESSAGE_QUEUE must stay in-process (None) so the
+    single-worker default is unchanged; it's opt-in only when scaling out."""
+    import mercury.web.extensions as ext
+
+    assert ext._message_queue is None
+
+
 @pytest.fixture
 def socket_app(app, mock_user_loader, socketio_instance):
     with patch("mercury.web.app.get_app_context") as mock_ctx_getter:

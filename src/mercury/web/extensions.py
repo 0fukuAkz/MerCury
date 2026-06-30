@@ -120,6 +120,18 @@ else:
 # CMD inherits it from there.
 _async_mode = os.environ.get("SOCKETIO_ASYNC_MODE", "threading").strip() or "threading"
 
+# Cross-process pub/sub so progress events fan out to clients connected to ANY
+# worker/replica. Unset (default) = in-process only, which is correct for the
+# single-worker default; set SOCKETIO_MESSAGE_QUEUE=redis://... when scaling the
+# web tier past one worker (requires the `redis` package + a shared broker).
+#
+# Pass the kwarg ONLY when configured: flask-socketio wires a client-manager
+# whenever message_queue is present, and an explicit None still diverges from
+# omitting it (the in-process emit path the test client relies on changes), so
+# the unset/default case must stay byte-identical to "no message_queue at all".
+_message_queue = os.environ.get("SOCKETIO_MESSAGE_QUEUE", "").strip() or None
+_mq_kwargs: dict[str, str] = {"message_queue": _message_queue} if _message_queue else {}
+
 socketio = SocketIO(
     async_mode=_async_mode,
     cors_allowed_origins=_cors_origins,
@@ -130,6 +142,7 @@ socketio = SocketIO(
     # even for users with valid Flask-Login cookies — causing the connect
     # to be rejected and the client to loop on reconnect.
     manage_session=False,
+    **_mq_kwargs,
 )
 
 # CSRF protection for browser form POSTs. The api blueprint is exempted

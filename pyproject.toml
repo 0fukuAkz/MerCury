@@ -124,8 +124,13 @@ postgres = [
     # PostgreSQL driver for DATABASE_URL=postgresql://... (SQLite needs none).
     "psycopg2-binary>=2.9.9",
 ]
+redis = [
+    # Shared state for Redis rate limiting, SocketIO cross-worker fan-out
+    # (SOCKETIO_MESSAGE_QUEUE), and distributed locks.
+    "redis>=5.0",
+]
 all = [
-    "mercury[dev,pdf,geo,observability,postgres]",
+    "mercury[dev,pdf,geo,observability,postgres,redis]",
 ]
 
 [project.scripts]

@@ -227,6 +227,7 @@ in a single boot so you fix them in one pass.
 | `SESSION_COOKIE_SAMESITE` | `Lax` / `Strict` / `None` | `Lax` |
 | `SESSION_COOKIE_SECURE` | Force the `Secure` cookie flag | `True` in production |
 | `SOCKETIO_ASYNC_MODE` | SocketIO backend: `threading` (dev/test) or `eventlet` (production gunicorn). Must agree with the gunicorn worker class. | `threading` |
+| `SOCKETIO_MESSAGE_QUEUE` | `redis://...` to fan out live progress events across multiple web workers/replicas. Leave unset for single-worker (in-process). Required before scaling the web tier past one worker. | unset (in-process) |
 | `MERCURY_BOOT_MIGRATIONS` | Set to `1` to force Alembic boot-migrations on in any environment | unset |
 | `MERCURY_SKIP_BOOT_MIGRATIONS` | Set to `1` to force Alembic boot-migrations off in any environment | unset |
 | `SENTRY_DSN` | Enable Sentry error tracking (dormant when unset; PII never sent) | unset |

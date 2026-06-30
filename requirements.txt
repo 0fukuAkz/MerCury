@@ -39,6 +39,12 @@ eventlet==0.40.3
 # on Python 3.13/3.14 hosts that don't have pg_config installed.
 psycopg2-binary==2.9.12
 
+# Redis - shared state for Redis rate limiting, SocketIO cross-worker fan-out
+# (SOCKETIO_MESSAGE_QUEUE), and distributed locks. Required in production when
+# RATE_LIMIT_STORAGE / SOCKETIO_MESSAGE_QUEUE use redis:// (the preflight
+# expects durable rate-limit storage).
+redis>=5.0
+
 # Security - Encryption and authentication
 # cryptography 42.0.1 -> 46.0.7 closes CVE-2026-26007, PYSEC-2026-35,
 # and PYSEC-2026-36 (44.x is unpatched for the first two; 46.0.6 still
