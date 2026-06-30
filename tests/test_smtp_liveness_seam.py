@@ -31,7 +31,10 @@ def smtp_server():
     aiosmtpd 1.4.x's readiness check connects to the configured port, which
     fails with port=0, so we pre-allocate a concrete free port.
     """
-    controller = Controller(Sink(), hostname="127.0.0.1", port=_free_port())
+    # ready_timeout defaults to 1.0s; bump it generously so the readiness
+    # handshake doesn't spuriously time out (surfacing as a fixture ERROR) when
+    # the suite is under heavy load and the server thread is slow to come up.
+    controller = Controller(Sink(), hostname="127.0.0.1", port=_free_port(), ready_timeout=30.0)
     controller.start()
     try:
         yield controller
