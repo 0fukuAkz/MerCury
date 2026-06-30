@@ -17,6 +17,7 @@ from .connection_pool import SMTPConnectionPool, SMTPServerConfig, AsyncConnecti
 from .rate_limiter import RateLimiter, RateLimiterConfig
 from .retry_queue import RetryQueue
 from ..features.placeholders import PlaceholderProcessor
+from ..utils.metrics import record_send_result
 from ..exceptions import (
     SMTPConnectionError,
     SMTPAuthenticationError,
@@ -533,6 +534,8 @@ class AsyncEmailSender:
                     }
                 )
 
+            # Business metric — one data point per email, bucketed by outcome.
+            record_send_result(result.success, result.error_type)
             return result
 
         # Send all emails concurrently

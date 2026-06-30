@@ -12,6 +12,7 @@ from ..data.repositories import CampaignRepository
 from ..data.models import CampaignStatus
 from ..services.campaign_service import CampaignService, CampaignConfig
 from ..services.webhook_service import WebhookService
+from ..utils.metrics import campaign_finished, campaign_started
 from .extensions import run_async
 
 logger = logging.getLogger(__name__)
@@ -109,6 +110,7 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
         queue_emit(event, data)
 
     try:
+        campaign_started()  # active-campaigns gauge; paired with finally below
         with app.app_context():
             with session_scope() as session:
 
@@ -454,6 +456,7 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
             )
         _emit("campaign_error", {"campaign_id": campaign_id, "error": str(exc)})
     finally:
+        campaign_finished()
         with _active_services_lock:
                 _active_services.pop(campaign_id, None)
 

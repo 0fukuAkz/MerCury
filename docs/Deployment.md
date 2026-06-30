@@ -875,11 +875,18 @@ gunicorn --worker-class eventlet -w 1 --bind 0.0.0.0:$PORT \
 - **Errors:** set `SENTRY_DSN` to stream exceptions to Sentry. PII is off by
   default — recipient data is never sent; opt into performance tracing with
   `SENTRY_TRACES_SAMPLE_RATE`, and tag releases with `MERCURY_RELEASE`.
-- **Metrics:** `GET /metrics` exposes Prometheus request/latency counters plus
-  process metrics. Single-worker means the in-process registry is complete, so
-  no multiprocess setup is needed. Scrape it on the internal network, or gate
-  it with `METRICS_TOKEN` (`Authorization: Bearer <token>` or `?token=`); the
-  sample Caddyfile blocks `/metrics` at the public edge.
+- **Metrics:** `GET /metrics` exposes Prometheus counters plus process metrics.
+  Single-worker means the in-process registry is complete, so no multiprocess
+  setup is needed. Scrape it on the internal network, or gate it with
+  `METRICS_TOKEN` (`Authorization: Bearer <token>` or `?token=`); the sample
+  Caddyfile blocks `/metrics` at the public edge.
+  - **HTTP (RED):** `mercury_http_requests_total{method,endpoint,status}`,
+    `mercury_http_request_duration_seconds` (labelled by route template).
+  - **Send pipeline:** `mercury_emails_sent_total`,
+    `mercury_emails_failed_total{type}` (type ∈ transient/permanent/unknown/
+    exception/other), `mercury_campaigns_active` (gauge). Good Grafana panels:
+    send rate (`rate(mercury_emails_sent_total[5m])`), failure ratio, and
+    active-campaign count.
 
 Both libraries ship in the image. With `SENTRY_DSN` unset, Sentry stays dormant
 and `/metrics` is still served.
