@@ -229,6 +229,10 @@ in a single boot so you fix them in one pass.
 | `SOCKETIO_ASYNC_MODE` | SocketIO backend: `threading` (dev/test) or `eventlet` (production gunicorn). Must agree with the gunicorn worker class. | `threading` |
 | `MERCURY_BOOT_MIGRATIONS` | Set to `1` to force Alembic boot-migrations on in any environment | unset |
 | `MERCURY_SKIP_BOOT_MIGRATIONS` | Set to `1` to force Alembic boot-migrations off in any environment | unset |
+| `SENTRY_DSN` | Enable Sentry error tracking (dormant when unset; PII never sent) | unset |
+| `SENTRY_TRACES_SAMPLE_RATE` | Sentry performance-trace sampling, `0.0`–`1.0` | `0` (errors only) |
+| `MERCURY_RELEASE` | Release tag attached to Sentry events | installed package version |
+| `METRICS_TOKEN` | Bearer / `?token=` gate for `GET /metrics`; open when unset | unset |
 
 ### Boot-time migration toggle
 
@@ -802,56 +806,83 @@ sudo systemctl status mercury
 
 ## Docker Deployment
 
-The repo ships a working [`Dockerfile`](../Dockerfile) and
-[`docker-compose.yml`](../docker-compose.yml). The compose file wires
-postgres + redis + a one-shot migration container + the web service,
-and uses `${VAR:?error}` enforcement so missing secrets fail at
-`docker compose up` time instead of at boot.
+The repo ships a production [`Dockerfile`](../Dockerfile) (multi-stage,
+non-root user, stdlib `HEALTHCHECK`) and [`docker-compose.yml`](../docker-compose.yml).
+The compose stack wires postgres + redis + a one-shot migration container +
+the web service, and uses `${VAR:?error}` enforcement so missing secrets fail
+at `docker compose up` time instead of at boot.
 
 ### Compose (recommended)
 
 ```bash
-# 1. Generate a .env file
+# 1. Generate a .env file (all of these are required by the compose stack)
 cat > .env <<'EOF'
 SECRET_KEY=<openssl rand -hex 32>
+POSTGRES_PASSWORD=<strong db password>
+REDIS_PASSWORD=<strong redis password>
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=<strong password>
 ADMIN_EMAIL=admin@yourdomain.com
 TRACKING_BASE_URL=https://mail.yourdomain.com
+# Optional observability:
+# SENTRY_DSN=https://<key>@<org>.ingest.sentry.io/<project>
+# METRICS_TOKEN=<random token to gate GET /metrics>
 EOF
 
-# 2. Bring the stack up
+# 2. Bring the stack up (web is published on 127.0.0.1:5050)
 docker compose up -d
 
 # 3. Tail logs
 docker compose logs -f web
+
+# 4. (optional) once your domain points here and deploy/Caddyfile has your
+#    hostname, add the TLS-terminating reverse proxy:
+docker compose --profile proxy up -d
 ```
 
 The compose file:
 
-- Runs the `migrations` service once before `web` to apply Alembic
-  migrations (avoiding the multi-worker boot race).
-- Uses Redis for `RATE_LIMIT_STORAGE` so limits are shared across any
-  future scale-out and survive restarts.
-- Mounts no host volumes by default — add your own if you need to
-  persist `config/`, `templates/`, or logs outside the container.
+- Waits for postgres + redis to pass their healthchecks, runs the
+  `migrations` service once, and waits for it to *complete*
+  (`service_completed_successfully`) before `web` starts — no boot race.
+- Uses Postgres for `DATABASE_URL` and Redis for `RATE_LIMIT_STORAGE` —
+  the two configs the production preflight now hard-requires.
+- Publishes `web` on `127.0.0.1:5050` only; front it with the optional
+  `proxy` (Caddy) service for TLS, or your own reverse proxy.
+- Persists the database in the `postgres_data` volume.
 
 ### Building / running by hand
 
 ```bash
 docker build -t mercury .
 docker run -d --name mercury \
-  -p 5000:5000 \
+  -p 127.0.0.1:5050:5050 \
   --env-file .env \
+  -e DATABASE_URL=postgresql://user:pass@your-db:5432/mercury \
+  -e RATE_LIMIT_STORAGE=redis://your-redis:6379/0 \
   mercury
 ```
 
-The image's `CMD` is:
+The image runs as a non-root user; its `CMD` is (with `PORT` defaulting to 5050):
 
 ```text
-gunicorn --worker-class eventlet -w 1 --bind 0.0.0.0:5000 \
+gunicorn --worker-class eventlet -w 1 --bind 0.0.0.0:$PORT \
   mercury.web.app:create_app()
 ```
+
+### Observability (Sentry + Prometheus)
+
+- **Errors:** set `SENTRY_DSN` to stream exceptions to Sentry. PII is off by
+  default — recipient data is never sent; opt into performance tracing with
+  `SENTRY_TRACES_SAMPLE_RATE`, and tag releases with `MERCURY_RELEASE`.
+- **Metrics:** `GET /metrics` exposes Prometheus request/latency counters plus
+  process metrics. Single-worker means the in-process registry is complete, so
+  no multiprocess setup is needed. Scrape it on the internal network, or gate
+  it with `METRICS_TOKEN` (`Authorization: Bearer <token>` or `?token=`); the
+  sample Caddyfile blocks `/metrics` at the public edge.
+
+Both libraries ship in the image. With `SENTRY_DSN` unset, Sentry stays dormant
+and `/metrics` is still served.
 
 ---
 

@@ -114,8 +114,18 @@ geo = [
     # {{location.*}} placeholders resolve to empty strings.
     "geoip2>=4.7",
 ]
+observability = [
+    # Error tracking (SENTRY_DSN) + Prometheus /metrics. Both are optional at
+    # runtime — the web app import-guards them, so a core install still boots.
+    "sentry-sdk[flask]>=2.0",
+    "prometheus-client>=0.20",
+]
+postgres = [
+    # PostgreSQL driver for DATABASE_URL=postgresql://... (SQLite needs none).
+    "psycopg2-binary>=2.9.9",
+]
 all = [
-    "mercury[dev,pdf,geo]",
+    "mercury[dev,pdf,geo,observability,postgres]",
 ]
 
 [project.scripts]

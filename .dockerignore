@@ -51,3 +51,24 @@ logs/
 .vscode/
 .idea/
 *.swp
+
+# Version control & CI (huge; never needed in the image)
+.git/
+.github/
+.gitignore
+
+# Tooling caches & coverage reports
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+
+# Not copied into the image (Dockerfile pulls only src/, migrations/, etc.)
+tests/
+docs/
+examples/
+scripts/
+.claude/
+
+# Runtime data — don't bake the dev DB / pid file / attachments into the image
+data/
+*.pid

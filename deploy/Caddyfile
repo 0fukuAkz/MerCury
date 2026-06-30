@@ -1,0 +1,21 @@
+# MerCury reverse proxy — TLS termination via Caddy's automatic HTTPS.
+#
+# 1. Replace mail.example.com with your real domain. Its A/AAAA record must
+#    point at this host; Caddy then provisions + renews Let's Encrypt certs.
+# 2. For local testing without a public domain, change the site address to
+#    `localhost` (Caddy issues a locally-trusted self-signed cert).
+#
+# Enable:  docker compose --profile proxy up -d
+
+mail.example.com {
+	encode zstd gzip
+
+	# Block /metrics from the public edge — scrape it on the internal compose
+	# network (prometheus -> web:5050/metrics) instead. Delete this matcher if
+	# you intentionally expose metrics (then also set METRICS_TOKEN on `web`).
+	@metrics path /metrics
+	respond @metrics 404
+
+	# SocketIO websocket upgrades are proxied transparently by reverse_proxy.
+	reverse_proxy web:5050
+}

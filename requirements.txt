@@ -70,6 +70,13 @@ httpx==0.26.0
 structlog==24.1.0
 python-json-logger==2.0.7
 
+# Observability - optional error tracking + metrics, activated by env.
+# SENTRY_DSN turns on Sentry; GET /metrics is always served (gate it with
+# METRICS_TOKEN or at your proxy). Both are import-guarded in web/, so a
+# core install without these still boots.
+sentry-sdk[flask]==2.63.0
+prometheus-client==0.25.0
+
 # CLI and Utilities
 # python-dotenv 1.0.0 -> 1.2.2 closes CVE-2026-28684.
 # tqdm 4.66.1 -> 4.66.3 closes CVE-2024-34062.

@@ -1,49 +1,59 @@
+# MerCury production topology. Postgres (not SQLite) + Redis (not the in-memory
+# limiter) satisfy create_app's production preflight out of the box; a one-shot
+# `migrations` service applies the schema before `web` starts.
+#
+# `web` speaks plain HTTP and is published on 127.0.0.1 only — front it with a
+# TLS-terminating reverse proxy. An optional Caddy proxy is wired under the
+# `proxy` profile:  docker compose --profile proxy up -d   (see deploy/Caddyfile).
+
 services:
   web:
     build: .
-    ports:
-      - "5000:5000"
     environment:
       - FLASK_ENV=production
       - FLASK_DEBUG=0
+      - PORT=5050
       - DATABASE_URL=postgresql://mercury:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@db:5432/mercury
       - SECRET_KEY=${SECRET_KEY:?SECRET_KEY must be set}
       # First-admin bootstrap. All three are required together — the app
-      # refuses to auto-create an admin user without them and you'll be
-      # locked out of the web UI on first boot.
+      # refuses to auto-create an admin user without them and you'll be locked
+      # out of the web UI on first boot.
       - ADMIN_USERNAME=${ADMIN_USERNAME:?ADMIN_USERNAME must be set}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set}
       - ADMIN_EMAIL=${ADMIN_EMAIL:?ADMIN_EMAIL must be set}
-      # Tracking pixel/click links are built against this URL. Required
-      # whenever a campaign opts into tracking; TrackingService raises at
-      # construction time if neither this nor an explicit base_url is set.
+      # Tracking pixel/click links are built against this URL. Required whenever
+      # a campaign opts into tracking; TrackingService raises at construction
+      # time if neither this nor an explicit base_url is set.
       - TRACKING_BASE_URL=${TRACKING_BASE_URL:?TRACKING_BASE_URL must be set (e.g. https://mail.yourdomain.com)}
-      # Rate-limit storage. memory:// loses all state on restart and cannot be
-      # shared across workers — Redis is the production default. Override only
-      # if you genuinely intend a single-worker, ephemeral-state deploy.
+      # Redis-backed rate limiting — durable across restarts and the production
+      # default the preflight expects.
       - RATE_LIMIT_STORAGE=${RATE_LIMIT_STORAGE:-redis://:${REDIS_PASSWORD:?REDIS_PASSWORD must be set}@redis:6379/0}
-      # SocketIO async backend must agree with the gunicorn worker class.
-      # The Dockerfile CMD uses --worker-class eventlet, so we need eventlet
-      # mode here. The default in src/ is 'threading' (dev-friendly); this
-      # is the production opt-in. Without it, live-progress events queue
-      # but never reach connected browsers.
+      # SocketIO async backend must agree with the gunicorn eventlet worker
+      # class. Without this, live-progress events queue but never reach browsers.
       - SOCKETIO_ASYNC_MODE=eventlet
-      # Boot-time alembic upgrade is OFF by default in production (see app.py).
-      # The `migrations` service below applies them once before web starts.
+      # Optional observability — safe to leave unset.
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - SENTRY_TRACES_SAMPLE_RATE=${SENTRY_TRACES_SAMPLE_RATE:-0}
+      - METRICS_TOKEN=${METRICS_TOKEN:-}
+      - API_KEYS=${API_KEYS:-}
+    ports:
+      # Loopback only — reach it through the proxy. Change to "5050:5050" for
+      # direct (untrusted, no TLS) exposure during testing.
+      - "127.0.0.1:5050:5050"
     depends_on:
-      - db
-      - redis
-      - migrations
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
+    init: true
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/live"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+    # Liveness uses the image's built-in HEALTHCHECK (stdlib probe, no curl).
 
-  # One-shot: apply pending Alembic migrations before the web service starts.
-  # Replaces the previous boot-time inline `alembic upgrade head`, which would
-  # race under multi-worker deploys.
+  # One-shot: apply pending Alembic migrations before web starts. Boot-time
+  # inline migration is OFF in production (see app.py), so this is the schema
+  # gate — `web` waits for it to complete successfully.
   migrations:
     build: .
     command: ["alembic", "upgrade", "head"]
@@ -51,7 +61,8 @@ services:
       - DATABASE_URL=postgresql://mercury:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@db:5432/mercury
       - SECRET_KEY=${SECRET_KEY:?SECRET_KEY must be set}
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     restart: "no"
 
   db:
@@ -62,14 +73,48 @@ services:
       - POSTGRES_USER=mercury
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
       - POSTGRES_DB=mercury
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mercury -d mercury"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     restart: unless-stopped
 
   redis:
     image: redis:7-alpine
     command: redis-server --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
+    healthcheck:
+      # PING requires auth once requirepass is set, so pass the password in.
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     # Persistence isn't required for rate-limit counters; restart resets are
     # acceptable. Add a volume here if you also use redis for other state.
     restart: unless-stopped
 
+  # Optional TLS-terminating reverse proxy. Enable with:
+  #   docker compose --profile proxy up -d
+  # Edit deploy/Caddyfile with your real domain first — Caddy then provisions
+  # and renews Let's Encrypt certificates automatically.
+  proxy:
+    image: caddy:2-alpine
+    profiles: ["proxy"]
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+    restart: unless-stopped
+
 volumes:
   postgres_data:
+  caddy_data:
+  caddy_config:

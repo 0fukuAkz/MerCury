@@ -232,6 +232,13 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
         level=os.environ.get("LOG_LEVEL", "INFO"), json_output=json_logging, log_file=str(log_file)
     )
 
+    # Optional Sentry error tracking — a no-op unless SENTRY_DSN is set. Placed
+    # right after logging is configured so its LoggingIntegration hooks the same
+    # handlers, and before any request handling begins.
+    from .observability import init_sentry
+
+    init_sentry()
+
     if config:
         app.config.update(config)
 
@@ -287,6 +294,11 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
     app.register_blueprint(senders_bp)  # /senders
     app.register_blueprint(templates_bp)  # /templates
     app.register_blueprint(attachments_bp)  # /attachments
+
+    # Prometheus metrics endpoint (GET /metrics) + per-request instrumentation.
+    from .metrics import init_metrics
+
+    init_metrics(app)
 
     # Register SocketIO events
     register_socketio_events(socketio)
