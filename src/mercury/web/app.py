@@ -182,22 +182,37 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
         if not os.environ.get("API_KEYS", "").strip():
             _prod_warnings.append("API_KEYS not set — programmatic API access will be disabled.")
 
-        # Single-worker invariant. The shared asyncio loop, SocketIO emit
-        # bridge, and in-memory rate limiters / connection pools are all
-        # per-process and NOT shared across workers — so MerCury is only correct
-        # with one worker. This stays a *warning*, not a hard error: WEB_CONCURRENCY
-        # is only a heuristic (a CLI `-w 1`, which run.py passes, overrides it),
-        # so a stray env value here is not proof of misconfiguration.
+        # Single-worker invariant — conditionally lifted. The shared asyncio
+        # loop, SocketIO emit bridge, and in-memory rate limiters are per-process,
+        # so multiple web workers are only correct once that state is
+        # externalized: event fan-out (SOCKETIO_MESSAGE_QUEUE), shared rate limits
+        # (redis:// RATE_LIMIT_STORAGE), and campaign execution moved off the web
+        # process (CAMPAIGN_EXECUTION_MODE=worker). With all three set, allow
+        # WEB_CONCURRENCY>1; otherwise warn. It stays a warning, not a hard error:
+        # WEB_CONCURRENCY is a heuristic (a CLI `-w 1`, which run.py passes,
+        # overrides it), so a stray env value isn't proof of misconfiguration.
         _workers = os.environ.get("WEB_CONCURRENCY", "").strip()
         if _workers and _workers != "1":
-            _prod_warnings.append(
-                f"WEB_CONCURRENCY={_workers}: MerCury's shared asyncio loop, SocketIO "
-                "emit bridge, and in-memory rate limiters/connection pools are "
-                "per-process and not shared across workers — it is only correct with "
-                "a single worker. Run gunicorn with -w 1 (run.py does), or add a "
-                "SocketIO message_queue + shared redis:// RATE_LIMIT_STORAGE before "
-                "scaling out."
-            )
+            _missing_for_scale = []
+            if not os.environ.get("SOCKETIO_MESSAGE_QUEUE", "").strip():
+                _missing_for_scale.append("SOCKETIO_MESSAGE_QUEUE=redis://...")
+            if not os.environ.get("RATE_LIMIT_STORAGE", "memory://").startswith("redis://"):
+                _missing_for_scale.append("RATE_LIMIT_STORAGE=redis://...")
+            if os.environ.get("CAMPAIGN_EXECUTION_MODE", "inprocess").strip().lower() != "worker":
+                _missing_for_scale.append("CAMPAIGN_EXECUTION_MODE=worker")
+            if _missing_for_scale:
+                _prod_warnings.append(
+                    f"WEB_CONCURRENCY={_workers} but the web tier is not multi-worker-"
+                    "safe yet: set " + ", ".join(_missing_for_scale) + ". MerCury's "
+                    "per-process asyncio loop / emit bridge / in-memory limiters are "
+                    "otherwise not shared across workers. Or run a single worker."
+                )
+            else:
+                logger.info(
+                    "Multi-worker web tier enabled (WEB_CONCURRENCY=%s): SocketIO "
+                    "message queue + redis rate-limit + worker execution all set.",
+                    _workers,
+                )
 
         for _w in _prod_warnings:
             logger.warning("Production preflight: %s", _w)

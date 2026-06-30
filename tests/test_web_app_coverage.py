@@ -86,6 +86,52 @@ def test_app_factory_prod_accepts_postgres_and_redis(monkeypatch):
             assert app.config["ENV"] == "production"
 
 
+def test_prod_multiworker_allowed_when_prereqs_met(monkeypatch):
+    """WEB_CONCURRENCY>1 is allowed (no multi-worker warning) once event fan-out
+    + redis rate-limit + worker execution are all configured."""
+    monkeypatch.setenv("FLASK_ENV", "production")
+    monkeypatch.setenv("SECRET_KEY", "prodsecret")
+    monkeypatch.setenv("ADMIN_PASSWORD", "adminpass")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@db/mercury")
+    monkeypatch.setenv("RATE_LIMIT_STORAGE", "redis://localhost:6379")
+    monkeypatch.setenv("WEB_CONCURRENCY", "4")
+    monkeypatch.setenv("SOCKETIO_MESSAGE_QUEUE", "redis://localhost:6379/1")
+    monkeypatch.setenv("CAMPAIGN_EXECUTION_MODE", "worker")
+
+    with patch("mercury.web.app.init_db"), patch("mercury.web.app.init_auth"), patch(
+        "mercury.web.app.start_background_loop"
+    ), patch("mercury.web.app.configure_logging"), patch("mercury.web.app.logger") as mock_logger:
+        mock_session = MagicMock()
+        with patch("mercury.data.database.get_session_direct", return_value=mock_session):
+            create_app()
+            warnings = [c[0][1] for c in mock_logger.warning.call_args_list]
+            assert not any("multi-worker-safe" in m for m in warnings)
+
+
+def test_prod_multiworker_warns_when_prereqs_missing(monkeypatch):
+    """WEB_CONCURRENCY>1 without the shared-state prerequisites warns, naming
+    exactly what's missing."""
+    monkeypatch.setenv("FLASK_ENV", "production")
+    monkeypatch.setenv("SECRET_KEY", "prodsecret")
+    monkeypatch.setenv("ADMIN_PASSWORD", "adminpass")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@db/mercury")
+    monkeypatch.setenv("RATE_LIMIT_STORAGE", "redis://localhost:6379")
+    monkeypatch.setenv("WEB_CONCURRENCY", "4")
+    monkeypatch.delenv("SOCKETIO_MESSAGE_QUEUE", raising=False)
+    monkeypatch.delenv("CAMPAIGN_EXECUTION_MODE", raising=False)
+
+    with patch("mercury.web.app.init_db"), patch("mercury.web.app.init_auth"), patch(
+        "mercury.web.app.start_background_loop"
+    ), patch("mercury.web.app.configure_logging"), patch("mercury.web.app.logger") as mock_logger:
+        mock_session = MagicMock()
+        with patch("mercury.data.database.get_session_direct", return_value=mock_session):
+            create_app()
+            warnings = [c[0][1] for c in mock_logger.warning.call_args_list]
+            assert any("not multi-worker-safe" in m for m in warnings)
+            assert any("SOCKETIO_MESSAGE_QUEUE" in m for m in warnings)
+            assert any("CAMPAIGN_EXECUTION_MODE=worker" in m for m in warnings)
+
+
 def test_app_load_user_exception():
     with patch("mercury.web.app.init_db"), patch("mercury.web.app.init_auth"), patch(
         "mercury.web.app.start_background_loop"

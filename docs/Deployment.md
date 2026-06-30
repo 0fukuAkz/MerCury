@@ -896,6 +896,30 @@ and `/metrics` is still served.
 
 ---
 
+## Scaling the web tier (multi-worker)
+
+MerCury defaults to a single worker because its asyncio loop, SocketIO emit
+bridge, and in-memory rate limiters are per-process. To run multiple web workers
+(or replicas), externalize that state — set **all** of:
+
+| Set on `web` | Why |
+|---|---|
+| `WEB_CONCURRENCY=<N>` (or gunicorn `-w N`) | the worker count itself |
+| `SOCKETIO_MESSAGE_QUEUE=redis://...` | live progress fans out to clients on any worker |
+| `RATE_LIMIT_STORAGE=redis://...` | rate limits shared across workers |
+| `CAMPAIGN_EXECUTION_MODE=worker` + run the `worker` service | execution moves off the web process |
+
+With all four in place the production preflight permits `WEB_CONCURRENCY>1`
+(otherwise it warns, naming what's missing). Bring up the worker tier with
+`docker compose --profile worker up -d`.
+
+> **Status:** the machinery is wired and unit-tested, but a multi-worker
+> deployment should be **validated in staging** (live event fan-out, shared
+> limits, worker execution) before production — the single-worker path remains
+> the proven default.
+
+---
+
 ## SSL/TLS & Reverse Proxy
 
 ### Let's Encrypt with Certbot
