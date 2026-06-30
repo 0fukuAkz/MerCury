@@ -47,8 +47,8 @@ def upgrade() -> None:
         """
         UPDATE smtpservers
            SET tls_mode = CASE
-             WHEN use_ssl = 1 THEN 'ssl'
-             WHEN use_tls = 1 THEN 'starttls'
+             WHEN use_ssl THEN 'ssl'
+             WHEN use_tls THEN 'starttls'
              ELSE 'none'
            END
          WHERE tls_mode IS NULL
