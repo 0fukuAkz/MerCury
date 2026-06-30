@@ -1,8 +1,8 @@
 """Email template model."""
 
-from typing import TYPE_CHECKING
-from sqlalchemy import Column, String, Text, Boolean, JSON
-from sqlalchemy.orm import Mapped, relationship
+from typing import TYPE_CHECKING, Optional, Any
+from sqlalchemy import String, Text, Boolean, JSON
+from sqlalchemy.orm import Mapped, relationship, mapped_column
 
 from ..database import Base
 from .base import BaseModel
@@ -16,32 +16,32 @@ class Template(Base, BaseModel):
 
     __tablename__ = "templates"
 
-    name = Column(String(255), nullable=False, index=True)
-    description = Column(Text)
+    name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    description: Mapped[Optional[str]] = mapped_column(Text)
 
     # Content
-    html_content = Column(Text)
-    text_content = Column(Text)
-    html_path = Column(String(500))  # Path to external HTML file
+    html_content: Mapped[Optional[str]] = mapped_column(Text)
+    text_content: Mapped[Optional[str]] = mapped_column(Text)
+    html_path: Mapped[Optional[str]] = mapped_column(String(500))  # Path to external HTML file
 
     # Subject templates
-    subject = Column(String(500))
-    subject_variants = Column(JSON, default=list)
+    subject: Mapped[Optional[str]] = mapped_column(String(500))
+    subject_variants: Mapped[Optional[Any]] = mapped_column(JSON, default=list)
 
     # Settings
-    is_active = Column(Boolean, default=True)
-    is_default = Column(Boolean, default=False)
+    is_active: Mapped[Optional[bool]] = mapped_column(Boolean, default=True)
+    is_default: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
 
     # Placeholders used in template
-    placeholders_used = Column(JSON, default=list)
+    placeholders_used: Mapped[Optional[Any]] = mapped_column(JSON, default=list)
 
     # Attachment settings
-    attachment_path = Column(String(500))
-    attachment_type = Column(String(50))  # pdf, docx, html, image
+    attachment_path: Mapped[Optional[str]] = mapped_column(String(500))
+    attachment_type: Mapped[Optional[str]] = mapped_column(String(50))  # pdf, docx, html, image
 
     # Metadata
-    tags = Column(JSON, default=list)
-    settings = Column(JSON, default=dict)
+    tags: Mapped[Optional[Any]] = mapped_column(JSON, default=list)
+    settings: Mapped[Optional[Any]] = mapped_column(JSON, default=dict)
 
     # Relationships
     campaigns: Mapped[list["Campaign"]] = relationship("Campaign", back_populates="template")

@@ -1,9 +1,9 @@
 """Recipient and recipient list models."""
 
 from enum import Enum
-from typing import TYPE_CHECKING, Optional
-from sqlalchemy import Column, String, Integer, ForeignKey, Text, Boolean, JSON
-from sqlalchemy.orm import Mapped, relationship
+from typing import TYPE_CHECKING, Optional, Any
+from sqlalchemy import String, Integer, ForeignKey, Text, Boolean, JSON
+from sqlalchemy.orm import Mapped, relationship, mapped_column
 
 from ..database import Base
 from .base import BaseModel
@@ -28,27 +28,29 @@ class RecipientList(Base, BaseModel):
 
     __tablename__ = "recipientlists"
 
-    name = Column(String(255), nullable=False, index=True)
-    description = Column(Text)
+    name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    description: Mapped[Optional[str]] = mapped_column(Text)
 
     # Source
-    source_path = Column(String(500))
-    source_type = Column(String(50), default="csv")  # csv, txt, manual
+    source_path: Mapped[Optional[str]] = mapped_column(String(500))
+    source_type: Mapped[Optional[str]] = mapped_column(
+        String(50), default="csv"
+    )  # csv, txt, manual
 
     # Statistics
-    total_count = Column(Integer, default=0)
-    valid_count = Column(Integer, default=0)
-    invalid_count = Column(Integer, default=0)
-    duplicate_count = Column(Integer, default=0)
-    suppressed_count = Column(Integer, default=0)
+    total_count: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    valid_count: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    invalid_count: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    duplicate_count: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    suppressed_count: Mapped[Optional[int]] = mapped_column(Integer, default=0)
 
     # Settings
-    is_validated = Column(Boolean, default=False)
-    is_deduplicated = Column(Boolean, default=False)
+    is_validated: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    is_deduplicated: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
 
     # Metadata
-    tags = Column(JSON, default=list)
-    settings = Column(JSON, default=dict)
+    tags: Mapped[Optional[Any]] = mapped_column(JSON, default=list)
+    settings: Mapped[Optional[Any]] = mapped_column(JSON, default=dict)
 
     # Relationships
     recipients: Mapped[list["Recipient"]] = relationship(
@@ -65,29 +67,31 @@ class Recipient(Base, BaseModel):
 
     __tablename__ = "recipients"
 
-    email = Column(String(255), nullable=False, index=True)
+    email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
 
     # Parsed email parts
-    local_part = Column(String(255))
-    domain = Column(String(255))
-    domain_name = Column(String(255))
+    local_part: Mapped[Optional[str]] = mapped_column(String(255))
+    domain: Mapped[Optional[str]] = mapped_column(String(255))
+    domain_name: Mapped[Optional[str]] = mapped_column(String(255))
 
     # Status
-    status = Column(String(50), default=RecipientStatus.PENDING.value)
-    is_valid = Column(Boolean, default=True)
-    is_suppressed = Column(Boolean, default=False)
+    status: Mapped[Optional[str]] = mapped_column(String(50), default=RecipientStatus.PENDING.value)
+    is_valid: Mapped[Optional[bool]] = mapped_column(Boolean, default=True)
+    is_suppressed: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
 
     # Custom data from CSV
-    first_name = Column(String(255))
-    last_name = Column(String(255))
-    company = Column(String(255))
-    custom_data = Column(JSON, default=dict)
+    first_name: Mapped[Optional[str]] = mapped_column(String(255))
+    last_name: Mapped[Optional[str]] = mapped_column(String(255))
+    company: Mapped[Optional[str]] = mapped_column(String(255))
+    custom_data: Mapped[Optional[Any]] = mapped_column(JSON, default=dict)
 
     # Validation
-    validation_error = Column(String(500))
+    validation_error: Mapped[Optional[str]] = mapped_column(String(500))
 
     # Relationship
-    recipient_list_id = Column(Integer, ForeignKey("recipientlists.id", ondelete="CASCADE"))
+    recipient_list_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("recipientlists.id", ondelete="CASCADE")
+    )
     recipient_list: Mapped[Optional["RecipientList"]] = relationship(
         "RecipientList", back_populates="recipients"
     )

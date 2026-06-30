@@ -199,14 +199,11 @@ extend-select = ["T201"]
 
 [tool.mypy]
 python_version = "3.12"
-# SQLAlchemy ORM models are still written in the legacy ``Column(X)``
-# style (the codebase runs on SA 2.0 but predates the ``Mapped[X]``
-# migration). The ext.mypy plugin teaches mypy how to read those
-# declarations as `X` rather than `Column[X]`, which eliminates ~200
-# false-positive [assignment]/[arg-type]/[valid-type] errors on model
-# assignments and queries. The plugin is deprecated upstream; replace
-# with ``Mapped[...]`` model annotations when the codebase migrates.
-plugins = ["sqlalchemy.ext.mypy.plugin"]
+# SQLAlchemy ORM models use 2.0-native ``Mapped[X]`` / ``mapped_column``
+# typing, so no mypy plugin is needed (the deprecated ext.mypy plugin was
+# removed once the models were migrated). mypy types model *attributes*
+# precisely from the Mapped[] annotations; constructor kwargs go through
+# SQLAlchemy's generic declarative ``__init__`` at runtime.
 
 # Quiet the [import-untyped] noise for third-party libraries that ship
 # no type stubs. These are runtime-only deps that mypy can't introspect,

@@ -7,9 +7,16 @@ from contextlib import contextmanager
 from typing import Any, Generator, Iterator, Optional
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
-from sqlalchemy.orm import sessionmaker, Session, declarative_base
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-Base = declarative_base()
+
+class Base(DeclarativeBase):
+    """Declarative base for all ORM models (SQLAlchemy 2.0 native).
+
+    Replaces the legacy ``declarative_base()`` factory: a real class is both a
+    valid base and a valid type to mypy without the deprecated ext.mypy plugin.
+    """
+
 
 logger = logging.getLogger(__name__)
 

@@ -1,7 +1,9 @@
 """Dead letter queue model for permanently failed emails."""
 
 from datetime import datetime, UTC
-from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, JSON
+from typing import Optional, Any
+from sqlalchemy import Integer, String, Text, DateTime, Boolean, JSON
+from sqlalchemy.orm import Mapped, mapped_column
 
 from .base import Base
 
@@ -22,37 +24,39 @@ class DeadLetter(Base):
 
     __tablename__ = "dead_letters"
 
-    id = Column(Integer, primary_key=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
     # Email details
-    recipient = Column(String(255), nullable=False, index=True)
-    subject = Column(String(500), nullable=False)
-    html_body = Column(Text, nullable=False)
-    from_email = Column(String(255), nullable=False)
-    from_name = Column(String(255))
+    recipient: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    subject: Mapped[str] = mapped_column(String(500), nullable=False)
+    html_body: Mapped[str] = mapped_column(Text, nullable=False)
+    from_email: Mapped[str] = mapped_column(String(255), nullable=False)
+    from_name: Mapped[Optional[str]] = mapped_column(String(255))
 
     # Campaign reference
-    campaign_id = Column(Integer, index=True)
-    correlation_id = Column(String(100), index=True)
+    campaign_id: Mapped[Optional[int]] = mapped_column(Integer, index=True)
+    correlation_id: Mapped[Optional[str]] = mapped_column(String(100), index=True)
 
     # Error details
-    error_type = Column(String(100), nullable=False)
-    error_message = Column(Text, nullable=False)
-    smtp_server = Column(String(100))
-    smtp_response = Column(Text)
+    error_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    error_message: Mapped[str] = mapped_column(Text, nullable=False)
+    smtp_server: Mapped[Optional[str]] = mapped_column(String(100))
+    smtp_response: Mapped[Optional[str]] = mapped_column(Text)
 
     # Metadata
-    failed_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False)
-    retry_count = Column(Integer, default=0, nullable=False)
-    last_retry_at = Column(DateTime(timezone=True))
+    failed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
+    )
+    retry_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_retry_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     # State
-    resolved = Column(Boolean, default=False, nullable=False)
-    resolved_at = Column(DateTime(timezone=True))
-    resolution_notes = Column(Text)
+    resolved: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    resolution_notes: Mapped[Optional[str]] = mapped_column(Text)
 
     # Additional data
-    additional_data = Column(JSON)
+    additional_data: Mapped[Optional[Any]] = mapped_column(JSON)
 
     def __repr__(self) -> str:
         return (

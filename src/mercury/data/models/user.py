@@ -1,6 +1,9 @@
 """User model for database-backed authentication."""
 
-from sqlalchemy import Column, String, Boolean, DateTime, Integer
+from datetime import datetime
+from typing import Optional
+from sqlalchemy import String, Boolean, DateTime, Integer
+from sqlalchemy.orm import Mapped, mapped_column
 
 from ..database import Base
 from .base import BaseModel
@@ -17,29 +20,33 @@ class User(Base, BaseModel):
     __tablename__ = "users"
 
     # Core fields
-    username = Column(String(255), unique=True, nullable=False, index=True)
-    email = Column(String(255), unique=True, nullable=True, index=True)
-    password_hash = Column(String(512), nullable=False)
+    username: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    email: Mapped[Optional[str]] = mapped_column(
+        String(255), unique=True, nullable=True, index=True
+    )
+    password_hash: Mapped[str] = mapped_column(String(512), nullable=False)
 
     # Profile
-    display_name = Column(String(255), nullable=True)
+    display_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Permissions
-    is_admin = Column(Boolean, default=False, nullable=False)
-    is_active = Column(Boolean, default=True, nullable=False)
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     # API access
-    api_key = Column(String(64), unique=True, nullable=True, index=True)
-    api_key_created_at = Column(DateTime, nullable=True)
+    api_key: Mapped[Optional[str]] = mapped_column(
+        String(64), unique=True, nullable=True, index=True
+    )
+    api_key_created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Tracking
-    last_login_at = Column(DateTime, nullable=True)
-    last_login_ip = Column(String(45), nullable=True)  # Supports IPv6
-    login_count = Column(Integer, default=0, nullable=False)
+    last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    last_login_ip: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)  # Supports IPv6
+    login_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     # Password management
-    password_changed_at = Column(DateTime, nullable=True)
-    must_change_password = Column(Boolean, default=False, nullable=False)
+    password_changed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    must_change_password: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     def __repr__(self):
         return f"<User(id={self.id}, username='{self.username}', is_admin={self.is_admin})>"

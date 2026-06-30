@@ -1,9 +1,9 @@
 """Campaign model with full feature support."""
 
 from enum import Enum
-from typing import TYPE_CHECKING, Optional
+from datetime import datetime
+from typing import TYPE_CHECKING, Optional, Any
 from sqlalchemy import (
-    Column,
     String,
     Integer,
     ForeignKey,
@@ -14,7 +14,7 @@ from sqlalchemy import (
     Float,
     Boolean,
 )
-from sqlalchemy.orm import Mapped, relationship, validates
+from sqlalchemy.orm import Mapped, relationship, validates, mapped_column
 
 from ..database import Base
 from .base import BaseModel
@@ -50,16 +50,22 @@ class Campaign(Base, BaseModel):
 
     __tablename__ = "campaigns"
 
-    name = Column(String(255), nullable=False, index=True)
-    description = Column(Text)
-    type = Column(SQLEnum(CampaignType), default=CampaignType.MARKETING, nullable=False)
-    status = Column(
+    name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    type: Mapped[CampaignType] = mapped_column(
+        SQLEnum(CampaignType), default=CampaignType.MARKETING, nullable=False
+    )
+    status: Mapped[CampaignStatus] = mapped_column(
         SQLEnum(CampaignStatus), default=CampaignStatus.DRAFT, nullable=False, index=True
     )
 
     # Relationships
-    template_id = Column(Integer, ForeignKey("templates.id", ondelete="SET NULL"))
-    recipient_list_id = Column(Integer, ForeignKey("recipientlists.id", ondelete="SET NULL"))
+    template_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("templates.id", ondelete="SET NULL")
+    )
+    recipient_list_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("recipientlists.id", ondelete="SET NULL")
+    )
 
     template: Mapped[Optional["Template"]] = relationship("Template", back_populates="campaigns")
     recipient_list: Mapped[Optional["RecipientList"]] = relationship(
@@ -73,49 +79,51 @@ class Campaign(Base, BaseModel):
     )
 
     # Scheduling
-    scheduled_at = Column(DateTime)
-    started_at = Column(DateTime)
-    completed_at = Column(DateTime)
+    scheduled_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
 
     # Statistics
-    total_recipients = Column(Integer, default=0)
-    sent_count = Column(Integer, default=0)
-    delivered_count = Column(Integer, default=0)
-    failed_count = Column(Integer, default=0)
-    queued_count = Column(Integer, default=0)
+    total_recipients: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    sent_count: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    delivered_count: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    failed_count: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    queued_count: Mapped[Optional[int]] = mapped_column(Integer, default=0)
 
     # Settings stored as JSON
-    settings = Column(JSON, default=dict)
+    settings: Mapped[Optional[Any]] = mapped_column(JSON, default=dict)
 
     # Subject configuration (supports rotation)
-    subjects = Column(JSON, default=list)
-    subject_rotation_strategy = Column(String(50), default="round_robin")
+    subjects: Mapped[Optional[Any]] = mapped_column(JSON, default=list)
+    subject_rotation_strategy: Mapped[Optional[str]] = mapped_column(
+        String(50), default="round_robin"
+    )
 
     # FROM configuration
-    reply_to = Column(String(255))
+    reply_to: Mapped[Optional[str]] = mapped_column(String(255))
 
     # Placeholders
-    placeholders = Column(JSON, default=dict)
+    placeholders: Mapped[Optional[Any]] = mapped_column(JSON, default=dict)
 
     # Content conversion settings
-    convert_to_image = Column(Boolean, default=False)
-    convert_to_pdf = Column(Boolean, default=False)
-    enable_qr_code = Column(Boolean, default=False)
+    convert_to_image: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    convert_to_pdf: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    enable_qr_code: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
 
     # Bulk sending configuration
-    chunk_size = Column(Integer, default=10000)
-    concurrency = Column(Integer, default=100)
-    pause_between_chunks = Column(Integer, default=30)
-    rate_per_minute = Column(Integer, default=0)
-    rate_per_hour = Column(Integer, default=0)
+    chunk_size: Mapped[Optional[int]] = mapped_column(Integer, default=10000)
+    concurrency: Mapped[Optional[int]] = mapped_column(Integer, default=100)
+    pause_between_chunks: Mapped[Optional[int]] = mapped_column(Integer, default=30)
+    rate_per_minute: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    rate_per_hour: Mapped[Optional[int]] = mapped_column(Integer, default=0)
 
     # SMTP rotation
-    smtp_rotation_strategy = Column(String(50), default="weighted")
-    auto_failover = Column(Boolean, default=True)
+    smtp_rotation_strategy: Mapped[Optional[str]] = mapped_column(String(50), default="weighted")
+    auto_failover: Mapped[Optional[bool]] = mapped_column(Boolean, default=True)
 
     # Organization
-    tags = Column(JSON, default=list)
-    last_used_at = Column(DateTime)
+    tags: Mapped[Optional[Any]] = mapped_column(JSON, default=list)
+    last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
 
     @property
     def success_rate(self) -> float:
@@ -257,14 +265,16 @@ class CampaignSMTPConfig(Base, BaseModel):
 
     __tablename__ = "campaign_smtp_configs"
 
-    campaign_id = Column(Integer, ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False)
-    smtp_server_id = Column(
+    campaign_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False
+    )
+    smtp_server_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("smtpservers.id", ondelete="CASCADE"), nullable=False
     )
 
-    weight = Column(Float, default=1.0)
-    priority = Column(Integer, default=0)
-    enabled = Column(Boolean, default=True)
+    weight: Mapped[Optional[float]] = mapped_column(Float, default=1.0)
+    priority: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    enabled: Mapped[Optional[bool]] = mapped_column(Boolean, default=True)
 
     campaign: Mapped["Campaign"] = relationship("Campaign", back_populates="smtp_configs")
     smtp_server: Mapped["SMTPServer"] = relationship(

@@ -6,7 +6,9 @@ the DB. This split keeps the SQLite file small and lets us swap to S3
 later without a schema migration.
 """
 
-from sqlalchemy import Column, String, Integer, Boolean, JSON, Text
+from typing import Optional, Any
+from sqlalchemy import String, Integer, Boolean, JSON, Text
+from sqlalchemy.orm import Mapped, mapped_column
 
 from ..database import Base
 from .base import BaseModel
@@ -18,18 +20,18 @@ class Attachment(Base, BaseModel):
     __tablename__ = "attachments"
 
     # User-facing filename — what the recipient sees in the email.
-    filename = Column(String(255), nullable=False, index=True)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
 
     # On-disk basename (UUID4 + extension). Never derived from user input,
     # so path traversal is structurally impossible.
-    stored_name = Column(String(80), nullable=False, unique=True)
+    stored_name: Mapped[str] = mapped_column(String(80), nullable=False, unique=True)
 
-    size_bytes = Column(Integer, nullable=False, default=0)
-    content_type = Column(String(120))
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    content_type: Mapped[Optional[str]] = mapped_column(String(120))
 
-    description = Column(Text)
-    tags = Column(JSON, default=list)
-    is_active = Column(Boolean, default=True, nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    tags: Mapped[Optional[Any]] = mapped_column(JSON, default=list)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     def __repr__(self) -> str:
         return f"<Attachment(id={self.id}, filename='{self.filename}')>"

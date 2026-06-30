@@ -1,6 +1,8 @@
 """Global application settings model."""
 
-from sqlalchemy import Column, Integer, Float, Boolean, String, JSON
+from typing import Optional, Any
+from sqlalchemy import Integer, Float, Boolean, String, JSON
+from sqlalchemy.orm import Mapped, mapped_column
 from ..database import Base
 from .base import BaseModel
 
@@ -13,48 +15,54 @@ class GlobalSetting(Base, BaseModel):
     # We'll validly only have one row, ID=1
 
     # --- General Settings ---
-    daily_limit = Column(Integer, default=500, nullable=False)
-    hourly_limit = Column(Integer, default=50, nullable=False)
+    daily_limit: Mapped[int] = mapped_column(Integer, default=500, nullable=False)
+    hourly_limit: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
 
     # Delay (seconds)
-    min_delay = Column(Float, default=10.0, nullable=False)
-    max_delay = Column(Float, default=60.0, nullable=False)
+    min_delay: Mapped[float] = mapped_column(Float, default=10.0, nullable=False)
+    max_delay: Mapped[float] = mapped_column(Float, default=60.0, nullable=False)
 
     # Defaults
-    default_reply_to = Column(String(255))
+    default_reply_to: Mapped[Optional[str]] = mapped_column(String(255))
 
     # --- Advanced Settings ---
-    max_retries = Column(Integer, default=3)
-    retry_delay_base = Column(Integer, default=300)  # Base seconds for backoff
+    max_retries: Mapped[Optional[int]] = mapped_column(Integer, default=3)
+    retry_delay_base: Mapped[Optional[int]] = mapped_column(
+        Integer, default=300
+    )  # Base seconds for backoff
 
-    smtp_timeout = Column(Integer, default=30)
-    dns_timeout = Column(Integer, default=5)
+    smtp_timeout: Mapped[Optional[int]] = mapped_column(Integer, default=30)
+    dns_timeout: Mapped[Optional[int]] = mapped_column(Integer, default=5)
 
-    max_concurrency = Column(Integer, default=5)
+    max_concurrency: Mapped[Optional[int]] = mapped_column(Integer, default=5)
 
     # Proxy Configuration
-    proxy_enabled = Column(Boolean, default=False)
-    proxy_list = Column(JSON, default=list)  # List of strings ["http://...", ...]
-    proxy_rotation_strategy = Column(String(50), default="round_robin")
+    proxy_enabled: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    proxy_list: Mapped[Optional[Any]] = mapped_column(
+        JSON, default=list
+    )  # List of strings ["http://...", ...]
+    proxy_rotation_strategy: Mapped[Optional[str]] = mapped_column(
+        String(50), default="round_robin"
+    )
 
     # --- Defaults ---
-    batch_size = Column(Integer, default=1000)
-    default_sender_name = Column(String(255))
-    default_test_email = Column(String(255))
+    batch_size: Mapped[Optional[int]] = mapped_column(Integer, default=1000)
+    default_sender_name: Mapped[Optional[str]] = mapped_column(String(255))
+    default_test_email: Mapped[Optional[str]] = mapped_column(String(255))
 
     # --- Logging & Maintenance ---
-    log_retention_days = Column(Integer, default=30)
-    log_level = Column(String(20), default="INFO")
+    log_retention_days: Mapped[Optional[int]] = mapped_column(Integer, default=30)
+    log_level: Mapped[Optional[str]] = mapped_column(String(20), default="INFO")
 
     # --- UI Preferences ---
-    ui_theme = Column(String(20), default="dark")
+    ui_theme: Mapped[Optional[str]] = mapped_column(String(20), default="dark")
 
     # --- Encoding & Obfuscation ---
-    encode_attachments = Column(Boolean, default=False)
-    encode_html_entities = Column(Boolean, default=False)
-    encode_body_base64 = Column(Boolean, default=False)
-    encode_unicode_homoglyphs = Column(Boolean, default=False)
-    obfuscate_links = Column(Boolean, default=False)
+    encode_attachments: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    encode_html_entities: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    encode_body_base64: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    encode_unicode_homoglyphs: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    obfuscate_links: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
 
     def __repr__(self):
         return f"<GlobalSetting(id={self.id})>"

@@ -2,9 +2,9 @@
 
 import logging
 from enum import Enum
-from typing import TYPE_CHECKING
-from sqlalchemy import Column, String, Integer, Boolean, Float, JSON
-from sqlalchemy.orm import Mapped, relationship
+from typing import TYPE_CHECKING, Optional, Any
+from sqlalchemy import String, Integer, Boolean, Float, JSON
+from sqlalchemy.orm import Mapped, relationship, mapped_column
 
 from ..database import Base
 from .base import BaseModel
@@ -27,49 +27,51 @@ class SMTPServer(Base, BaseModel):
 
     __tablename__ = "smtpservers"
 
-    name = Column(String(100), nullable=False, unique=True)
-    host = Column(String(255), nullable=False)
-    port = Column(Integer, default=587)
-    username = Column(String(255))
-    _password = Column("password", String(500))  # Encrypted password storage
+    name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    host: Mapped[str] = mapped_column(String(255), nullable=False)
+    port: Mapped[Optional[int]] = mapped_column(Integer, default=587)
+    username: Mapped[Optional[str]] = mapped_column(String(255))
+    _password: Mapped[Optional[Any]] = mapped_column(
+        "password", String(500)
+    )  # Encrypted password storage
 
     # Connection settings. `tls_mode` is the single TLS field
     # ('none' | 'starttls' | 'ssl').
-    tls_mode = Column(String(16), default="starttls", nullable=False)
-    use_auth = Column(Boolean, default=True)
-    timeout = Column(Integer, default=30)
+    tls_mode: Mapped[str] = mapped_column(String(16), default="starttls", nullable=False)
+    use_auth: Mapped[Optional[bool]] = mapped_column(Boolean, default=True)
+    timeout: Mapped[Optional[int]] = mapped_column(Integer, default=30)
 
     # Sender defaults
-    from_email = Column(String(255))
-    from_name = Column(String(255))
+    from_email: Mapped[Optional[str]] = mapped_column(String(255))
+    from_name: Mapped[Optional[str]] = mapped_column(String(255))
 
     # Status and health
-    status = Column(String(50), default=SMTPServerStatus.ACTIVE.value)
-    is_enabled = Column(Boolean, default=True)
+    status: Mapped[Optional[str]] = mapped_column(String(50), default=SMTPServerStatus.ACTIVE.value)
+    is_enabled: Mapped[Optional[bool]] = mapped_column(Boolean, default=True)
 
     # Rate limiting (per-process limits enforced in-memory by the engine;
     # only the *configured* maxima are persisted, not the live counters).
-    max_per_hour = Column(Integer, default=500)
-    max_per_minute = Column(Integer, default=30)
+    max_per_hour: Mapped[Optional[int]] = mapped_column(Integer, default=500)
+    max_per_minute: Mapped[Optional[int]] = mapped_column(Integer, default=30)
 
     # Load balancing
-    weight = Column(Float, default=1.0)
-    priority = Column(Integer, default=0)
+    weight: Mapped[Optional[float]] = mapped_column(Float, default=1.0)
+    priority: Mapped[Optional[int]] = mapped_column(Integer, default=0)
 
     # Circuit breaker
-    failure_count = Column(Integer, default=0)
-    last_failure_at = Column(String(50))
-    circuit_open = Column(Boolean, default=False)
+    failure_count: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    last_failure_at: Mapped[Optional[str]] = mapped_column(String(50))
+    circuit_open: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
 
     # Statistics
-    total_sent = Column(Integer, default=0)
-    total_failed = Column(Integer, default=0)
+    total_sent: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    total_failed: Mapped[Optional[int]] = mapped_column(Integer, default=0)
 
     # IP Warmup
-    ip_warmup = Column(Boolean, default=False)
+    ip_warmup: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
 
     # Metadata
-    settings = Column(JSON, default=dict)
+    settings: Mapped[Optional[Any]] = mapped_column(JSON, default=dict)
 
     # Relationships
     campaign_configs: Mapped[list["CampaignSMTPConfig"]] = relationship(

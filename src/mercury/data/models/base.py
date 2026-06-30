@@ -1,7 +1,8 @@
 """Base model with common fields."""
 
 from datetime import datetime, UTC
-from sqlalchemy import Column, Integer, DateTime
+from sqlalchemy import Integer, DateTime
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.ext.declarative import declared_attr
 
 from ..database import Base  # re-exported: used by dead_letter.py
@@ -17,9 +18,11 @@ class BaseModel:
         """Generate table name from class name."""
         return cls.__name__.lower() + "s"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
-    updated_at = Column(
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(UTC), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=lambda: datetime.now(UTC),
         onupdate=lambda: datetime.now(UTC),
