@@ -45,6 +45,12 @@ psycopg2-binary==2.9.12
 # expects durable rate-limit storage).
 redis>=5.0
 
+# Task queue for the optional worker tier (CAMPAIGN_EXECUTION_MODE=worker),
+# decoupling campaign execution from the web process so the web tier scales
+# out. arq is async-native (fits the asyncio engine) and Redis-backed; it pins
+# redis<6, compatible with the redis>=5.0 above.
+arq>=0.26
+
 # Security - Encryption and authentication
 # cryptography 42.0.1 -> 46.0.7 closes CVE-2026-26007, PYSEC-2026-35,
 # and PYSEC-2026-36 (44.x is unpatched for the first two; 46.0.6 still

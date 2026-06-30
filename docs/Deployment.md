@@ -228,6 +228,8 @@ in a single boot so you fix them in one pass.
 | `SESSION_COOKIE_SECURE` | Force the `Secure` cookie flag | `True` in production |
 | `SOCKETIO_ASYNC_MODE` | SocketIO backend: `threading` (dev/test) or `eventlet` (production gunicorn). Must agree with the gunicorn worker class. | `threading` |
 | `SOCKETIO_MESSAGE_QUEUE` | `redis://...` to fan out live progress events across multiple web workers/replicas. Leave unset for single-worker (in-process). Required before scaling the web tier past one worker. | unset (in-process) |
+| `CAMPAIGN_EXECUTION_MODE` | `inprocess` (run campaigns in a web-process thread) or `worker` (enqueue to the arq worker tier — `docker compose --profile worker up`). `worker` also needs `SOCKETIO_MESSAGE_QUEUE` so worker progress reaches clients. | `inprocess` |
+| `CAMPAIGN_QUEUE_REDIS` | Redis DSN for the campaign task queue. Falls back to `SOCKETIO_MESSAGE_QUEUE`, then a local default. | `SOCKETIO_MESSAGE_QUEUE` |
 | `MERCURY_BOOT_MIGRATIONS` | Set to `1` to force Alembic boot-migrations on in any environment | unset |
 | `MERCURY_SKIP_BOOT_MIGRATIONS` | Set to `1` to force Alembic boot-migrations off in any environment | unset |
 | `SENTRY_DSN` | Enable Sentry error tracking (dormant when unset; PII never sent) | unset |

@@ -36,6 +36,11 @@ services:
       - SENTRY_TRACES_SAMPLE_RATE=${SENTRY_TRACES_SAMPLE_RATE:-0}
       - METRICS_TOKEN=${METRICS_TOKEN:-}
       - API_KEYS=${API_KEYS:-}
+      # Worker tier opt-in: set both to enqueue campaigns to the `worker`
+      # service (docker compose --profile worker up) instead of running them
+      # in-process. Default (inprocess) keeps the single-process setup.
+      - CAMPAIGN_EXECUTION_MODE=${CAMPAIGN_EXECUTION_MODE:-inprocess}
+      - SOCKETIO_MESSAGE_QUEUE=${SOCKETIO_MESSAGE_QUEUE:-}
     ports:
       # Loopback only — reach it through the proxy. Change to "5050:5050" for
       # direct (untrusted, no TLS) exposure during testing.
@@ -112,6 +117,29 @@ services:
       - caddy_config:/config
     depends_on:
       - web
+    restart: unless-stopped
+
+  # Optional campaign worker tier. Enable with:
+  #   docker compose --profile worker up -d
+  # ...and set CAMPAIGN_EXECUTION_MODE=worker + SOCKETIO_MESSAGE_QUEUE on `web`
+  # (via .env) so the web tier enqueues instead of running campaigns in-process.
+  worker:
+    build: .
+    profiles: ["worker"]
+    command: ["arq", "mercury.worker.tasks.WorkerSettings"]
+    environment:
+      - DATABASE_URL=postgresql://mercury:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@db:5432/mercury
+      - SECRET_KEY=${SECRET_KEY:?SECRET_KEY must be set}
+      - SOCKETIO_MESSAGE_QUEUE=${SOCKETIO_MESSAGE_QUEUE:-redis://:${REDIS_PASSWORD:?REDIS_PASSWORD must be set}@redis:6379/0}
+      - CAMPAIGN_QUEUE_REDIS=${CAMPAIGN_QUEUE_REDIS:-redis://:${REDIS_PASSWORD}@redis:6379/0}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
+    init: true
     restart: unless-stopped
 
 volumes:

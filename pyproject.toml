@@ -129,8 +129,13 @@ redis = [
     # (SOCKETIO_MESSAGE_QUEUE), and distributed locks.
     "redis>=5.0",
 ]
+worker = [
+    # arq task queue for the optional worker tier (CAMPAIGN_EXECUTION_MODE=
+    # worker), which decouples campaign execution from the web process.
+    "arq>=0.26",
+]
 all = [
-    "mercury[dev,pdf,geo,observability,postgres,redis]",
+    "mercury[dev,pdf,geo,observability,postgres,redis,worker]",
 ]
 
 [project.scripts]

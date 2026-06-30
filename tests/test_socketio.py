@@ -150,6 +150,28 @@ def test_socket_campaign_events(socket_app, socketio_instance, db_session):
         mock_svc.stop.assert_called_once()
 
 
+def test_start_campaign_worker_mode_enqueues(socket_app, socketio_instance, monkeypatch):
+    """With CAMPAIGN_EXECUTION_MODE=worker, start_campaign enqueues to the worker
+    tier (run_async(enqueue_campaign(...))) instead of spawning an in-process
+    thread, while still acknowledging with campaign_started."""
+    monkeypatch.setenv("CAMPAIGN_EXECUTION_MODE", "worker")
+    with patch("flask_login.utils._get_user") as mock_user_getter, patch(
+        "mercury.web.events.run_async", return_value="job-1"
+    ) as mock_run_async, patch("mercury.worker.queue.enqueue_campaign"):
+        mock_user = MagicMock()
+        mock_user.is_authenticated = True
+        mock_user.is_active = True
+        mock_user.username = "admin"
+        mock_user_getter.return_value = mock_user
+
+        client = socketio_instance.test_client(socket_app)
+        client.emit("start_campaign", {"campaign_id": 5})
+        received = client.get_received()
+
+        assert any(e["name"] == "campaign_started" for e in received)
+        mock_run_async.assert_called()  # routed via run_async(enqueue_campaign(...))
+
+
 def test_build_config_from_campaign():
     from mercury.web.events import _build_config_from_campaign
     from mercury.data.models import Campaign

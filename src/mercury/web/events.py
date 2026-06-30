@@ -2,7 +2,7 @@
 
 import logging
 import threading
-from typing import Any
+from typing import Any, Callable, Optional
 from datetime import datetime, UTC
 from flask_socketio import SocketIO, emit
 from flask_login import current_user
@@ -95,7 +95,9 @@ def _build_config_from_campaign(campaign) -> CampaignConfig:
     )
 
 
-def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
+def _run_campaign_thread(
+    campaign_id: int, sio: SocketIO, app, emit_fn: Optional[Callable[[str, Any], None]] = None
+):
     """Execute campaign in a background thread.
 
     Emits go through the cross-thread bridge queue (see extensions.py:
@@ -106,14 +108,16 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
     """
     from .extensions import queue_emit
 
+    # emit_fn lets the worker process route progress through a Redis-backed
+    # SocketIO (message_queue) instead of the in-process web emit bridge; it
+    # defaults to the bridge for the normal in-process web path.
     def _emit(event, data):
-        queue_emit(event, data)
+        (emit_fn or queue_emit)(event, data)
 
     try:
         campaign_started()  # active-campaigns gauge; paired with finally below
         with app.app_context():
             with session_scope() as session:
-
                 repo = CampaignRepository(session)
                 campaign = repo.get(campaign_id)
                 if not campaign:
@@ -157,7 +161,6 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
         # Load recipients
         with app.app_context():
             with session_scope() as session:
-
                 repo = CampaignRepository(session)
                 campaign = repo.get(campaign_id)
                 config_snap = _build_config_from_campaign(campaign)
@@ -181,7 +184,6 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
             linked_list_path = None
             with app.app_context():
                 with session_scope() as session:
-
                     repo = CampaignRepository(session)
                     campaign = repo.get(campaign_id)
                     if campaign and campaign.recipient_list and campaign.recipient_list.source_path:
@@ -217,7 +219,6 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
         if not recipients:
             with app.app_context():
                 with session_scope() as session:
-
                     repo = CampaignRepository(session)
                     campaign = repo.get(campaign_id)
                     if campaign:
@@ -291,6 +292,7 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
                         errors = _progress_count.get("errors")
                         if errors:
                             from sqlalchemy.orm.attributes import flag_modified
+
                             settings = dict(c.settings or {})
                             settings["error_breakdown"] = dict(errors)
                             c.settings = settings
@@ -384,7 +386,6 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
 
         with app.app_context():
             with session_scope() as session:
-
                 repo = CampaignRepository(session)
                 campaign = repo.get(campaign_id)
                 if campaign is not None:
@@ -437,7 +438,6 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
         try:
             with app.app_context():
                 with session_scope() as session:
-
                     repo = CampaignRepository(session)
                     campaign = repo.get(campaign_id)
                     # Guard against the campaign being deleted mid-run —
@@ -458,7 +458,7 @@ def _run_campaign_thread(campaign_id: int, sio: SocketIO, app):
     finally:
         campaign_finished()
         with _active_services_lock:
-                _active_services.pop(campaign_id, None)
+            _active_services.pop(campaign_id, None)
 
 
 def register_socketio_events(sio: SocketIO):
@@ -559,6 +559,24 @@ def register_socketio_events(sio: SocketIO):
             },
         )
 
+        # Execution mode: enqueue to the worker tier (CAMPAIGN_EXECUTION_MODE=
+        # worker) so the web tier can scale out, or run in-process (default).
+        from ..worker.queue import worker_mode_enabled
+
+        if worker_mode_enabled():
+            try:
+                from ..worker.queue import enqueue_campaign
+
+                job_id = run_async(enqueue_campaign(campaign_id))
+                logger.info("Campaign %s enqueued to worker tier (job=%s)", campaign_id, job_id)
+                return
+            except Exception:
+                # Don't drop the campaign if the queue is unreachable — fall
+                # back to in-process execution.
+                logger.exception(
+                    "Failed to enqueue campaign %s; falling back to in-process", campaign_id
+                )
+
         app = current_app._get_current_object()
         # daemon=False so the thread is NOT silently reaped when the
         # main process exits (notably: werkzeug's auto-reloader in dev
@@ -593,7 +611,6 @@ def register_socketio_events(sio: SocketIO):
             app = current_app._get_current_object()
             with app.app_context():
                 with session_scope() as session:
-
                     repo = CampaignRepository(session)
                     campaign = repo.get(campaign_id)
                     if campaign:
@@ -625,7 +642,6 @@ def register_socketio_events(sio: SocketIO):
             app = current_app._get_current_object()
             with app.app_context():
                 with session_scope() as session:
-
                     repo = CampaignRepository(session)
                     campaign = repo.get(campaign_id)
                     if campaign:
