@@ -386,7 +386,9 @@ def require_api_key(api_key: str) -> bool:
             # Handle potential shell-style quoting
             valid_keys = shlex.split(env_val)
     except Exception:
-        # Fallback
+        # A malformed API_KEYS (e.g. unbalanced quotes) would otherwise reject
+        # every request with no trace — log so the misconfig is debuggable.
+        logger.warning("Failed to parse API_KEYS env var; rejecting all API requests")
         valid_keys = []
 
     if not valid_keys:

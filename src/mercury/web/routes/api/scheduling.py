@@ -1,5 +1,6 @@
 """Scheduled job API routes."""
 
+import logging
 import uuid
 from datetime import datetime
 
@@ -14,6 +15,8 @@ from . import (
 # SchedulerService is import-deferred (the scheduler module is heavy and only
 # needed when these routes actually fire).
 from ....services.scheduler_service import SchedulerService
+
+logger = logging.getLogger(__name__)
 
 
 @api_bp.route("/scheduling/jobs", methods=["GET"])
@@ -82,6 +85,7 @@ def api_create_scheduled_job():
 
         return jsonify({"success": True, "job": job.to_dict()})
     except Exception as e:
+        logger.exception("Failed to create scheduled job")
         return jsonify({"error": str(e)}), 500
 
 

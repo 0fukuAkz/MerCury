@@ -128,6 +128,9 @@ This document outlines build, run, test, and linting commands, as well as code s
 - **Logging**:
   - Always use `structlog` (imported via `mercury.utils.logging` or structured loggers) rather than `print()`.
   - `print()` is banned in `src/` (rule `T201`) to preserve JSON logging format in production. Exception is allowed only in `run.py`, CLI code, `scripts/`, `examples/`, and tests.
+- **Error handling**:
+  - A broad `except Exception` (or bare `except`) must **log** (`logger.exception(...)` / `logger.warning(...)`) or **re-raise** — never silently swallow. This keeps failures visible to logs and Sentry. In particular, a route handler that catches and returns HTTP 500 must `logger.exception(...)` first, since the Flask/Sentry integration never sees a *caught* exception.
+  - Genuinely best-effort silent catches are allowed (resource cleanup like `quit()`/`close()`, liveness probes, tracking that must not fail the user request, serialization fallbacks) but must carry a brief comment explaining *why* it's safe to ignore.
 - **Testing Conventions**:
   - Store tests in the `tests/` directory.
   - Async tests use `pytest-asyncio` with `asyncio_mode = "auto"`.

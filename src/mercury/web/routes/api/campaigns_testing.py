@@ -5,6 +5,7 @@ shares no state with CRUD or lifecycle, has its own SMTP/template loading
 shape, and was the largest single handler in the file.
 """
 
+import logging
 import os
 
 from flask import jsonify, request
@@ -19,6 +20,8 @@ from . import (
     TemplateRepository,
     SMTPService,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @api_bp.route("/campaigns/test-email", methods=["POST"])
@@ -289,4 +292,5 @@ def api_send_test_email():
                 }
             )
     except Exception as e:
+        logger.exception("Campaign test-send failed")
         return jsonify({"success": False, "error": str(e)}), 500

@@ -1,10 +1,14 @@
 """Tools route module."""
 
+import io
+import logging
+
 from flask import Blueprint, render_template, request, send_file, jsonify
 from flask_login import login_required
-import io
 
 from ...features.generators import AttachmentGenerator, GeneratorConfig
+
+logger = logging.getLogger(__name__)
 
 tools_bp = Blueprint("tools", __name__, url_prefix="/tools")
 
@@ -44,6 +48,9 @@ def generate_qr():
             download_name="qrcode.png",
         )
     except Exception as e:
+        # Log server-side (→ Sentry) before returning; a caught 500 is
+        # otherwise invisible to the Flask integration.
+        logger.exception("tools endpoint failed")
         return jsonify({"error": str(e)}), 500
 
 
@@ -77,4 +84,7 @@ def render_content():
             io.BytesIO(data), mimetype=mimetype, as_attachment=True, download_name=filename
         )
     except Exception as e:
+        # Log server-side (→ Sentry) before returning; a caught 500 is
+        # otherwise invisible to the Flask integration.
+        logger.exception("tools endpoint failed")
         return jsonify({"error": str(e)}), 500

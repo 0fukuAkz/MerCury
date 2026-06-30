@@ -148,7 +148,9 @@ def session_scope() -> Iterator[Session]:
         try:
             session.rollback()
         except Exception:
-            pass
+            # The original error still propagates via `raise` below; surface
+            # the rollback failure too rather than losing it entirely.
+            logger.warning("session.rollback() failed during exception handling", exc_info=True)
         raise
     finally:
         session.close()
