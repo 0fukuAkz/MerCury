@@ -10,6 +10,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > documents the lineage on its own terms; future releases should be tagged
 > in git (`v2.0.0`, `v2.1.0`, ...) to match `pyproject.toml`.
 
+## [2.1.0] - 2026-07-01
+
+### Added
+- **Horizontal scale-out (opt-in, default-off).** The single-worker default is
+  unchanged; multi-worker becomes available once shared state is externalized:
+  - `SOCKETIO_MESSAGE_QUEUE=redis://...` fans live progress events out across
+    web workers/replicas.
+  - A campaign **worker tier** (arq): set `CAMPAIGN_EXECUTION_MODE=worker` to
+    enqueue campaigns to a separate worker process instead of an in-web thread
+    (`docker compose --profile worker up`). Config: `CAMPAIGN_QUEUE_REDIS`.
+  - The production preflight conditionally permits `WEB_CONCURRENCY>1` when
+    message-queue + redis rate-limit + worker execution are all set, and warns
+    (naming what's missing) otherwise.
+- **Observability.** Optional Sentry error tracking (`SENTRY_DSN`, PII-off) and
+  a Prometheus `GET /metrics` endpoint — HTTP request/latency plus send-pipeline
+  business metrics (`mercury_emails_sent_total`, `mercury_emails_failed_total`,
+  `mercury_campaigns_active`). Optional `METRICS_TOKEN` gate.
+- **Containerized deployment.** Multi-stage, non-root `Dockerfile` with a
+  stdlib `HEALTHCHECK`; `docker-compose.yml` wiring Postgres + Redis + one-shot
+  migrations + web, with optional `proxy` (Caddy/TLS) and `worker` profiles.
+- New dependencies for the above: `redis`, `arq`, `sentry-sdk[flask]`,
+  `prometheus-client` (pyproject extras: `observability`, `postgres`, `redis`,
+  `worker`).
+
+### Changed
+- **SQLAlchemy 2.0 native typing.** All ORM models migrated from legacy
+  `Column()` to `Mapped[]` / `mapped_column()`, and `Base` is now a
+  `DeclarativeBase` subclass. Removed the deprecated `sqlalchemy.ext.mypy`
+  plugin; `mypy src/` is plugin-free and enforced at zero errors in CI.
+- Production preflight now **hard-fails** on a SQLite `DATABASE_URL` or an
+  in-memory `RATE_LIMIT_STORAGE` in production (escape hatches:
+  `ALLOW_SQLITE_IN_PRODUCTION`, `ALLOW_INMEMORY_RATE_LIMIT`).
+- DB engine gains `pool_pre_ping` (all engines) and `pool_recycle` (networked
+  engines) so a Postgres restart / idle-timeout reconnects transparently.
+
+### Fixed
+- **Critical — Alembic migrations synced to the models.** A fresh Postgres
+  deploy previously produced a schema the code couldn't use (missing columns
+  such as `templates.subject_variants`, wrong enum types, a non-portable
+  `boolean = integer` backfill). SQLite dev/tests masked this via
+  `create_all`. Verified live: `alembic upgrade head` + `alembic check` clean
+  on a fresh Postgres, with a campaign running end-to-end.
+- Caught HTTP 500s and config-parse failures are now logged
+  (`logger.exception`/`warning`) so the Sentry/Flask integration and ops see
+  them instead of silently swallowing.
+- De-flaked the socketio + smtp-liveness tests (a shared in-memory connection
+  raced by a leaked worker thread); the suite is now deterministic.
+
 ## [2.0.0] - 2026-05-21
 
 ### Removed (BREAKING)
@@ -221,4 +269,5 @@ tagged in git and pulled from cleaner commit messages.
 - Added `pip install -e .` step so pytest can import `mercury` under the
   `src/` layout.
 
+[2.1.0]: https://github.com/0fukuAkz/MerCury/releases/tag/v2.1.0
 [2.0.0]: https://github.com/0fukuAkz/MerCury/releases/tag/v2.0.0
