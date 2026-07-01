@@ -1,7 +1,6 @@
 """Alembic environment configuration."""
 
 import os
-import sys
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
@@ -9,14 +8,12 @@ from sqlalchemy import pool
 
 from alembic import context
 
-# Add src to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+# `mercury` is imported from the installed package (editable in dev, or the
+# wheel in a pip install) — no sys.path manipulation needed now that env.py
+# lives inside the package.
 
 # Import our models
 from mercury.data.database import Base
-from mercury.data.models import (
-    Campaign, SMTPServer, Template, RecipientList, Recipient, EmailLog
-)
 
 # This is the Alembic Config object
 config = context.config

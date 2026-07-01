@@ -309,11 +309,16 @@ def test_db_migrate_success(runner):
         assert "Applying migrations" in result.output
         mock_upgrade.assert_called_once()
 
-def test_db_migrate_missing_ini(runner):
-    with patch("os.path.isfile", return_value=False):
+def test_db_migrate_uses_packaged_migrations(runner):
+    # The command no longer depends on a repo-root alembic.ini (not shipped in
+    # the wheel); it resolves the migrations bundled inside the package. Verify
+    # upgrade() runs with a config whose script_location is mercury/migrations.
+    with patch("alembic.command.upgrade") as mock_up:
         result = runner.invoke(cli, ["db", "migrate"])
-        assert result.exit_code == 1
-        assert "alembic.ini not found" in result.output
+        assert result.exit_code == 0, result.output
+        cfg = mock_up.call_args.args[0]
+        loc = cfg.get_main_option("script_location").replace("\\", "/")
+        assert loc.endswith("mercury/migrations")
 
 def test_db_migrate_failed(runner):
     with patch("os.path.isfile", return_value=True), \

@@ -605,52 +605,67 @@ def db():
     """Database / migration management."""
 
 
+def _alembic_config():
+    """Alembic Config for the migrations bundled inside the package.
+
+    Delegates to ``mercury.data.database.alembic_config`` so the CLI and the web
+    app's boot-migration resolve migrations the same way (works from a pip
+    install, not just a source checkout).
+    """
+    from ..data.database import alembic_config
+
+    return alembic_config()
+
+
 @db.command("migrate")
 @click.option(
     "--revision",
     default="head",
-    help="Target revision (default: head). Use a revision id to upgrade/downgrade to a specific point.",
+    help="Target revision (default: head).",
 )
 def db_migrate(revision: str):
-    """Apply Alembic migrations to the database.
+    """Apply Alembic migrations (upgrade) to the database.
 
     Run this once before starting the web app in production. The web app only
     runs migrations on boot in non-production environments (`FLASK_ENV` !=
     `production`) to avoid multi-worker boot races.
     """
-    import os
-    from alembic.config import Config as AlembicConfig
     from alembic import command as alembic_command
 
-    alembic_ini = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..", "..", "..", "alembic.ini")
-    )
-    if not os.path.isfile(alembic_ini):
-        click.echo(f"Error: alembic.ini not found at {alembic_ini}", err=True)
-        raise SystemExit(1)
-
-    cfg = AlembicConfig(alembic_ini)
     click.echo(f"Applying migrations -> {revision}")
     try:
-        alembic_command.upgrade(cfg, revision)
+        alembic_command.upgrade(_alembic_config(), revision)
         click.echo("Migrations applied")
     except Exception as e:
         click.echo(f"Migration failed: {e}", err=True)
         raise SystemExit(1)
 
 
+@db.command("downgrade")
+@click.option(
+    "--revision",
+    default="-1",
+    help="Target revision (default: -1, i.e. one step back).",
+)
+def db_downgrade(revision: str):
+    """Revert Alembic migrations (downgrade)."""
+    from alembic import command as alembic_command
+
+    click.echo(f"Downgrading -> {revision}")
+    try:
+        alembic_command.downgrade(_alembic_config(), revision)
+        click.echo("Downgrade applied")
+    except Exception as e:
+        click.echo(f"Downgrade failed: {e}", err=True)
+        raise SystemExit(1)
+
+
 @db.command("current")
 def db_current():
     """Show the current database revision."""
-    import os
-    from alembic.config import Config as AlembicConfig
     from alembic import command as alembic_command
 
-    alembic_ini = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..", "..", "..", "alembic.ini")
-    )
-    cfg = AlembicConfig(alembic_ini)
-    alembic_command.current(cfg, verbose=True)
+    alembic_command.current(_alembic_config(), verbose=True)
 
 
 # =============================================================================

@@ -13,7 +13,6 @@ import logging
 from typing import Optional
 from flask import Flask
 from flask_login import LoginManager
-from alembic.config import Config as AlembicConfig
 from alembic import command as alembic_command
 
 from ..app_context import AppContext, get_app_context, set_app_context
@@ -404,11 +403,9 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
             # before workers start — multi-worker boot races are real.
             if not _is_production:
                 try:
-                    _alembic_ini = os.path.join(
-                        os.path.dirname(__file__), "..", "..", "..", "alembic.ini"
-                    )
-                    _alembic_cfg = AlembicConfig(os.path.abspath(_alembic_ini))
-                    alembic_command.upgrade(_alembic_cfg, "head")
+                    from ..data.database import alembic_config
+
+                    alembic_command.upgrade(alembic_config(), "head")
                     logger.info("Database migrations applied successfully")
                 except Exception as ex:
                     logger.warning(

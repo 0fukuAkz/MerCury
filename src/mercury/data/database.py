@@ -161,3 +161,24 @@ def session_scope() -> Iterator[Session]:
         raise
     finally:
         session.close()
+
+
+def alembic_config() -> "Any":
+    """Build an Alembic ``Config`` pointing at the migrations bundled inside the
+    package (``mercury/migrations``).
+
+    Resolves migrations relative to the installed ``mercury`` package, so it
+    works identically from a source checkout and a ``pip install`` — no
+    repo-root ``alembic.ini`` required (that file is not shipped in the wheel).
+    The database URL is read from ``DATABASE_URL`` by the migration env.
+    """
+    from pathlib import Path
+
+    from alembic.config import Config as AlembicConfig
+
+    import mercury
+
+    migrations_dir = Path(mercury.__file__).resolve().parent / "migrations"
+    cfg = AlembicConfig()
+    cfg.set_main_option("script_location", str(migrations_dir))
+    return cfg

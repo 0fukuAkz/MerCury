@@ -237,13 +237,27 @@ in a single boot so you fix them in one pass.
 | `MERCURY_RELEASE` | Release tag attached to Sentry events | installed package version |
 | `METRICS_TOKEN` | Bearer / `?token=` gate for `GET /metrics`; open when unset | unset |
 
-### Boot-time migration toggle
+### Running migrations
 
-The web app runs `alembic upgrade head` automatically in non-production
-environments (convenient for `make dev` and tests). In production it
-**skips** boot migrations — run `alembic upgrade head` out-of-band
-(init container, pre-deploy hook, or the `migrations` compose service)
-before workers start.
+Migrations live **inside the package** (`mercury/migrations`), so a plain
+install can migrate its own database:
+
+```bash
+pip install "mercury[postgres]"     # postgres extra pulls the DB driver
+export DATABASE_URL=postgresql://…
+mercury db migrate                  # apply all migrations (alembic upgrade head)
+mercury db current                  # show the current revision
+mercury db downgrade                # revert one step
+```
+
+From a source checkout, `alembic upgrade head` also works (the repo-root
+`alembic.ini` points at the packaged migrations).
+
+**Boot-time toggle:** the web app runs migrations automatically in
+non-production environments (convenient for `make dev` and tests). In
+production it **skips** boot migrations — run `mercury db migrate` out-of-band
+(init container, pre-deploy hook, or the `migrations` compose service, which
+uses exactly this command) before workers start.
 
 ---
 

@@ -61,7 +61,7 @@ services:
   # gate — `web` waits for it to complete successfully.
   migrations:
     build: .
-    command: ["alembic", "upgrade", "head"]
+    command: ["mercury", "db", "migrate"]
     environment:
       - DATABASE_URL=postgresql://mercury:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@db:5432/mercury
       - SECRET_KEY=${SECRET_KEY:?SECRET_KEY must be set}

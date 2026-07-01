@@ -67,7 +67,9 @@ COPY --from=builder /opt/venv /opt/venv
 
 WORKDIR /app
 COPY --from=builder /app/src ./src
-COPY migrations ./migrations
+# Migrations now live inside the package (src/mercury/migrations), copied via
+# `COPY src` above. alembic.ini is kept for repo-style `alembic` invocations;
+# the compose `migrations` service uses `mercury db migrate` (packaged).
 COPY alembic.ini ./
 
 # Writable data/log dirs owned by the runtime user. Compose mounts volumes over
