@@ -33,6 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New dependencies for the above: `redis`, `arq`, `sentry-sdk[flask]`,
   `prometheus-client` (pyproject extras: `observability`, `postgres`, `redis`,
   `worker`).
+- **Packaged migrations + `mercury db` CLI.** Alembic migrations now live
+  inside the package and ship in the wheel/sdist, so a `pip install
+  mercury[postgres]` can create and manage its own schema — no repo checkout
+  required. New commands: `mercury db migrate` / `downgrade` / `current`.
 
 ### Changed
 - **SQLAlchemy 2.0 native typing.** All ORM models migrated from legacy
@@ -44,6 +48,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ALLOW_SQLITE_IN_PRODUCTION`, `ALLOW_INMEMORY_RATE_LIMIT`).
 - DB engine gains `pool_pre_ping` (all engines) and `pool_recycle` (networked
   engines) so a Postgres restart / idle-timeout reconnects transparently.
+- CI now runs the full Alembic chain against a real Postgres service
+  (`alembic upgrade head` + `alembic check`), gating migration/model drift that
+  the SQLite test suite can't see.
 
 ### Fixed
 - **Critical — Alembic migrations synced to the models.** A fresh Postgres
@@ -51,7 +58,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   such as `templates.subject_variants`, wrong enum types, a non-portable
   `boolean = integer` backfill). SQLite dev/tests masked this via
   `create_all`. Verified live: `alembic upgrade head` + `alembic check` clean
-  on a fresh Postgres, with a campaign running end-to-end.
+  on a fresh Postgres, with a campaign running end-to-end. The migration chain
+  is now complete on its own — a migration adds the `users` table that only
+  `create_all` had been creating — so it matches the models without relying on
+  boot-time `create_all`.
 - Caught HTTP 500s and config-parse failures are now logged
   (`logger.exception`/`warning`) so the Sentry/Flask integration and ops see
   them instead of silently swallowing.
