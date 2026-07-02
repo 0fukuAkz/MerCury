@@ -37,6 +37,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   inside the package and ship in the wheel/sdist, so a `pip install
   mercury[postgres]` can create and manage its own schema — no repo checkout
   required. New commands: `mercury db migrate` / `downgrade` / `current`.
+- **One-command installers.** `install.sh` (macOS/Linux) and `install.ps1`
+  (Windows) create an isolated virtualenv, install MerCury, initialise the
+  database, and write a login-ready `.env`. They prefer `uv` when present
+  (which also sidesteps stdlib `venv` failing on uv-managed / standalone
+  Pythons) and fall back to `python -m venv` + `pip`.
 
 ### Changed
 - **SQLAlchemy 2.0 native typing.** All ORM models migrated from legacy

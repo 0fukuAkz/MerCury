@@ -38,23 +38,36 @@ the same domain layer.
 git clone https://github.com/0fukuAkz/MerCury.git
 cd MerCury
 
-# 1. Install (Python 3.12+)
-python3 -m venv venv && source venv/bin/activate
-pip install -e .
-
-# 2. Configure first-admin + secrets (no fallbacks exist)
-cp .env.example .env
-$EDITOR .env           # set SECRET_KEY, ADMIN_*, TRACKING_BASE_URL
-
-# 3. Apply migrations + launch
-alembic upgrade head
-python run.py
+# One command: makes a virtualenv, installs MerCury, initialises the DB, and
+# writes a login-ready .env. Prefers `uv` if installed, else a python3.12 venv.
+./install.sh                       # macOS / Linux
+#   Windows (PowerShell):   .\install.ps1
+#   extras / editable dev:  ./install.sh --extras postgres,redis   --dev   --help
 ```
 
-Open <http://localhost:5000> and sign in with your configured
-`ADMIN_USERNAME` / `ADMIN_PASSWORD`. For the CLI path
-(`mercury new project`, `mercury send config.yaml`, …) and the full
-docker/systemd/nginx walkthroughs, see [Deployment.md](docs/Deployment.md).
+The installer prints (and saves to `.env`) a generated admin password. Start
+the app and sign in:
+
+```bash
+source .venv/bin/activate
+set -a; source .env; set +a        # the `mercury` CLI does not auto-read .env
+mercury start server               # → http://127.0.0.1:5000
+```
+
+<details>
+<summary>Install by hand instead</summary>
+
+```bash
+python3.12 -m venv .venv && source .venv/bin/activate
+pip install -e .                   # or, without a checkout: pip install mercury[postgres]
+# Set at least SECRET_KEY + ADMIN_USERNAME / ADMIN_PASSWORD / ADMIN_EMAIL in .env
+mercury db migrate                 # apply Alembic migrations (schema → head)
+python run.py                      # or: mercury start server
+```
+</details>
+
+For the CLI path (`mercury new project`, `mercury send config.yaml`, …) and the
+full docker/systemd/nginx walkthroughs, see [Deployment.md](docs/Deployment.md).
 
 ---
 
