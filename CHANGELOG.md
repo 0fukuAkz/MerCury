@@ -62,6 +62,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is now complete on its own — a migration adds the `users` table that only
   `create_all` had been creating — so it matches the models without relying on
   boot-time `create_all`.
+- **Migrations are now SQLite-portable, not only Postgres-clean.** The
+  `sync_models_with_schema` migration dropped foreign keys by their
+  Postgres-generated names (`emaillogs_campaign_id_fkey`, …); SQLite doesn't
+  name FK constraints, so `mercury db migrate` on a fresh SQLite DB — the
+  default local/desktop path — aborted with "No such constraint" and never
+  reached the `users` table. The affected batch blocks now carry an explicit FK
+  naming convention and name their recreated FKs, so the full chain applies on
+  SQLite *and* Postgres (verified live on both). CI now also runs the chain on
+  SQLite, closing the Postgres-only gap that let this ship.
 - Caught HTTP 500s and config-parse failures are now logged
   (`logger.exception`/`warning`) so the Sentry/Flask integration and ops see
   them instead of silently swallowing.

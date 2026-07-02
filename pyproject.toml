@@ -162,7 +162,7 @@ where = ["src"]
     "static/**/*",
 ]
 # Alembic migrations now live inside the package so a pip install can migrate
-# its own DB via `mercury db upgrade`. env.py / script.py.mako / the version
+# its own DB via `mercury db migrate`. env.py / script.py.mako / the version
 # scripts are loaded by path (not imported as modules), so they ship as data.
 "mercury" = [
     "migrations/*.py",
