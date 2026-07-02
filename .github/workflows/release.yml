@@ -1,0 +1,116 @@
+name: Release
+
+# Cut a GitHub Release when a v* tag is pushed. The release page then offers
+# BOTH paths to users automatically:
+#   * build from source — GitHub auto-attaches "Source code (zip/tar.gz)" for
+#     the tag, and `pip install .` / `pip install mercury` build from it.
+#   * download a build   — the wheel + sdist uploaded below (and, once the
+#     desktop stubs are enabled, the .dmg / .exe installers).
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch: {}   # manual runs build + verify artifacts, but do not publish
+
+permissions:
+  contents: write         # create the Release and upload assets
+  id-token: write         # OIDC token for build-provenance attestation
+  attestations: write     # write the provenance attestation
+
+jobs:
+  python-dist:
+    name: Build & publish Python distributions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build wheel + sdist
+        run: |
+          python -m pip install --upgrade pip build twine
+          python -m build
+          twine check dist/*
+
+      # Checksums so users can verify a downloaded wheel/sdist matches CI output.
+      - name: Generate SHA256SUMS
+        working-directory: dist
+        run: sha256sum mercury-* > SHA256SUMS
+
+      # Cryptographic proof these artifacts were built by THIS workflow from the
+      # tagged commit — lets a user run `gh attestation verify <file>`. Only on a
+      # real tag; manual dispatch just builds and checks.
+      - name: Attest build provenance
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: "dist/mercury-*"
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/mercury-*.whl
+            dist/mercury-*.tar.gz
+            dist/SHA256SUMS
+          generate_release_notes: true   # auto-notes from commits/PRs since last tag
+          fail_on_unmatched_files: true  # fail loudly if the build produced nothing
+
+  # ===========================================================================
+  # OPTIONAL: publish to PyPI so `pip install mercury` pulls the wheel (binary)
+  # and falls back to the sdist (source build) automatically. Enable once a PyPI
+  # Trusted Publisher is configured for this repo (no token needed with OIDC).
+  # ===========================================================================
+  # pypi:
+  #   name: Publish to PyPI
+  #   needs: python-dist
+  #   if: startsWith(github.ref, 'refs/tags/v')
+  #   runs-on: ubuntu-latest
+  #   environment: pypi
+  #   permissions:
+  #     id-token: write        # OIDC for PyPI Trusted Publishing
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-python@v5
+  #       with: { python-version: "3.12" }
+  #     - run: python -m pip install --upgrade build && python -m build
+  #     - uses: pypa/gh-action-pypi-publish@release/v1
+
+  # ===========================================================================
+  # OPTIONAL: desktop installers (.exe / .app+.dmg). Stubbed until the desktop
+  # entry point exists — see docs/desktop-bundling-plan.md (D1 = mercury.desktop
+  # + `desktop` extra, D2 = mercury.spec). These jobs target the SAME tag, so
+  # their artifacts land on the same Release as the Python distributions above.
+  # ===========================================================================
+  # desktop:
+  #   name: Desktop installer (${{ matrix.os }})
+  #   needs: python-dist
+  #   if: startsWith(github.ref, 'refs/tags/v')
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       include:
+  #         - os: macos-latest     # -> MerCury.app -> MerCury.dmg
+  #         - os: windows-latest   # -> MerCury.exe
+  #   runs-on: ${{ matrix.os }}
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-python@v5
+  #       with: { python-version: "3.12" }
+  #     - name: Build the app bundle
+  #       run: |
+  #         python -m pip install --upgrade pip pyinstaller
+  #         pip install ".[desktop]"     # requires the `desktop` extra (plan D1)
+  #         pyinstaller mercury.spec      # requires mercury.spec (plan D2)
+  #     # - name: Sign / notarize (plan D3) — uses repo secrets for certs
+  #     - name: Upload desktop artifact to the release
+  #       uses: softprops/action-gh-release@v2
+  #       with:
+  #         files: |
+  #           dist/*.dmg
+  #           dist/*.exe
+  #         fail_on_unmatched_files: false
