@@ -241,6 +241,12 @@ module = [
     "reportlab.*",
     "tqdm",
     "weasyprint",
+    # Optional, ImportError-guarded imports that a core install may lack, so
+    # mypy's result must not depend on their being transitively present:
+    #   * pdf2image        — HTML→PNG rasterizer (features/generators.py)
+    #   * charset_normalizer — CSV encoding sniffing (services/campaign_service.py)
+    "pdf2image",
+    "charset_normalizer",
 ]
 ignore_missing_imports = true
 
