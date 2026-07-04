@@ -50,11 +50,15 @@ Thumbs.db
 # Test / coverage / lint caches
 .coverage
 coverage.xml
+coverage_report.txt
 htmlcov/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 .tox/
+# Ad-hoc pytest stdout dumps at repo root (e.g. `pytest > test_out.txt`)
+/test_out.txt
+/test_output.txt
 
 # Environment files (.env.example IS tracked; .env / .env.local are not)
 .env
@@ -69,6 +73,7 @@ data/.encryption.key
 *.db
 *.db-shm
 *.db-wal
+*.db.bak
 
 # Logs (the directory is kept via data/.gitkeep; contents are not)
 logs/*.log
