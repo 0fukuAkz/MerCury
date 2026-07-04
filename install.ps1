@@ -23,6 +23,7 @@
 .PARAMETER Dev        Editable install (pip install -e) + the [dev] extra
 .PARAMETER Recreate   Delete and rebuild the virtualenv
 .PARAMETER NoUv       Force stdlib venv + pip even if uv is installed
+.PARAMETER NoBootstrap  On a bare system (no Python + no uv), fail instead of auto-installing uv
 .PARAMETER NoDb       Skip `mercury db migrate`
 .PARAMETER NoEnv      Do not generate a starter .env
 .PARAMETER Yes        Non-interactive; never prompt
@@ -42,6 +43,7 @@ param(
     [switch] $Dev,
     [switch] $Recreate,
     [switch] $NoUv,
+    [switch] $NoBootstrap,
     [switch] $NoDb,
     [switch] $NoEnv,
     [switch] $Yes
@@ -56,6 +58,24 @@ function Ok($m)   { Write-Host "    [ok] $m" -ForegroundColor Green }
 function Info($m) { Write-Host "    $m" }
 function Warn($m) { Write-Host "    [!] $m" -ForegroundColor Yellow }
 function Die($m)  { Write-Host "[X] $m" -ForegroundColor Red; exit 1 }
+
+# Install uv on a bare system, then make it usable in THIS session. uv fetches a
+# managed Python 3.12 for us and adds itself to PATH for future shells.
+function Install-Uv {
+    Step "No Python $RequiredPy and no uv found — bootstrapping uv"
+    Info "Installing uv from https://astral.sh/uv (it will fetch Python $RequiredPy)"
+    try {
+        Invoke-Expression (Invoke-RestMethod https://astral.sh/uv/install.ps1)
+    } catch {
+        Die "uv install failed: $_"
+    }
+    # uv installs to %USERPROFILE%\.local\bin (older builds: ~\.cargo\bin).
+    $env:Path = "$env:USERPROFILE\.local\bin;$env:USERPROFILE\.cargo\bin;$env:Path"
+    if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
+        Die "uv installed but not on PATH — open a new terminal and re-run .\install.ps1"
+    }
+    Ok "uv ready"
+}
 
 # Location of this script — SOURCE-mode detection is location-based.
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -93,6 +113,13 @@ function Resolve-Py312 {
 
 $FoundPy = Resolve-Py312 -Explicit $Python
 $UseUv   = (-not $NoUv) -and [bool](Get-Command uv -ErrorAction SilentlyContinue)
+
+# Truly fresh machine: no Python 3.12 and no uv. Auto-install uv (unless opted
+# out), which then downloads a managed Python 3.12 and handles PATH.
+if (-not $FoundPy -and -not $UseUv -and -not $NoUv -and -not $NoBootstrap) {
+    Install-Uv
+    $UseUv = [bool](Get-Command uv -ErrorAction SilentlyContinue)
+}
 
 if ($FoundPy) {
     $PySpec = $FoundPy

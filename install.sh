@@ -42,6 +42,7 @@ DO_ENV=1                  # generate a starter .env if none exists
 RECREATE=0               # wipe & rebuild the venv (--clear)
 ASSUME_YES=0              # non-interactive; never prompt
 NO_UV=0                   # force stdlib venv + pip even if uv is installed
+BOOTSTRAP=1               # fresh system (no python + no uv): auto-install uv
 
 # MerCury targets exactly this Python (pyproject: requires-python >=3.12,<3.13).
 REQUIRED_PY="3.12"
@@ -69,6 +70,27 @@ ok()   { printf "    ${C_GREEN}✓${C_RESET} %s\n" "$*"; }
 warn() { printf "    ${C_YELLOW}!${C_RESET} %s\n" "$*"; }
 die()  { printf "${C_RED}${C_BOLD}✗ %s${C_RESET}\n" "$*" >&2; exit 1; }
 
+# Install uv on a bare system, then make it usable in THIS shell. uv is the
+# fastest path from "nothing installed" to a working environment: it fetches a
+# managed Python 3.12 for us and adds itself to PATH for future shells.
+bootstrap_uv() {
+    step "No Python ${REQUIRED_PY} and no uv found — bootstrapping uv"
+    info "Installing uv from https://astral.sh/uv (it will fetch Python ${REQUIRED_PY})"
+    if command -v curl >/dev/null 2>&1; then
+        curl -LsSf https://astral.sh/uv/install.sh | sh || return 1
+    elif command -v wget >/dev/null 2>&1; then
+        wget -qO- https://astral.sh/uv/install.sh | sh || return 1
+    else
+        die "Need curl or wget to bootstrap uv. Install one (or install Python ${REQUIRED_PY} yourself), then re-run."
+    fi
+    # uv installs to $XDG_BIN_HOME or ~/.local/bin (older builds: ~/.cargo/bin).
+    # Put those on PATH now so the rest of this run can call uv.
+    export PATH="${XDG_BIN_HOME:-$HOME/.local/bin}:$HOME/.cargo/bin:$PATH"
+    command -v uv >/dev/null 2>&1 || die "uv installed but not on PATH — open a new terminal and re-run ./install.sh"
+    ok "uv $(uv --version 2>/dev/null | awk '{print $2}') ready"
+    return 0
+}
+
 usage() {
     cat <<'EOF'
 MerCury installer (macOS / Linux)
@@ -85,6 +107,8 @@ OPTIONS:
     --dev              Editable install (pip install -e) + the [dev] extra
     --recreate         Delete and rebuild the virtualenv from scratch
     --no-uv            Force stdlib `python -m venv` + pip (ignore uv)
+    --no-bootstrap     On a bare system (no Python + no uv), fail instead of
+                       auto-installing uv
     --no-db            Skip database migration (`mercury db migrate`)
     --no-env           Do not generate a starter .env
     -y, --yes          Non-interactive; assume yes and never prompt
@@ -109,6 +133,7 @@ while [ $# -gt 0 ]; do
         --dev)      DEV=1; shift ;;
         --recreate) RECREATE=1; shift ;;
         --no-uv)    NO_UV=1; shift ;;
+        --no-bootstrap) BOOTSTRAP=0; shift ;;
         --no-db)    DO_DB=0; shift ;;
         --no-env)   DO_ENV=0; shift ;;
         -y|--yes)   ASSUME_YES=1; shift ;;
@@ -147,6 +172,13 @@ fi
 # -----------------------------------------------------------------------------
 USE_UV=0
 if [ "$NO_UV" -eq 0 ] && command -v uv >/dev/null 2>&1; then USE_UV=1; fi
+
+# Truly fresh machine: no Python 3.12 on PATH and no uv. Auto-install uv (unless
+# opted out with --no-bootstrap/--no-uv); it then downloads a managed Python
+# 3.12 and handles PATH — the "from nothing" path.
+if [ -z "$PY" ] && [ "$USE_UV" -eq 0 ] && [ "$NO_UV" -eq 0 ] && [ "$BOOTSTRAP" -eq 1 ]; then
+    bootstrap_uv && USE_UV=1
+fi
 
 # PY_SPEC is what we hand the backend: a concrete interpreter path when we found
 # one, otherwise the bare version so uv can fetch/select a managed 3.12.
