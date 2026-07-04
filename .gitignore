@@ -68,6 +68,10 @@ htmlcov/
 *.pid
 data/.mercury.pid
 data/.encryption.key
+# Per-install encryption salt (security/encryption.py derives keys from it).
+# Untracked so each deployment generates its own — a shared committed salt
+# weakens per-install key derivation. Local file is kept.
+data/.encryption.salt
 
 # SQLite databases + WAL files
 *.db
