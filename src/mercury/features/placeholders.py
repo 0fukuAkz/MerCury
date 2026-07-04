@@ -17,7 +17,12 @@ logger = logging.getLogger(__name__)
 try:
     from faker import Faker
 
-    fake = Faker()
+    # Annotated Any on purpose: faker is a guarded optional dep used dynamically
+    # (the fake.*() call sites are all reached only when HAS_FAKER is True). This
+    # keeps mypy from flagging both the `fake = None` fallback and every call
+    # site — matching the prior behaviour when faker resolved to Any via the
+    # ignore_missing_imports override.
+    fake: Any = Faker()
     HAS_FAKER = True
 except ImportError:
     HAS_FAKER = False

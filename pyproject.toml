@@ -84,6 +84,15 @@ dependencies = [
     # platformdirs is imported unconditionally by utils/app_dirs.py; without
     # it `import mercury` fails on a fresh wheel install.
     "platformdirs>=4.0.0",
+
+    # Pure-Python features on core code paths — guarded imports with graceful
+    # fallbacks, but required for a fully-functional install:
+    #   charset-normalizer sniffs non-UTF8 CSV encodings on recipient import
+    #                      (services/campaign_service.py)
+    #   faker              powers the {{fake.*}} template placeholders
+    #                      (features/placeholders.py)
+    "charset-normalizer>=3.0",
+    "faker==22.5.1",
 ]
 
 [project.optional-dependencies]
@@ -101,11 +110,17 @@ dev = [
     "types-aiofiles==25.1.0.20260518",
     "ipython==8.20.0",
     "pre-commit==3.6.0",
-    "faker==22.5.1",
+    # faker moved to core [project.dependencies] — it backs a runtime templating
+    # feature, not just tests; dev inherits it from core.
 ]
 pdf = [
-    # Better PDF generation (requires system dependencies)
+    # Better PDF generation. Requires system libraries: pango/cairo for
+    # WeasyPrint, and Poppler for pdf2image's HTML->PNG rasterization
+    # (macOS: `brew install poppler pango`; Debian: `apt install poppler-utils
+    # libpango-1.0-0`). The Python packages install without them; only runtime
+    # rendering needs the system libs.
     "weasyprint>=60.0",
+    "pdf2image>=1.17",
 ]
 geo = [
     # Offline IP→geolocation via MaxMind GeoLite2. Operators must download
@@ -247,6 +262,20 @@ module = [
     #   * charset_normalizer — CSV encoding sniffing (services/campaign_service.py)
     "pdf2image",
     "charset_normalizer",
+    # Optional feature/observability deps that live only in their extras
+    # (arq→worker, geoip2→geo, redis, prometheus_client & sentry_sdk→
+    # observability). Listing them keeps `mypy src/` clean whether or not those
+    # extras are installed in the checking environment.
+    "arq",
+    "arq.*",
+    "geoip2",
+    "geoip2.*",
+    "prometheus_client",
+    "prometheus_client.*",
+    "redis",
+    "redis.*",
+    "sentry_sdk",
+    "sentry_sdk.*",
 ]
 ignore_missing_imports = true
 
