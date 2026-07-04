@@ -1,5 +1,6 @@
 """Structured logging configuration using structlog."""
 
+import atexit
 import os
 import re
 import sys
@@ -41,6 +42,48 @@ class _SuppressEngineIOSocketShutdown(logging.Filter):
 # configure_logging) means it's active even before configure_logging
 # runs, which matters for early-boot engineio traffic.
 logging.getLogger("engineio.server").addFilter(_SuppressEngineIOSocketShutdown())
+
+
+# Registered once by configure_logging(); see _teardown_logging_handlers.
+_LOGGING_TEARDOWN_REGISTERED = False
+
+
+def _teardown_logging_handlers() -> None:
+    """Neutralize the logging module lock before greenlet finalizes at shutdown.
+
+    Under gunicorn's eventlet worker, ``threading`` is monkey-patched, so the
+    stdlib logging lock uses eventlet's *green* ``get_ident``. At interpreter
+    shutdown the handler weakref finalizers (``logging._removeHandlerRef``) run
+    *after* greenlet's C-extension has finalized, and they acquire that lock —
+    hitting ``RuntimeError: greenlet is being finalized`` (printed as a harmless
+    "Exception ignored in:" during worker exit).
+
+    Detaching handlers can't fix it: module-global handlers such as
+    ``logging.lastResort`` are strongly referenced and only finalized at
+    interpreter teardown. Instead we drop the module lock — ``_acquireLock`` /
+    ``_releaseLock`` both no-op when ``logging._lock`` is None (exactly how
+    CPython itself guards logging during teardown), so the finalizers then run
+    lock-free and never touch the dead greenlet. Shutdown is single-threaded, so
+    running lock-free here is safe.
+
+    Purely cosmetic: the process already exits cleanly without this; it just
+    removes the shutdown traceback noise.
+    """
+    # Flush buffered records while logging still works, then drop the module
+    # lock so shutdown-time weakref finalizers don't call eventlet's green
+    # get_ident. Guarded against the (stable but private) logging internals.
+    try:
+        for _wr in list(getattr(logging, "_handlerList", [])):
+            _handler = _wr()
+            if _handler is not None:
+                try:
+                    _handler.flush()
+                except Exception:
+                    pass
+        logging._lock = None  # type: ignore[attr-defined]
+    except Exception:
+        # Never let shutdown cleanup raise.
+        pass
 
 
 def configure_logging(
@@ -117,6 +160,14 @@ def configure_logging(
         file_handler = logging.FileHandler(log_file)
         file_handler.setFormatter(formatter)
         root_logger.addHandler(file_handler)
+
+    # Tear logging down before greenlet finalizes at shutdown (see
+    # _teardown_logging_handlers). Registered once, regardless of how many
+    # times configure_logging() runs.
+    global _LOGGING_TEARDOWN_REGISTERED
+    if not _LOGGING_TEARDOWN_REGISTERED:
+        atexit.register(_teardown_logging_handlers)
+        _LOGGING_TEARDOWN_REGISTERED = True
 
 
 def get_logger(name: Optional[str] = None) -> structlog.stdlib.BoundLogger:
