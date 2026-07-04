@@ -51,7 +51,11 @@
       "Bash(git commit -m ' *)",
       "Bash(grep -v \":0$\")",
       "Bash(python -c \"from mercury.engine.connection_pool import SMTPConnectionPoolManager; print\\('import OK'\\)\")",
-      "Bash(python -c \"import importlib; m=importlib.import_module\\('mercury.engine.connection_pool'\\); print\\('connection_pool OK'\\); m2=importlib.import_module\\('mercury.engine.enhanced_sender'\\); print\\('enhanced_sender OK'\\)\")"
+      "Bash(python -c \"import importlib; m=importlib.import_module\\('mercury.engine.connection_pool'\\); print\\('connection_pool OK'\\); m2=importlib.import_module\\('mercury.engine.enhanced_sender'\\); print\\('enhanced_sender OK'\\)\")",
+      "Bash(.venv/bin/mypy src/)",
+      "Read(//tmp/**)",
+      "Bash(chmod +x scripts/mypy_gate.sh)",
+      "Bash(bash scripts/mypy_gate.sh)"
     ]
   },
   "outputStyle": "Explanatory"

@@ -96,3 +96,5 @@ templates/redirect.html
 fix_*.py
 patch_*.py
 setup_worker.py
+docs/desktop-bundling-plan.md
+.claude/settings.local.json
