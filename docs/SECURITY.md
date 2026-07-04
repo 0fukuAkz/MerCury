@@ -29,16 +29,14 @@ We will credit reporters in the CHANGELOG unless you ask to remain anonymous.
 
 ## Supported versions
 
-MerCury has not yet cut tagged releases. Until `v2.0.0` is tagged, only the
-current `main` branch receives security fixes. Older deployments built from
-arbitrary commits should rebase onto `main`.
+Security fixes land on `main` and ship in the latest `2.1.x` release. Older
+tagged releases and pre-tag commits should upgrade to the latest.
 
 | Version          | Supported |
 |------------------|-----------|
 | `main` (latest)  | ✅        |
-| pre-tag commits  | ❌        |
-
-This table will be updated once tagged releases exist.
+| `2.1.x` (latest) | ✅        |
+| `< 2.1`          | ❌        |
 
 ## Scope
 
@@ -64,9 +62,9 @@ Out of scope:
   `python -m mercury.web.app`); only the Gunicorn production runner
   (`python run.py`) is in scope.
 - Default-credential findings on a deployment that ignored the
-  `ADMIN_PASSWORD` / `SECRET_KEY` boot-time hard-fail. Those defaults are
-  guarded by an explicit `MERCURY_DEV=1` opt-in and FLASK_ENV gate; only
-  bypasses of those gates count.
+  `ADMIN_PASSWORD` / `SECRET_KEY` boot-time hard-fail. Those hard-fails are
+  gated by `FLASK_ENV` (they fire in production and any non-dev environment);
+  only bypasses of that gate count.
 - Self-XSS or social-engineering against an authenticated administrator
   who already has full app privileges.
 - Findings from automated scanners with no demonstrated impact.
@@ -80,7 +78,8 @@ Operators should ensure, before exposing the web app:
 - [ ] `ADMIN_PASSWORD` set to a strong password before first boot.
       (Required: the app refuses to start in production without it.)
 - [ ] `FLASK_ENV=production`.
-- [ ] `MERCURY_DEV` **not** set.
+- [ ] `data/.encryption.salt` is the per-install file MerCury generated — not a
+      shared or committed value, and not checked into version control.
 - [ ] `API_KEYS` set if programmatic `/api/*` access is needed.
 - [ ] `UNSUBSCRIBE_SECRET` set separately from `SECRET_KEY` if you rotate
       session keys independently of unsubscribe-link signing.
@@ -90,8 +89,8 @@ Operators should ensure, before exposing the web app:
       defaults to `True` in production; do not override unless you know why.
 - [ ] Database file (SQLite) is on a non-world-readable path, or you are
       using a managed PostgreSQL instance with TLS.
-- [ ] Alembic migrations have been run (`alembic upgrade head`) rather
-      than relying on the boot-time `ALTER TABLE` shim.
+- [ ] Migrations have been run (`mercury db migrate`, or `alembic upgrade head`
+      from a source checkout) rather than relying on the boot-time auto-upgrade.
 
 ## Known security-relevant defaults
 
@@ -107,6 +106,11 @@ Operators should ensure, before exposing the web app:
 ## Cryptography
 
 - Password hashing: `bcrypt` via `passlib`.
+- Stored SMTP credentials: encrypted at rest (via the `cryptography` library)
+  with a key derived from a passphrase and a **per-install salt** that MerCury
+  generates at `<data-dir>/.encryption.salt`. The salt is unique per install
+  and must not be committed — a shared salt weakens key derivation across
+  deployments.
 - HMAC for unsubscribe tokens: SHA-256 over `UNSUBSCRIBE_SECRET` (or
   `SECRET_KEY` fallback). Rotating either invalidates all outstanding
   unsubscribe links.

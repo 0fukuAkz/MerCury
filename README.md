@@ -83,10 +83,11 @@ migration notes is in [CHANGELOG.md](CHANGELOG.md).
    bootstrap the first admin without them. The `MERCURY_DEV` escape
    hatch was removed — use `FLASK_ENV=development` for local iteration.
    See [.env.example](.env.example).
-2. **`alembic upgrade head` is required.** Migration `c9d4e8b1a7f2`
-   drops the legacy `use_tls` / `use_ssl` columns from `smtpservers`.
-   Production deployments must run this out-of-band before workers
-   start (boot-time auto-upgrade only runs in non-production).
+2. **Migrations must be run** — `mercury db migrate` (or `alembic upgrade
+   head` from a source checkout). Migration `c9d4e8b1a7f2` drops the legacy
+   `use_tls` / `use_ssl` columns from `smtpservers`. Production deployments
+   must run this out-of-band before workers start (boot-time auto-upgrade
+   only runs in non-production).
 3. **SMTP API surface change.** `POST /api/smtp` and
    `PUT /api/smtp/<name>` no longer accept `use_tls` / `use_ssl`. Send
    the single `tls_mode` field (`'none' | 'starttls' | 'ssl'`) instead.

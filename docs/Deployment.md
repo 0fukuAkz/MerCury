@@ -45,9 +45,12 @@ security reporting and the hardening checklist, see
 git clone https://github.com/0fukuAkz/MerCury.git
 cd MerCury
 
-# 2. Install (Python 3.12+)
-python3 -m venv venv
-source venv/bin/activate          # Windows: .\venv\Scripts\activate
+# 2. Install. One command — creates a venv, installs, migrates, and writes a
+#    login-ready .env (bootstraps uv + Python 3.12 on a bare system):
+./install.sh                      # macOS/Linux   (Windows: .\install.ps1)
+#    …then skip to step 5. Or install by hand (needs Python 3.12 exactly):
+python3.12 -m venv .venv
+source .venv/bin/activate         # Windows: .\.venv\Scripts\activate
 pip install -e .
 
 # 3. Configure first-admin + secrets (no fallbacks exist)
@@ -55,7 +58,7 @@ cp .env.example .env
 $EDITOR .env                      # set SECRET_KEY, ADMIN_*, TRACKING_BASE_URL
 
 # 4. Apply migrations
-alembic upgrade head
+mercury db migrate                # from a source checkout, alembic upgrade head also works
 
 # 5. Run
 python run.py
@@ -766,7 +769,7 @@ Lock it down: `chmod 600 /opt/mercury/.env`.
 ### 5. Apply migrations (out-of-band, before workers start)
 
 ```bash
-sudo -u mercury ./venv/bin/alembic upgrade head
+sudo -u mercury ./venv/bin/mercury db migrate
 ```
 
 ### 6. Systemd service
@@ -1081,7 +1084,7 @@ sudo systemctl stop mercury
 cd /opt/mercury
 sudo -u mercury git pull origin main
 sudo -u mercury ./venv/bin/pip install -e . --upgrade
-sudo -u mercury ./venv/bin/alembic upgrade head
+sudo -u mercury ./venv/bin/mercury db migrate
 
 sudo systemctl start mercury
 ```
