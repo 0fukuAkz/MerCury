@@ -11,9 +11,9 @@ This document outlines build, run, test, and linting commands, as well as code s
   # or
   make install
   ```
-- **Install Development Dependencies**:
+- **Install Development Dependencies** (all dev tooling lives in the `[dev]` extra):
   ```bash
-  pip install -e ".[dev]" && pip install -r requirements-dev.txt
+  pip install -e ".[dev]"
   # or
   make install-dev
   ```

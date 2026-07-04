@@ -48,7 +48,6 @@ install:
 
 install-dev:
 	pip install -e ".[dev]"
-	pip install -r requirements-dev.txt
 	pre-commit install
 
 # Testing

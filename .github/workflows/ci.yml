@@ -27,11 +27,11 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        pip install -r requirements-dev.txt
-        # Editable install so `import mercury` resolves during pytest collection.
-        # The package layout uses src/ so without this the conftest fails with
-        # ModuleNotFoundError: No module named 'mercury'.
-        pip install -e . --no-deps
+        # Dev tooling (pytest, mypy, ruff, playwright, bandit, ...) now lives in
+        # pyproject [dev]. The editable install resolves `import mercury` during
+        # pytest collection (src/ layout) and pulls the dev deps; core deps are
+        # already satisfied by requirements.txt above.
+        pip install -e ".[dev]"
     
     - name: Lint with ruff
       run: |

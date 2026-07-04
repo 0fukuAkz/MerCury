@@ -31,8 +31,8 @@ fi
 echo "▶ pip install requirements + dev deps + editable mercury"
 ./venv/bin/pip install --upgrade --quiet pip
 ./venv/bin/pip install --quiet -r requirements.txt
-[ -f requirements-dev.txt ] && ./venv/bin/pip install --quiet -r requirements-dev.txt
-./venv/bin/pip install --quiet -e . --no-deps
+# Dev tooling now lives in pyproject [dev]; the editable install pulls it + mercury.
+./venv/bin/pip install --quiet -e ".[dev]"
 
 # ── 3. Pre-commit hooks (if the project uses them) ────────
 if [ -f .pre-commit-config.yaml ]; then
