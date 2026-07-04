@@ -10,6 +10,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > documents the lineage on its own terms; future releases should be tagged
 > in git (`v2.0.0`, `v2.1.0`, ...) to match `pyproject.toml`.
 
+## [2.1.1] - 2026-07-04
+
+### Added
+- **Fresh-system installers.** `install.sh` / `install.ps1` now bootstrap `uv`
+  and a managed Python 3.12 on a machine with neither installed — a true
+  zero-to-running install (`--no-bootstrap` opts out).
+
+### Changed
+- **Dependency completeness.** `charset-normalizer` (non-UTF8 CSV import) and
+  `faker` (`{{fake.*}}` template placeholders) are now core dependencies, so a
+  plain `pip install mercury` is fully functional instead of silently degraded;
+  `pdf2image` moved to the `pdf` extra (alongside WeasyPrint). Dev tooling is
+  single-sourced in the `[dev]` extra (`requirements-dev.txt` removed).
+- `mypy src/` is now environment-independent — every guarded-optional import is
+  in the overrides, so type-checking passes from a bare core install.
+
+### Fixed
+- Shutdown no longer prints the eventlet `RuntimeError: greenlet is being
+  finalized` traceback (a harmless but noisy `Exception ignored in:` at worker
+  exit). The process already exited cleanly; now it does so quietly.
+
+### Security
+- Stopped tracking `data/.encryption.salt`. A committed shared salt weakened
+  per-install key derivation; each deployment now generates its own.
+
+### Internal
+- Release workflow's build-provenance attestation is non-blocking (activates on
+  a public repo; never blocks the release otherwise).
+- Repo streamlining: purged ~110 KB of tracked build/test artifacts, dropped an
+  orphaned linter config and an empty `protocols/` dir, tightened `.gitignore`.
+
 ## [2.1.0] - 2026-07-01
 
 ### Added
@@ -293,5 +324,6 @@ tagged in git and pulled from cleaner commit messages.
 - Added `pip install -e .` step so pytest can import `mercury` under the
   `src/` layout.
 
+[2.1.1]: https://github.com/0fukuAkz/MerCury/releases/tag/v2.1.1
 [2.1.0]: https://github.com/0fukuAkz/MerCury/releases/tag/v2.1.0
 [2.0.0]: https://github.com/0fukuAkz/MerCury/releases/tag/v2.0.0

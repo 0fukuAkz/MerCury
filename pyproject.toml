@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mercury"
-version = "2.1.0"
+version = "2.1.1"
 description = "Production-grade email automation platform with async sending, security, tracking, and campaign management"
 readme = "README.md"
 license = {text = "MIT"}

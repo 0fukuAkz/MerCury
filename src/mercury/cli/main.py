@@ -29,7 +29,7 @@ def banner():
 
 
 @click.group()
-@click.version_option(version="2.1.0", prog_name="mercury")
+@click.version_option(version="2.1.1", prog_name="mercury")
 @click.option("-v", "--verbose", is_flag=True, help="Detailed output")
 @click.option("-q", "--quiet", is_flag=True, help="Minimal output")
 @click.pass_context
