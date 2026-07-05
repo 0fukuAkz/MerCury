@@ -36,7 +36,9 @@ if sys.version_info[:2] != (3, 12):
 
 # Constants
 ROOT_DIR = Path(__file__).parent.absolute()
-VENV_DIR = ROOT_DIR / "venv"
+# Placeholder; resolve_venv_dir() picks the real value at the top of main() —
+# see that function for why this can't just be a fixed path.
+VENV_DIR = ROOT_DIR / ".venv"
 REQUIREMENTS_FILE = ROOT_DIR / "requirements.txt"
 PID_FILE = ROOT_DIR / "data" / ".mercury.pid"
 
@@ -58,11 +60,59 @@ def is_venv():
             (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix))
 
 
+def resolve_venv_dir() -> Path:
+    """Pick the venv directory this script should use.
+
+    `.venv` is the repo-wide canonical name (install.sh/install.ps1,
+    .vscode/settings.json, .envrc, .devcontainer/*). This script used to
+    default to `venv` (no dot), so a checkout from before that was
+    standardized can still have a stray, possibly wrong-Python-version
+    `venv/` sitting around. Prefer whichever already exists, so an existing
+    setup keeps working, rather than silently bootstrapping a second venv
+    next to it; default to `.venv` when neither exists yet.
+    """
+    dotted = ROOT_DIR / ".venv"
+    undotted = ROOT_DIR / "venv"
+    if dotted.exists():
+        return dotted
+    if undotted.exists():
+        return undotted
+    return dotted
+
+
 def get_venv_python():
     """Get path to virtual environment python executable."""
     if sys.platform == "win32":
         return VENV_DIR / "Scripts" / "python.exe"
     return VENV_DIR / "bin" / "python"
+
+
+def get_venv_python_version(python_path: Path):
+    """Return (major, minor) reported by a venv's python, or None on failure.
+
+    None covers both "doesn't exist" and a real Windows failure mode: venvs
+    created by CPython 3.11+ ship a small launcher stub at Scripts\\python.exe
+    that reads pyvenv.cfg's recorded base-interpreter path and execs it. If
+    that base install was since moved, upgraded, or removed, the stub fails
+    with an OS-level "could not find executable" error instead of a Python
+    traceback — this check turns that into an actionable message up front
+    instead of a cryptic crash during the actual re-launch.
+    """
+    try:
+        result = subprocess.run(
+            [str(python_path), "-c",
+             "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')"],
+            capture_output=True, text=True, timeout=15,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    try:
+        major, minor = result.stdout.strip().split(".")
+        return int(major), int(minor)
+    except ValueError:
+        return None
 
 
 def create_venv():
@@ -256,15 +306,28 @@ def main():
         os.environ['FLASK_DEBUG'] = '1'
 
     # Check if we need to switch to venv
+    global VENV_DIR
+    VENV_DIR = resolve_venv_dir()
     if not is_venv():
         if not VENV_DIR.exists():
             create_venv()
             install_dependencies(get_venv_python())
-        
+
         venv_python = get_venv_python()
         if not venv_python.exists():
             print(f"Error: Virtual environment python not found at {venv_python}")
-            print("Please delete the 'venv' folder and try again.")
+            print(f"Please delete the '{VENV_DIR.name}' folder and try again.")
+            sys.exit(1)
+
+        venv_version = get_venv_python_version(venv_python)
+        if venv_version != (3, 12):
+            found = f"{venv_version[0]}.{venv_version[1]}" if venv_version else "unknown"
+            print(f"Error: the virtualenv at {VENV_DIR} reports Python {found}, not 3.12.")
+            if venv_version is None:
+                print(f"({venv_python} failed to run at all — on Windows this usually means "
+                      f"its recorded base Python install was moved, upgraded, or removed.)")
+            print(f"Delete '{VENV_DIR.name}' and re-run to rebuild it against a working "
+                  f"Python 3.12 (or run ./install.sh / .\\install.ps1, which pin this for you).")
             sys.exit(1)
 
         print("Re-launching in virtual environment...")
@@ -314,7 +377,7 @@ def main():
         sys.exit(1)
     except ImportError as e:
         print(f"\nError importing application: {e}")
-        print("Dependencies might be missing. Try deleting 'venv' folder and re-running.")
+        print(f"Dependencies might be missing. Try deleting '{VENV_DIR.name}' folder and re-running.")
         sys.exit(1)
     except KeyboardInterrupt:
         graceful_shutdown()
