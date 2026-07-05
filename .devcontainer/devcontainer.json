@@ -18,9 +18,9 @@
 
   // Web dashboard. Auto-previewed in VSCode/Codespaces' Simple Browser
   // when the user runs `python run.py` or `make dev`.
-  "forwardPorts": [5000],
+  "forwardPorts": [5050],
   "portsAttributes": {
-    "5000": {
+    "5050": {
       "label": "MerCury dashboard",
       "onAutoForward": "notify"
     }

@@ -64,7 +64,7 @@ mercury db migrate                # from a source checkout, alembic upgrade head
 python run.py
 ```
 
-Open <http://localhost:5000> and log in with the `ADMIN_USERNAME` /
+Open <http://localhost:5050> and log in with the `ADMIN_USERNAME` /
 `ADMIN_PASSWORD` you configured.
 
 For a CLI-driven workflow instead of the web app:
@@ -85,7 +85,7 @@ mercury send  config/campaign.yaml
 
 | Component | Requirement |
 |---|---|
-| **OS** | Linux (Ubuntu 20.04+), macOS 12+, Windows 10+ |
+| **OS** | Linux (Ubuntu 20.04+), macOS 12+, Windows 10+ (production runner uses an in-process fallback server on Windows — see [Running the App](#running-the-app)) |
 | **Python** | **3.12.x specifically** — `pyproject.toml` pins `>=3.12,<3.13` because Python 3.13 / 3.14 wheels are still patchy for some pinned deps |
 | **RAM** | 2 GB minimum (4 GB recommended for large campaigns) |
 | **Disk** | 1 GB free (more for SQLite + logs at scale) |
@@ -112,7 +112,7 @@ VSCode with the Dev Containers extension, or open the repo in
 [Codespaces](https://github.com/0fukuAkz/MerCury/codespaces), the
 container builds with Python 3.12, WeasyPrint/Cairo runtime deps,
 `gh` CLI, the `venv/` populated, and a `.env` seeded from
-`.env.example` — all in one click. Forwards port 5000 automatically.
+`.env.example` — all in one click. Forwards port 5050 automatically.
 
 Use this path if you just want to *try the project* or *contribute*
 without configuring your host machine.
@@ -270,13 +270,26 @@ There are three runners — pick the right one:
 
 | Runner | Purpose | Port | Backend |
 |---|---|---|---|
-| **`python run.py`** | Canonical production runner | 5000 | Gunicorn + eventlet, single worker |
-| **`make dev`** / `python -m mercury.web.app` | Fast dev iteration | 5000 | Flask dev server |
-| **`mercury start server`** | CLI-driven local launch | 5000 | Flask + SocketIO directly |
+| **`python run.py`** | Canonical production runner (Linux/macOS) | 5050 (`$PORT`) | Gunicorn + eventlet, single worker |
+| **`python run.py`** | Fallback runner (Windows) | 5050 (`$PORT`) | In-process Flask + SocketIO (threading mode) |
+| **`make dev`** / `python -m mercury.web.app` | Fast dev iteration | 5050 (`$PORT`) | Flask dev server |
+| **`mercury start server`** | CLI-driven local launch | 5050 (`--port`) | Flask + SocketIO directly |
 
 The eventlet worker + SocketIO + the async sender thread assume a
 **single worker process**. `run.py` enforces `-w 1`; do not change this
 unless you know what you're doing.
+
+### Windows note
+
+Gunicorn's arbiter requires `fcntl`/`os.fork()` and cannot run on Windows
+at all. On Windows, `python run.py` automatically falls back to running
+the app in-process with Flask-SocketIO's threading async mode instead of
+shelling out to gunicorn — same server code path `make dev` already uses,
+just bound to `$PORT` (default 5050) instead of the dev entry point's
+hardcoded port. This fallback is single-process/single-threaded and meant
+for small personal deployments; for anything handling meaningful
+concurrent load on Windows, deploy via Docker/WSL2 instead so the real
+gunicorn + eventlet path is used.
 
 ---
 
@@ -298,7 +311,7 @@ mercury --help
 | `mercury send  <config> --to N` | First N recipients only |
 | `mercury show stats` | Aggregate stats from local logs |
 | `mercury show logs` | Tail recent log entries |
-| `mercury start server [--port N]` | Launch the Flask/SocketIO dev runner (defaults to port 5000) |
+| `mercury start server [--port N]` | Launch the Flask/SocketIO dev runner (defaults to port 5050) |
 | `mercury db migrate` | Apply Alembic migrations to head |
 | `mercury db current` | Show current Alembic revision |
 
@@ -671,10 +684,10 @@ The web app exposes a REST API under `/api/`. Detailed schema:
 
 ```bash
 # X-API-Key header (set API_KEYS env var to enable)
-curl -H "X-API-Key: your-api-key" http://localhost:5000/api/campaigns
+curl -H "X-API-Key: your-api-key" http://localhost:5050/api/campaigns
 
 # Session-cookie (after web UI login)
-curl -b cookies.txt http://localhost:5000/api/campaigns
+curl -b cookies.txt http://localhost:5050/api/campaigns
 ```
 
 ### Common endpoints
@@ -696,7 +709,7 @@ curl -b cookies.txt http://localhost:5000/api/campaigns
 ### Example: create campaign
 
 ```bash
-curl -X POST http://localhost:5000/api/campaigns \
+curl -X POST http://localhost:5050/api/campaigns \
   -H "Content-Type: application/json" \
   -H "X-API-Key: your-key" \
   -d '{
@@ -797,7 +810,7 @@ Environment=SOCKETIO_ASYNC_MODE=eventlet
 ExecStart=/opt/mercury/venv/bin/gunicorn \
     --worker-class eventlet \
     -w 1 \
-    --bind 0.0.0.0:5000 \
+    --bind 0.0.0.0:5050 \
     --timeout 120 \
     --access-logfile /var/log/mercury/access.log \
     --error-logfile  /var/log/mercury/error.log \
@@ -975,7 +988,7 @@ server {
     ssl_certificate_key /etc/letsencrypt/live/mercury.yourdomain.com/privkey.pem;
 
     location / {
-        proxy_pass http://127.0.0.1:5000;
+        proxy_pass http://127.0.0.1:5050;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -987,7 +1000,7 @@ server {
     }
 
     location /socket.io {
-        proxy_pass http://127.0.0.1:5000/socket.io;
+        proxy_pass http://127.0.0.1:5050/socket.io;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -1030,8 +1043,8 @@ System dependencies:
 ### Port already in use
 
 ```bash
-lsof -i :5000                          # Linux/macOS
-netstat -ano | findstr :5000           # Windows
+lsof -i :5050                          # Linux/macOS
+netstat -ano | findstr :5050           # Windows
 kill -9 <PID>
 ```
 

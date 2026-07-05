@@ -40,6 +40,12 @@ VENV_DIR = ROOT_DIR / "venv"
 REQUIREMENTS_FILE = ROOT_DIR / "requirements.txt"
 PID_FILE = ROOT_DIR / "data" / ".mercury.pid"
 
+# Single source of truth for the port. Previously the gunicorn bind used this
+# env var (default 5050) while the Windows shadow-process killer hardcoded a
+# search for ":5000" — the two drifted apart and the killer silently matched
+# nothing in the default config.
+PORT = os.environ.get("PORT", "5050")
+
 # Global for cleanup
 _app = None
 _gunicorn_proc = None
@@ -127,7 +133,7 @@ def kill_existing_instances():
             except Exception:
                 pass
         
-        # Also kill any python processes using port 5000
+        # Also kill any python processes using our port
         try:
             result = subprocess.run(
                 ['netstat', '-ano'],
@@ -136,15 +142,15 @@ def kill_existing_instances():
                 timeout=5
             )
             for line in result.stdout.split('\n'):
-                if ':5000' in line and 'LISTENING' in line:
+                if f':{PORT}' in line and 'LISTENING' in line:
                     parts = line.split()
                     if len(parts) >= 5:
                         pid = int(parts[-1])
                         if pid != os.getpid():
                             try:
-                                subprocess.run(['taskkill', '/F', '/PID', str(pid)], 
+                                subprocess.run(['taskkill', '/F', '/PID', str(pid)],
                                              capture_output=True, timeout=5)
-                                print(f"Killed shadow process on port 5000 (PID: {pid})")
+                                print(f"Killed shadow process on port {PORT} (PID: {pid})")
                             except Exception:
                                 pass
         except Exception:
@@ -295,58 +301,13 @@ def main():
     print(f"PID: {os.getpid()}")
     print()
     
+    is_debug = os.environ.get('FLASK_DEBUG', '0').lower() in ('true', '1')
+
     try:
-        import shutil
-        gunicorn_path = shutil.which("gunicorn") or str(Path(sys.executable).parent / "gunicorn")
-
-        is_debug = os.environ.get('FLASK_DEBUG', '0').lower() in ('true', '1')
-
-        # In debug mode: all output to stdout, full access log
-        # In normal mode: access log goes to file only, warnings+ to stdout
-        if is_debug:
-            log_args = [
-                "--log-level", "debug",
-                "--access-logfile", "-",
-            ]
+        if sys.platform == "win32":
+            run_windows_server(is_debug)
         else:
-            log_dir = ROOT_DIR / "logs"
-            log_dir.mkdir(parents=True, exist_ok=True)
-            log_args = [
-                "--log-level", "warning",
-                "--access-logfile", str(log_dir / "access.log"),
-                "--error-logfile", "-",
-            ]
-
-        cmd = [
-            gunicorn_path,
-            "--worker-class", "eventlet",
-            # LOAD-BEARING: single worker only. MerCury's shared asyncio loop,
-            # SocketIO emit bridge, and in-memory rate limiters / connection
-            # pools are per-process and not shared across workers. Scaling past
-            # 1 needs a SocketIO message_queue + shared redis rate-limit storage
-            # first (create_app()'s production preflight warns if you bump
-            # WEB_CONCURRENCY).
-            "-w", "1",
-            "--bind", f"127.0.0.1:{os.environ.get('PORT', 5050)}",
-            *log_args,
-            "mercury.web.app:create_app()",
-        ]
-
-        # Force SocketIO to the eventlet async backend that matches the
-        # --worker-class eventlet line above. The mercury extensions module
-        # defaults to 'threading' so dev / test paths work out of the box;
-        # production opt-in lives here. Without this, SocketIO would use
-        # the wrong async primitives and live-progress events would silently
-        # fail to reach the browser even though gunicorn+eventlet is fine.
-        env = {
-            **os.environ,
-            "PYTHONPATH": str(ROOT_DIR / "src"),
-            "SOCKETIO_ASYNC_MODE": "eventlet",
-        }
-
-        global _gunicorn_proc
-        _gunicorn_proc = subprocess.Popen(cmd, env=env)
-        _gunicorn_proc.wait()
+            run_posix_server(is_debug)
 
     except FileNotFoundError:
         print("\nError: gunicorn not found. Run: pip install gunicorn eventlet")
@@ -362,6 +323,92 @@ def main():
         sys.exit(1)
     finally:
         remove_pid()
+
+
+def run_posix_server(is_debug: bool) -> None:
+    """Run the production server via gunicorn + eventlet (Linux/macOS only).
+
+    gunicorn's arbiter requires fcntl/os.fork and does not run on Windows —
+    see run_windows_server() for that platform's fallback.
+    """
+    import shutil
+    gunicorn_path = shutil.which("gunicorn") or str(Path(sys.executable).parent / "gunicorn")
+
+    # In debug mode: all output to stdout, full access log
+    # In normal mode: access log goes to file only, warnings+ to stdout
+    if is_debug:
+        log_args = [
+            "--log-level", "debug",
+            "--access-logfile", "-",
+        ]
+    else:
+        log_dir = ROOT_DIR / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_args = [
+            "--log-level", "warning",
+            "--access-logfile", str(log_dir / "access.log"),
+            "--error-logfile", "-",
+        ]
+
+    cmd = [
+        gunicorn_path,
+        "--worker-class", "eventlet",
+        # LOAD-BEARING: single worker only. MerCury's shared asyncio loop,
+        # SocketIO emit bridge, and in-memory rate limiters / connection
+        # pools are per-process and not shared across workers. Scaling past
+        # 1 needs a SocketIO message_queue + shared redis rate-limit storage
+        # first (create_app()'s production preflight warns if you bump
+        # WEB_CONCURRENCY).
+        "-w", "1",
+        "--bind", f"127.0.0.1:{PORT}",
+        *log_args,
+        "mercury.web.app:create_app()",
+    ]
+
+    # Force SocketIO to the eventlet async backend that matches the
+    # --worker-class eventlet line above. The mercury extensions module
+    # defaults to 'threading' so dev / test paths work out of the box;
+    # production opt-in lives here. Without this, SocketIO would use
+    # the wrong async primitives and live-progress events would silently
+    # fail to reach the browser even though gunicorn+eventlet is fine.
+    env = {
+        **os.environ,
+        "PYTHONPATH": str(ROOT_DIR / "src"),
+        "SOCKETIO_ASYNC_MODE": "eventlet",
+    }
+
+    global _gunicorn_proc
+    _gunicorn_proc = subprocess.Popen(cmd, env=env)
+    _gunicorn_proc.wait()
+
+
+def run_windows_server(is_debug: bool) -> None:
+    """Run the app in-process on Windows, where gunicorn cannot run at all.
+
+    gunicorn's arbiter imports fcntl and calls os.fork(), neither of which
+    exist on Windows, so `python run.py` would crash immediately there
+    with "No module named 'fcntl'". This runs the same threading-mode
+    SocketIO server that `python -m mercury.web.app` already uses for local
+    dev (proven to work cross-platform), bound to the configured PORT
+    instead of the dev entry point's hardcoded 0.0.0.0:5000. It is a
+    single-threaded fallback, not a scaling story — see the single-worker
+    note in run_posix_server() for why this whole codebase is single-process
+    anyway.
+    """
+    # Must be set before mercury.web.extensions is imported — it reads this
+    # env var once at import time to pick SocketIO's async backend.
+    os.environ.setdefault("SOCKETIO_ASYNC_MODE", "threading")
+
+    from mercury.web.app import create_app
+    from mercury.web.extensions import socketio
+
+    print("Note: running the Windows-compatible fallback server (gunicorn "
+          "does not support Windows). For multi-connection production loads, "
+          "deploy behind Linux/macOS or Docker instead.")
+
+    app = create_app()
+    socketio.run(app, host="127.0.0.1", port=int(PORT), debug=is_debug,
+                 allow_unsafe_werkzeug=True)  # nosec B104 -- bound to loopback only
 
 
 if __name__ == "__main__":

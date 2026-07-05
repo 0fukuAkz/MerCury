@@ -485,5 +485,9 @@ if __name__ == "__main__":
     # interfaces is intentional for the dev runner so the app is reachable
     # from container/host/VM networks during local iteration. Production uses
     # run.py + gunicorn behind a reverse proxy, not this entry point.
+    #
+    # Reads $PORT (default 5050) rather than a hardcoded literal so this stays
+    # in sync with run.py's default and `mercury start server`'s --port default.
     app = create_app(config={"DEBUG": True})
-    socketio.run(app, host="0.0.0.0", port=5000, allow_unsafe_werkzeug=True)  # nosec B104
+    port = int(os.environ.get("PORT", 5050))
+    socketio.run(app, host="0.0.0.0", port=port, allow_unsafe_werkzeug=True)  # nosec B104
