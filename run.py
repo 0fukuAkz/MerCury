@@ -21,6 +21,19 @@ try:
 except ImportError:
     pass
 
+# MerCury targets exactly Python 3.12 (pyproject: requires-python
+# ">=3.12,<3.13"). Fail fast with a clear message instead of letting the venv
+# bootstrap below build an environment that `pip install -e .` then rejects
+# with a cryptic requires-python error — and `venv.create()` can't build a
+# working env from a uv-managed standalone interpreter either.
+if sys.version_info[:2] != (3, 12):
+    _found = f"{sys.version_info.major}.{sys.version_info.minor}"
+    raise SystemExit(
+        f"MerCury requires Python 3.12 (you ran {_found}). Install 3.12 "
+        f"(macOS: brew install python@3.12) or run ./install.sh, which locates "
+        f"or bootstraps it for you."
+    )
+
 # Constants
 ROOT_DIR = Path(__file__).parent.absolute()
 VENV_DIR = ROOT_DIR / "venv"
