@@ -21,8 +21,9 @@ wheels/
 *.egg
 
 # Virtual environments
-# (no trailing slash so the patterns also match `.venv` when it's a symlink
-# pointing at `venv/` — see CLAUDE.md note on the canonical venv name.)
+# .venv/ is the repo-wide canonical name (install.sh/install.ps1,
+# .vscode/settings.json, .envrc, .devcontainer/*). `venv` is also ignored
+# for checkouts predating that convention.
 venv
 ENV
 env

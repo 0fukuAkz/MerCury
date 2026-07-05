@@ -111,7 +111,7 @@ The repo ships a [`.devcontainer/`](../.devcontainer/) config. If you use
 VSCode with the Dev Containers extension, or open the repo in
 [Codespaces](https://github.com/0fukuAkz/MerCury/codespaces), the
 container builds with Python 3.12, WeasyPrint/Cairo runtime deps,
-`gh` CLI, the `venv/` populated, and a `.env` seeded from
+`gh` CLI, the `.venv/` populated, and a `.env` seeded from
 `.env.example` — all in one click. Forwards port 5050 automatically.
 
 Use this path if you just want to *try the project* or *contribute*
@@ -122,8 +122,8 @@ without configuring your host machine.
 ```bash
 git clone https://github.com/0fukuAkz/MerCury.git
 cd MerCury
-python3 -m venv venv
-source venv/bin/activate
+python3.12 -m venv .venv
+source .venv/bin/activate
 pip install -e .
 ```
 
@@ -132,10 +132,15 @@ pip install -e .
 ```powershell
 git clone https://github.com/0fukuAkz/MerCury.git
 cd MerCury
-python -m venv venv
-.\venv\Scripts\activate
+py -3.12 -m venv .venv
+.\.venv\Scripts\activate
 pip install -e .
 ```
+
+Pin the interpreter to `3.12` explicitly (`python3.12` / `py -3.12`) rather
+than a bare `python` — MerCury requires exactly 3.12, and a venv built
+against whatever `python` happens to resolve to on your system can silently
+end up on the wrong version.
 
 ### Dev tooling (optional, for contributors)
 
@@ -149,19 +154,22 @@ make build-check      # build wheel + smoke-test in fresh venv
 ### Auto-activate the venv
 
 The repo ships several layers of venv auto-activation so you don't
-have to `source venv/bin/activate` by hand every terminal. From most
-to least automatic:
+have to `source .venv/bin/activate` by hand every terminal. `.venv/` is
+the canonical name throughout (matching install.sh/install.ps1); the
+bare bash/PowerShell wrappers below also still detect a legacy `venv/`
+(no dot) for checkouts that predate this convention. From most to least
+automatic:
 
 | Path | What you do once | Result |
 |---|---|---|
-| **VSCode / Cursor** | Open the folder | `.vscode/settings.json` + `extensions.json` are committed; the Python extension auto-activates `venv/bin/python` in every integrated terminal. |
+| **VSCode / Cursor** | Open the folder | `.vscode/settings.json` + `extensions.json` are committed; the Python extension auto-activates `.venv/bin/python` in every integrated terminal. |
 | **GitHub Codespaces / Devcontainers** | Click "Reopen in Container" | `.devcontainer/post-create.sh` builds the venv and `devcontainer.json` wires the terminal activation. |
-| **Direnv users (any shell)** | `direnv allow` (once per repo) | `.envrc` sources `venv/bin/activate` on every `cd` into the repo. |
+| **Direnv users (any shell)** | `direnv allow` (once per repo) | `.envrc` sources `.venv/bin/activate` on every `cd` into the repo. |
 | **Bare bash/zsh/fish** | `source ./activate.sh` (per terminal) | One-line wrapper that auto-detects `venv/` vs `.venv/` and activates. |
 | **Bare PowerShell** | `. .\activate.ps1` (per terminal) | Windows equivalent. May need `Set-ExecutionPolicy -Scope Process RemoteSigned` once. |
 
-If none of those work for you, the long-form `source venv/bin/activate`
-(or `.\venv\Scripts\Activate.ps1` on Windows) always works.
+If none of those work for you, the long-form `source .venv/bin/activate`
+(or `.\.venv\Scripts\Activate.ps1` on Windows) always works.
 
 ---
 
@@ -758,9 +766,9 @@ sudo chown mercury:mercury /opt/mercury
 ```bash
 sudo -u mercury git clone https://github.com/0fukuAkz/MerCury.git /opt/mercury
 cd /opt/mercury
-sudo -u mercury python3.12 -m venv venv
-sudo -u mercury ./venv/bin/pip install --upgrade pip
-sudo -u mercury ./venv/bin/pip install -e .
+sudo -u mercury python3.12 -m venv .venv
+sudo -u mercury ./.venv/bin/pip install --upgrade pip
+sudo -u mercury ./.venv/bin/pip install -e .
 ```
 
 ### 4. Configure `/opt/mercury/.env`
@@ -782,7 +790,7 @@ Lock it down: `chmod 600 /opt/mercury/.env`.
 ### 5. Apply migrations (out-of-band, before workers start)
 
 ```bash
-sudo -u mercury ./venv/bin/mercury db migrate
+sudo -u mercury ./.venv/bin/mercury db migrate
 ```
 
 ### 6. Systemd service
@@ -807,7 +815,7 @@ EnvironmentFile=/opt/mercury/.env
 Environment=SOCKETIO_ASYNC_MODE=eventlet
 # eventlet worker + single worker process is REQUIRED — the SocketIO
 # and async-sender wiring assume a single process. Do not change -w.
-ExecStart=/opt/mercury/venv/bin/gunicorn \
+ExecStart=/opt/mercury/.venv/bin/gunicorn \
     --worker-class eventlet \
     -w 1 \
     --bind 0.0.0.0:5050 \
@@ -1096,8 +1104,8 @@ sudo systemctl stop mercury
 
 cd /opt/mercury
 sudo -u mercury git pull origin main
-sudo -u mercury ./venv/bin/pip install -e . --upgrade
-sudo -u mercury ./venv/bin/mercury db migrate
+sudo -u mercury ./.venv/bin/pip install -e . --upgrade
+sudo -u mercury ./.venv/bin/mercury db migrate
 
 sudo systemctl start mercury
 ```

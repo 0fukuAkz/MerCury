@@ -38,9 +38,10 @@
         "github.vscode-github-actions"
       ],
       "settings": {
-        // Container-local venv — distinct from the host's .venv symlink
-        // which won't exist inside the container.
-        "python.defaultInterpreterPath": "/workspaces/MerCury/venv/bin/python",
+        // Container-local venv, built fresh by post-create.sh — distinct
+        // from any .venv/ on the host, which won't exist inside the
+        // container filesystem.
+        "python.defaultInterpreterPath": "/workspaces/MerCury/.venv/bin/python",
         "python.terminal.activateEnvironment": true,
         "python.testing.pytestEnabled": true,
         "python.testing.pytestArgs": ["tests"],
