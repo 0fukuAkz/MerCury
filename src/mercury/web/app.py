@@ -395,7 +395,7 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
     # Initialize Database
     with app.app_context():
         try:
-            init_db()
+            engine = init_db()
 
             # --- Run Alembic migrations to head ---
             # Non-production: run on boot (convenient for `make dev` and tests).
@@ -404,9 +404,28 @@ def create_app(config: Optional[dict] = None, app_context: Optional[AppContext] 
             if not _is_production:
                 try:
                     from ..data.database import alembic_config
+                    from alembic.runtime.migration import MigrationContext
 
-                    alembic_command.upgrade(alembic_config(), "head")
-                    logger.info("Database migrations applied successfully")
+                    cfg = alembic_config()
+                    with engine.connect() as conn:
+                        current_rev = MigrationContext.configure(conn).get_current_revision()
+
+                    if current_rev is None:
+                        # init_db() just ran Base.metadata.create_all(),
+                        # which builds the exact head-equivalent schema
+                        # straight from the ORM models. On a brand-new
+                        # database that leaves alembic_version unset —
+                        # "upgrade to head" would then re-run migration
+                        # 0001's CREATE TABLE statements against tables
+                        # create_all() already made, crashing with "table X
+                        # already exists" on every fresh install. Stamp at
+                        # head instead: the schema already matches, it just
+                        # isn't recorded as such yet.
+                        alembic_command.stamp(cfg, "head")
+                        logger.info("Fresh database detected; stamped at head")
+                    else:
+                        alembic_command.upgrade(cfg, "head")
+                        logger.info("Database migrations applied successfully")
                 except Exception as ex:
                     logger.warning(
                         f"Alembic migration failed (may be a fresh DB or already current): {ex}"
