@@ -26,6 +26,8 @@
 .PARAMETER NoBootstrap  On a bare system (no Python + no uv), fail instead of auto-installing uv
 .PARAMETER NoDb       Skip `mercury db migrate`
 .PARAMETER NoEnv      Do not generate a starter .env
+.PARAMETER Uninstall  Remove the virtualenv (add -Purge to also delete .env + local DB)
+.PARAMETER Purge      With -Uninstall: also delete .env + the local database
 .PARAMETER Yes        Non-interactive; never prompt
 
 .EXAMPLE
@@ -46,6 +48,8 @@ param(
     [switch] $NoBootstrap,
     [switch] $NoDb,
     [switch] $NoEnv,
+    [switch] $Uninstall,
+    [switch] $Purge,
     [switch] $Yes
 )
 
@@ -77,8 +81,63 @@ function Install-Uv {
     Ok "uv ready"
 }
 
+# Reverse an install: always remove the virtualenv; with -Purge also delete the
+# generated .env and the LOCAL database / salt / logs. Never touches source or an
+# external Postgres database.
+function Invoke-Uninstall {
+    Write-Host "MerCury uninstaller (Windows)`n" -ForegroundColor White
+
+    $pyproj = Join-Path $ScriptDir "pyproject.toml"
+    $installDir = if ((Test-Path $pyproj) -and (Select-String -Path $pyproj -Pattern '^name = "mercury"' -Quiet)) { $ScriptDir } else { (Get-Location).Path }
+    $envFile = Join-Path $installDir ".env"
+    $venvPy  = Join-Path $Venv "Scripts\python.exe"
+
+    $dataDir = ""; $logDir = ""; $dbPath = ""
+    if ($Purge -and (Test-Path $venvPy)) {
+        if (Test-Path $envFile) {
+            Get-Content $envFile | ForEach-Object {
+                if ($_ -match '^\s*([^#=][^=]*)=(.*)$') {
+                    [Environment]::SetEnvironmentVariable($matches[1].Trim(), $matches[2].Trim(), "Process")
+                }
+            }
+        }
+        $dataDir = (& $venvPy -c "from mercury.utils import app_dirs as a; print(a.get_data_dir())" 2>$null | Out-String).Trim()
+        $logDir  = (& $venvPy -c "from mercury.utils import app_dirs as a; print(a.get_log_dir())"  2>$null | Out-String).Trim()
+        $dbPath  = (& $venvPy -c "from mercury.utils import app_dirs as a; print(a.get_db_path())"  2>$null | Out-String).Trim()
+    }
+
+    Step "Will remove"
+    if (Test-Path $Venv) { Info "* virtualenv:  $Venv" } else { Info "* virtualenv:  (none at $Venv)" }
+    if ($Purge) {
+        if (Test-Path $envFile) { Info "* .env:        $envFile" }
+        if ($dbPath -like "sqlite:*") { Info "* database:    $($dbPath -replace '^sqlite:///','')" }
+        elseif ($dbPath)             { Warn "database is external ($dbPath) - NOT removed" }
+        if ($dataDir) { Info "* data dir:    $dataDir  (DB + encryption salt)" }
+        if ($logDir)  { Info "* log dir:     $logDir" }
+    } else {
+        Info "(keeping .env + database - pass -Purge to remove them too)"
+    }
+
+    if (-not $Yes) {
+        $reply = Read-Host "`nProceed with removal? [y/N]"
+        if ($reply -notmatch '^[yY]') { Info "Aborted - nothing removed."; exit 0 }
+    }
+
+    Step "Removing"
+    if (Test-Path $Venv) { Remove-Item -Recurse -Force $Venv; Ok "virtualenv" }
+    if ($Purge) {
+        if (Test-Path $envFile) { Remove-Item -Force $envFile; Ok ".env" }
+        if ($dataDir -and (Test-Path $dataDir)) { Remove-Item -Recurse -Force $dataDir; Ok "data dir" }
+        if ($logDir  -and (Test-Path $logDir))  { Remove-Item -Recurse -Force $logDir;  Ok "log dir" }
+    }
+    Write-Host "`n[ok] MerCury uninstalled." -ForegroundColor Green
+    exit 0
+}
+
 # Location of this script — SOURCE-mode detection is location-based.
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+
+if ($Uninstall) { Invoke-Uninstall }   # exits (prints its own banner)
 
 Write-Host "MerCury installer (Windows)`n" -ForegroundColor White
 

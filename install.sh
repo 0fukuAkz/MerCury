@@ -43,6 +43,8 @@ RECREATE=0               # wipe & rebuild the venv (--clear)
 ASSUME_YES=0              # non-interactive; never prompt
 NO_UV=0                   # force stdlib venv + pip even if uv is installed
 BOOTSTRAP=1               # fresh system (no python + no uv): auto-install uv
+UNINSTALL=0               # --uninstall: remove the venv (+ --purge for data)
+PURGE=0                   # with --uninstall: also delete .env + local DB/logs
 
 # MerCury targets exactly this Python (pyproject: requires-python >=3.12,<3.13).
 REQUIRED_PY="3.12"
@@ -91,6 +93,63 @@ bootstrap_uv() {
     return 0
 }
 
+# Reverse an install: always remove the virtualenv; with --purge also delete the
+# generated .env and the LOCAL database / salt / logs. Never touches the source
+# tree or an external Postgres database.
+do_uninstall() {
+    printf "${C_BOLD}MerCury uninstaller${C_RESET} ${C_DIM}(macOS / Linux)${C_RESET}\n\n"
+
+    # Where .env lives (same rule the installer uses).
+    local install_dir
+    if [ -f "$SCRIPT_DIR/pyproject.toml" ] && grep -q '^name = "mercury"' "$SCRIPT_DIR/pyproject.toml" 2>/dev/null; then
+        install_dir="$SCRIPT_DIR"
+    else
+        install_dir="$(pwd)"
+    fi
+    local env_file="$install_dir/.env"
+    local venv_py="$VENV_DIR/bin/python"
+
+    # Discover data/log/db paths from the venv BEFORE it's deleted (for --purge).
+    local data_dir="" log_dir="" db_path=""
+    if [ "$PURGE" -eq 1 ] && [ -x "$venv_py" ]; then
+        [ -f "$env_file" ] && { set -a; . "$env_file"; set +a; }   # reflect DATABASE_URL
+        data_dir="$("$venv_py" -c 'from mercury.utils import app_dirs as a; print(a.get_data_dir())' 2>/dev/null || true)"
+        log_dir="$("$venv_py" -c 'from mercury.utils import app_dirs as a; print(a.get_log_dir())' 2>/dev/null || true)"
+        db_path="$("$venv_py" -c 'from mercury.utils import app_dirs as a; print(a.get_db_path())' 2>/dev/null || true)"
+    fi
+
+    step "Will remove"
+    [ -d "$VENV_DIR" ] && info "• virtualenv:  $VENV_DIR" || info "• virtualenv:  (none at $VENV_DIR)"
+    if [ "$PURGE" -eq 1 ]; then
+        [ -f "$env_file" ] && info "• .env:        $env_file"
+        case "$db_path" in
+            sqlite:*) info "• database:    ${db_path#sqlite:///}" ;;
+            "")       : ;;
+            *)        warn "database is external ($db_path) — NOT removed" ;;
+        esac
+        [ -n "$data_dir" ] && info "• data dir:    $data_dir  (DB + encryption salt)"
+        [ -n "$log_dir" ]  && info "• log dir:     $log_dir"
+    else
+        info "(keeping .env + database — pass --purge to remove them too)"
+    fi
+
+    if [ "$ASSUME_YES" -ne 1 ]; then
+        printf "\n${C_YELLOW}Proceed with removal? [y/N] ${C_RESET}"
+        read -r _reply || _reply=""
+        case "$_reply" in [yY]*) ;; *) info "Aborted — nothing removed."; exit 0 ;; esac
+    fi
+
+    step "Removing"
+    if [ -d "$VENV_DIR" ]; then rm -rf "$VENV_DIR" && ok "virtualenv"; fi
+    if [ "$PURGE" -eq 1 ]; then
+        [ -f "$env_file" ] && { rm -f "$env_file"; ok ".env"; }
+        [ -n "$data_dir" ] && [ -d "$data_dir" ] && { rm -rf "$data_dir"; ok "data dir"; }
+        [ -n "$log_dir" ]  && [ -d "$log_dir" ]  && { rm -rf "$log_dir"; ok "log dir"; }
+    fi
+    printf "\n${C_GREEN}${C_BOLD}✓ MerCury uninstalled.${C_RESET}\n"
+    exit 0
+}
+
 usage() {
     cat <<'EOF'
 MerCury installer (macOS / Linux)
@@ -111,6 +170,8 @@ OPTIONS:
                        auto-installing uv
     --no-db            Skip database migration (`mercury db migrate`)
     --no-env           Do not generate a starter .env
+    --uninstall        Uninstall: remove the virtualenv (keeps .env + database)
+    --purge            With --uninstall: also delete .env + the local database
     -y, --yes          Non-interactive; assume yes and never prompt
     -h, --help         Show this help and exit
 
@@ -119,6 +180,8 @@ EXAMPLES:
     ./install.sh --extras postgres,redis      # add the Postgres + Redis drivers
     ./install.sh --dev                        # contributor setup (editable + dev)
     ./install.sh --venv /opt/mercury/venv -y  # scripted install to a fixed path
+    ./install.sh --uninstall                  # remove the venv (keeps .env + DB)
+    ./install.sh --uninstall --purge -y       # remove everything, no prompt
 EOF
 }
 
@@ -134,6 +197,8 @@ while [ $# -gt 0 ]; do
         --recreate) RECREATE=1; shift ;;
         --no-uv)    NO_UV=1; shift ;;
         --no-bootstrap) BOOTSTRAP=0; shift ;;
+        --uninstall) UNINSTALL=1; shift ;;
+        --purge)    PURGE=1; shift ;;
         --no-db)    DO_DB=0; shift ;;
         --no-env)   DO_ENV=0; shift ;;
         -y|--yes)   ASSUME_YES=1; shift ;;
@@ -141,6 +206,9 @@ while [ $# -gt 0 ]; do
         *)          die "Unknown option: $1  (try --help)" ;;
     esac
 done
+
+# Uninstall short-circuits the whole install flow.
+if [ "$UNINSTALL" -eq 1 ]; then do_uninstall; fi
 
 printf "${C_BOLD}MerCury installer${C_RESET} ${C_DIM}(macOS / Linux)${C_RESET}\n\n"
 

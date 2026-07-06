@@ -66,6 +66,10 @@ python run.py                      # or: mercury start server
 ```
 </details>
 
+**Uninstall:** `./install.sh --uninstall` removes the virtualenv (keeps your
+`.env` + database); add `--purge` to also delete the local database and secrets.
+Windows: `.\install.ps1 -Uninstall [-Purge]`.
+
 For the CLI path (`mercury new project`, `mercury send config.yaml`, …) and the
 full docker/systemd/nginx walkthroughs, see [Deployment.md](docs/Deployment.md).
 
