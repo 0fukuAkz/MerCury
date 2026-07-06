@@ -13,14 +13,14 @@
 if (Test-Path "venv\Scripts\Activate.ps1") {
     . .\venv\Scripts\Activate.ps1
     $pyver = (python --version) -replace '^Python\s*'
-    Write-Host "✓ venv activated  (Python $pyver)" -ForegroundColor Green
+    Write-Host "[ok] venv activated  (Python $pyver)" -ForegroundColor Green
 }
 elseif (Test-Path ".venv\Scripts\Activate.ps1") {
     . .\.venv\Scripts\Activate.ps1
     $pyver = (python --version) -replace '^Python\s*'
-    Write-Host "✓ .venv activated  (Python $pyver)" -ForegroundColor Green
+    Write-Host "[ok] .venv activated  (Python $pyver)" -ForegroundColor Green
 }
 else {
-    Write-Host "✗ No venv\ or .venv\ found in $(Get-Location)." -ForegroundColor Red
+    Write-Host "[X] No venv\ or .venv\ found in $(Get-Location)." -ForegroundColor Red
     Write-Host "  Create one:  py -3.12 -m venv venv ; .\venv\Scripts\Activate.ps1 ; pip install -e ."
 }

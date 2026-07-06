@@ -127,6 +127,21 @@ jobs:
       run: |
         alembic upgrade head
 
+  scripts-ascii:
+    name: PowerShell scripts ASCII-only
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    # Windows PowerShell 5.1 reads a script without a BOM as the system ANSI
+    # code page, so any non-ASCII byte (em-dash, checkmark, ...) is garbled.
+    # Keep every .ps1 pure ASCII so it renders and runs identically regardless
+    # of the console encoding.
+    - name: Reject non-ASCII bytes in .ps1 files
+      run: |
+        python3 -c "import subprocess,sys; files=subprocess.check_output(['git','ls-files','*.ps1'],text=True).split(); bad=[f for f in files if any(b>0x7f for b in open(f,'rb').read())]; [print(f'::error file={f}::{f} has non-ASCII bytes; Windows PowerShell 5.1 (no BOM) garbles them. Use ASCII.') for f in bad]; print(f'checked {len(files)} .ps1 file(s):', 'FAIL' if bad else 'all ASCII-only'); sys.exit(1 if bad else 0)"
+
   security:
     name: Security Checks
     runs-on: ubuntu-latest
