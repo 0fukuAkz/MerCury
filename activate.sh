@@ -4,9 +4,10 @@
 #
 #   source ./activate.sh
 #
-# Equivalent to:  source venv/bin/activate
-# but auto-detects whether the repo has venv/ or .venv/ on disk, and
-# warns clearly if neither exists. For direnv users this is handled
+# Equivalent to:  source .venv/bin/activate
+# .venv/ is the repo-wide canonical name; this also detects a legacy
+# venv/ (no dot) for checkouts that predate that convention, and warns
+# clearly if neither exists. For direnv users this is handled
 # automatically by .envrc on `cd`.
 
 # Refuse to run if not sourced (so `./activate.sh` doesn't silently
@@ -17,15 +18,15 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     exit 1
 fi
 
-if [ -d "venv" ]; then
-    # shellcheck disable=SC1091
-    source venv/bin/activate
-    echo "✓ venv activated  (Python $(python --version 2>&1 | cut -d' ' -f2))"
-elif [ -d ".venv" ]; then
+if [ -d ".venv" ]; then
     # shellcheck disable=SC1091
     source .venv/bin/activate
-    echo "✓ .venv activated  (Python $(python --version 2>&1 | cut -d' ' -f2))"
+    echo "[ok] .venv activated  (Python $(python --version 2>&1 | cut -d' ' -f2))"
+elif [ -d "venv" ]; then
+    # shellcheck disable=SC1091
+    source venv/bin/activate
+    echo "[ok] venv activated  (Python $(python --version 2>&1 | cut -d' ' -f2))"
 else
-    echo "✗ No venv/ or .venv/ found in $(pwd)."
-    echo "  Create one:  python3.12 -m venv venv && pip install -e ."
+    echo "[X] No .venv/ or venv/ found in $(pwd)."
+    echo "  Create one:  python3.12 -m venv .venv && pip install -e ."
 fi

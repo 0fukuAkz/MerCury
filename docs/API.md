@@ -4,7 +4,7 @@
 
 The Unified Sender API provides programmatic access to the email sending platform. All API endpoints (except health checks and public endpoints) require authentication.
 
-**Base URL:** `http://localhost:5000` (development) or your production domain
+**Base URL:** `http://localhost:5050` (development) or your production domain
 
 **API Version:** 2.0.0
 
@@ -754,7 +754,7 @@ There is no live Swagger UI or `/api/openapi.json` route served by the applicati
 import requests
 
 API_KEY = "your-api-key"
-BASE_URL = "http://localhost:5000"
+BASE_URL = "http://localhost:5050"
 
 headers = {"X-API-Key": API_KEY}
 
@@ -779,16 +779,16 @@ response = requests.post(
 
 ```bash
 # List campaigns
-curl -H "X-API-Key: your-api-key" http://localhost:5000/api/campaigns
+curl -H "X-API-Key: your-api-key" http://localhost:5050/api/campaigns
 
 # Create campaign
-curl -X POST http://localhost:5000/api/campaigns \
+curl -X POST http://localhost:5050/api/campaigns \
   -H "X-API-Key: your-api-key" \
   -H "Content-Type: application/json" \
   -d '{"name": "My Campaign", "subject": "Hello!"}'
 
 # Test SMTP connection
-curl -X POST http://localhost:5000/api/smtp/test/primary \
+curl -X POST http://localhost:5050/api/smtp/test/primary \
   -H "X-API-Key: your-api-key"
 ```
 

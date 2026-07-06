@@ -18,9 +18,9 @@
 
   // Web dashboard. Auto-previewed in VSCode/Codespaces' Simple Browser
   // when the user runs `python run.py` or `make dev`.
-  "forwardPorts": [5000],
+  "forwardPorts": [5050],
   "portsAttributes": {
-    "5000": {
+    "5050": {
       "label": "MerCury dashboard",
       "onAutoForward": "notify"
     }
@@ -38,9 +38,10 @@
         "github.vscode-github-actions"
       ],
       "settings": {
-        // Container-local venv — distinct from the host's .venv symlink
-        // which won't exist inside the container.
-        "python.defaultInterpreterPath": "/workspaces/MerCury/venv/bin/python",
+        // Container-local venv, built fresh by post-create.sh — distinct
+        // from any .venv/ on the host, which won't exist inside the
+        // container filesystem.
+        "python.defaultInterpreterPath": "/workspaces/MerCury/.venv/bin/python",
         "python.terminal.activateEnvironment": true,
         "python.testing.pytestEnabled": true,
         "python.testing.pytestArgs": ["tests"],

@@ -20,25 +20,27 @@ sudo apt-get install -y --no-install-recommends \
     > /tmp/apt.log 2>&1 || { tail -50 /tmp/apt.log; exit 1; }
 
 # ── 2. Project venv ───────────────────────────────────────
-# Matches the repo convention (`venv/`, not `.venv/`) so that
-# `make dev`, `make test`, `python run.py`, etc. resolve to the same
-# tools whether you're inside or outside the container.
-if [ ! -d venv ]; then
-    echo "▶ Creating venv/"
-    python -m venv venv
+# .venv/ is the repo-wide canonical name (matches install.sh/install.ps1,
+# .vscode/settings.json, .envrc) so `make dev`, `make test`, `python run.py`,
+# etc. resolve to the same tools whether you're inside or outside the
+# container. The base image is pinned to Python 3.12, so a plain `python`
+# here is always the right version.
+if [ ! -d .venv ]; then
+    echo "▶ Creating .venv/"
+    python -m venv .venv
 fi
 
 echo "▶ pip install requirements + dev deps + editable mercury"
-./venv/bin/pip install --upgrade --quiet pip
-./venv/bin/pip install --quiet -r requirements.txt
+./.venv/bin/pip install --upgrade --quiet pip
+./.venv/bin/pip install --quiet -r requirements.txt
 # Dev tooling now lives in pyproject [dev]; the editable install pulls it + mercury.
-./venv/bin/pip install --quiet -e ".[dev]"
+./.venv/bin/pip install --quiet -e ".[dev]"
 
 # ── 3. Pre-commit hooks (if the project uses them) ────────
 if [ -f .pre-commit-config.yaml ]; then
     echo "▶ pre-commit install"
-    ./venv/bin/pip install --quiet pre-commit
-    ./venv/bin/pre-commit install --install-hooks > /dev/null 2>&1 || \
+    ./.venv/bin/pip install --quiet pre-commit
+    ./.venv/bin/pre-commit install --install-hooks > /dev/null 2>&1 || \
         echo "  (pre-commit install skipped — hook config issue)"
 fi
 
@@ -58,14 +60,14 @@ fi
 
 # ── 5. Quick smoke ────────────────────────────────────────
 echo "▶ Smoke: mercury --help"
-./venv/bin/mercury --help > /dev/null 2>&1 && echo "  ✓ mercury CLI installed" || echo "  ✗ mercury CLI failed to import"
+./.venv/bin/mercury --help > /dev/null 2>&1 && echo "  ✓ mercury CLI installed" || echo "  ✗ mercury CLI failed to import"
 
 cat <<'DONE'
 
 ──────────────────────────────────────────────────────
   Ready.
 
-  Activate the venv:    source venv/bin/activate
+  Activate the venv:    source .venv/bin/activate
   Run the dashboard:    python run.py
   Run tests:            make test
   Run the CLI:          mercury --help

@@ -554,7 +554,7 @@ def generate_image(input_file, output_file):
 @cli.command("start")
 @click.argument("what", type=click.Choice(["server", "web", "dashboard"]), default="server")
 @click.option(
-    "-p", "--port", default=5000, help="Port number (default: 5000, matches `python run.py`)"
+    "-p", "--port", default=5050, help="Port number (default: 5050, matches `python run.py`)"
 )
 @click.option("--open", "open_browser", is_flag=True, help="Open browser")
 @click.option("--debug", is_flag=True, default=False, help="Enable debug mode")

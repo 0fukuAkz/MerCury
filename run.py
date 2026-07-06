@@ -36,9 +36,17 @@ if sys.version_info[:2] != (3, 12):
 
 # Constants
 ROOT_DIR = Path(__file__).parent.absolute()
-VENV_DIR = ROOT_DIR / "venv"
+# Placeholder; resolve_venv_dir() picks the real value at the top of main() —
+# see that function for why this can't just be a fixed path.
+VENV_DIR = ROOT_DIR / ".venv"
 REQUIREMENTS_FILE = ROOT_DIR / "requirements.txt"
 PID_FILE = ROOT_DIR / "data" / ".mercury.pid"
+
+# Single source of truth for the port. Previously the gunicorn bind used this
+# env var (default 5050) while the Windows shadow-process killer hardcoded a
+# search for ":5000" — the two drifted apart and the killer silently matched
+# nothing in the default config.
+PORT = os.environ.get("PORT", "5050")
 
 # Global for cleanup
 _app = None
@@ -52,11 +60,59 @@ def is_venv():
             (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix))
 
 
+def resolve_venv_dir() -> Path:
+    """Pick the venv directory this script should use.
+
+    `.venv` is the repo-wide canonical name (install.sh/install.ps1,
+    .vscode/settings.json, .envrc, .devcontainer/*). This script used to
+    default to `venv` (no dot), so a checkout from before that was
+    standardized can still have a stray, possibly wrong-Python-version
+    `venv/` sitting around. Prefer whichever already exists, so an existing
+    setup keeps working, rather than silently bootstrapping a second venv
+    next to it; default to `.venv` when neither exists yet.
+    """
+    dotted = ROOT_DIR / ".venv"
+    undotted = ROOT_DIR / "venv"
+    if dotted.exists():
+        return dotted
+    if undotted.exists():
+        return undotted
+    return dotted
+
+
 def get_venv_python():
     """Get path to virtual environment python executable."""
     if sys.platform == "win32":
         return VENV_DIR / "Scripts" / "python.exe"
     return VENV_DIR / "bin" / "python"
+
+
+def get_venv_python_version(python_path: Path):
+    """Return (major, minor) reported by a venv's python, or None on failure.
+
+    None covers both "doesn't exist" and a real Windows failure mode: venvs
+    created by CPython 3.11+ ship a small launcher stub at Scripts\\python.exe
+    that reads pyvenv.cfg's recorded base-interpreter path and execs it. If
+    that base install was since moved, upgraded, or removed, the stub fails
+    with an OS-level "could not find executable" error instead of a Python
+    traceback — this check turns that into an actionable message up front
+    instead of a cryptic crash during the actual re-launch.
+    """
+    try:
+        result = subprocess.run(
+            [str(python_path), "-c",
+             "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')"],
+            capture_output=True, text=True, timeout=15,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    try:
+        major, minor = result.stdout.strip().split(".")
+        return int(major), int(minor)
+    except ValueError:
+        return None
 
 
 def create_venv():
@@ -127,7 +183,7 @@ def kill_existing_instances():
             except Exception:
                 pass
         
-        # Also kill any python processes using port 5000
+        # Also kill any python processes using our port
         try:
             result = subprocess.run(
                 ['netstat', '-ano'],
@@ -136,15 +192,15 @@ def kill_existing_instances():
                 timeout=5
             )
             for line in result.stdout.split('\n'):
-                if ':5000' in line and 'LISTENING' in line:
+                if f':{PORT}' in line and 'LISTENING' in line:
                     parts = line.split()
                     if len(parts) >= 5:
                         pid = int(parts[-1])
                         if pid != os.getpid():
                             try:
-                                subprocess.run(['taskkill', '/F', '/PID', str(pid)], 
+                                subprocess.run(['taskkill', '/F', '/PID', str(pid)],
                                              capture_output=True, timeout=5)
-                                print(f"Killed shadow process on port 5000 (PID: {pid})")
+                                print(f"Killed shadow process on port {PORT} (PID: {pid})")
                             except Exception:
                                 pass
         except Exception:
@@ -250,15 +306,28 @@ def main():
         os.environ['FLASK_DEBUG'] = '1'
 
     # Check if we need to switch to venv
+    global VENV_DIR
+    VENV_DIR = resolve_venv_dir()
     if not is_venv():
         if not VENV_DIR.exists():
             create_venv()
             install_dependencies(get_venv_python())
-        
+
         venv_python = get_venv_python()
         if not venv_python.exists():
             print(f"Error: Virtual environment python not found at {venv_python}")
-            print("Please delete the 'venv' folder and try again.")
+            print(f"Please delete the '{VENV_DIR.name}' folder and try again.")
+            sys.exit(1)
+
+        venv_version = get_venv_python_version(venv_python)
+        if venv_version != (3, 12):
+            found = f"{venv_version[0]}.{venv_version[1]}" if venv_version else "unknown"
+            print(f"Error: the virtualenv at {VENV_DIR} reports Python {found}, not 3.12.")
+            if venv_version is None:
+                print(f"({venv_python} failed to run at all — on Windows this usually means "
+                      f"its recorded base Python install was moved, upgraded, or removed.)")
+            print(f"Delete '{VENV_DIR.name}' and re-run to rebuild it against a working "
+                  f"Python 3.12 (or run ./install.sh / .\\install.ps1, which pin this for you).")
             sys.exit(1)
 
         print("Re-launching in virtual environment...")
@@ -295,65 +364,20 @@ def main():
     print(f"PID: {os.getpid()}")
     print()
     
+    is_debug = os.environ.get('FLASK_DEBUG', '0').lower() in ('true', '1')
+
     try:
-        import shutil
-        gunicorn_path = shutil.which("gunicorn") or str(Path(sys.executable).parent / "gunicorn")
-
-        is_debug = os.environ.get('FLASK_DEBUG', '0').lower() in ('true', '1')
-
-        # In debug mode: all output to stdout, full access log
-        # In normal mode: access log goes to file only, warnings+ to stdout
-        if is_debug:
-            log_args = [
-                "--log-level", "debug",
-                "--access-logfile", "-",
-            ]
+        if sys.platform == "win32":
+            run_windows_server(is_debug)
         else:
-            log_dir = ROOT_DIR / "logs"
-            log_dir.mkdir(parents=True, exist_ok=True)
-            log_args = [
-                "--log-level", "warning",
-                "--access-logfile", str(log_dir / "access.log"),
-                "--error-logfile", "-",
-            ]
-
-        cmd = [
-            gunicorn_path,
-            "--worker-class", "eventlet",
-            # LOAD-BEARING: single worker only. MerCury's shared asyncio loop,
-            # SocketIO emit bridge, and in-memory rate limiters / connection
-            # pools are per-process and not shared across workers. Scaling past
-            # 1 needs a SocketIO message_queue + shared redis rate-limit storage
-            # first (create_app()'s production preflight warns if you bump
-            # WEB_CONCURRENCY).
-            "-w", "1",
-            "--bind", f"127.0.0.1:{os.environ.get('PORT', 5050)}",
-            *log_args,
-            "mercury.web.app:create_app()",
-        ]
-
-        # Force SocketIO to the eventlet async backend that matches the
-        # --worker-class eventlet line above. The mercury extensions module
-        # defaults to 'threading' so dev / test paths work out of the box;
-        # production opt-in lives here. Without this, SocketIO would use
-        # the wrong async primitives and live-progress events would silently
-        # fail to reach the browser even though gunicorn+eventlet is fine.
-        env = {
-            **os.environ,
-            "PYTHONPATH": str(ROOT_DIR / "src"),
-            "SOCKETIO_ASYNC_MODE": "eventlet",
-        }
-
-        global _gunicorn_proc
-        _gunicorn_proc = subprocess.Popen(cmd, env=env)
-        _gunicorn_proc.wait()
+            run_posix_server(is_debug)
 
     except FileNotFoundError:
         print("\nError: gunicorn not found. Run: pip install gunicorn eventlet")
         sys.exit(1)
     except ImportError as e:
         print(f"\nError importing application: {e}")
-        print("Dependencies might be missing. Try deleting 'venv' folder and re-running.")
+        print(f"Dependencies might be missing. Try deleting '{VENV_DIR.name}' folder and re-running.")
         sys.exit(1)
     except KeyboardInterrupt:
         graceful_shutdown()
@@ -362,6 +386,92 @@ def main():
         sys.exit(1)
     finally:
         remove_pid()
+
+
+def run_posix_server(is_debug: bool) -> None:
+    """Run the production server via gunicorn + eventlet (Linux/macOS only).
+
+    gunicorn's arbiter requires fcntl/os.fork and does not run on Windows —
+    see run_windows_server() for that platform's fallback.
+    """
+    import shutil
+    gunicorn_path = shutil.which("gunicorn") or str(Path(sys.executable).parent / "gunicorn")
+
+    # In debug mode: all output to stdout, full access log
+    # In normal mode: access log goes to file only, warnings+ to stdout
+    if is_debug:
+        log_args = [
+            "--log-level", "debug",
+            "--access-logfile", "-",
+        ]
+    else:
+        log_dir = ROOT_DIR / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_args = [
+            "--log-level", "warning",
+            "--access-logfile", str(log_dir / "access.log"),
+            "--error-logfile", "-",
+        ]
+
+    cmd = [
+        gunicorn_path,
+        "--worker-class", "eventlet",
+        # LOAD-BEARING: single worker only. MerCury's shared asyncio loop,
+        # SocketIO emit bridge, and in-memory rate limiters / connection
+        # pools are per-process and not shared across workers. Scaling past
+        # 1 needs a SocketIO message_queue + shared redis rate-limit storage
+        # first (create_app()'s production preflight warns if you bump
+        # WEB_CONCURRENCY).
+        "-w", "1",
+        "--bind", f"127.0.0.1:{PORT}",
+        *log_args,
+        "mercury.web.app:create_app()",
+    ]
+
+    # Force SocketIO to the eventlet async backend that matches the
+    # --worker-class eventlet line above. The mercury extensions module
+    # defaults to 'threading' so dev / test paths work out of the box;
+    # production opt-in lives here. Without this, SocketIO would use
+    # the wrong async primitives and live-progress events would silently
+    # fail to reach the browser even though gunicorn+eventlet is fine.
+    env = {
+        **os.environ,
+        "PYTHONPATH": str(ROOT_DIR / "src"),
+        "SOCKETIO_ASYNC_MODE": "eventlet",
+    }
+
+    global _gunicorn_proc
+    _gunicorn_proc = subprocess.Popen(cmd, env=env)
+    _gunicorn_proc.wait()
+
+
+def run_windows_server(is_debug: bool) -> None:
+    """Run the app in-process on Windows, where gunicorn cannot run at all.
+
+    gunicorn's arbiter imports fcntl and calls os.fork(), neither of which
+    exist on Windows, so `python run.py` would crash immediately there
+    with "No module named 'fcntl'". This runs the same threading-mode
+    SocketIO server that `python -m mercury.web.app` already uses for local
+    dev (proven to work cross-platform), bound to the configured PORT
+    instead of the dev entry point's hardcoded 0.0.0.0:5000. It is a
+    single-threaded fallback, not a scaling story — see the single-worker
+    note in run_posix_server() for why this whole codebase is single-process
+    anyway.
+    """
+    # Must be set before mercury.web.extensions is imported — it reads this
+    # env var once at import time to pick SocketIO's async backend.
+    os.environ.setdefault("SOCKETIO_ASYNC_MODE", "threading")
+
+    from mercury.web.app import create_app
+    from mercury.web.extensions import socketio
+
+    print("Note: running the Windows-compatible fallback server (gunicorn "
+          "does not support Windows). For multi-connection production loads, "
+          "deploy behind Linux/macOS or Docker instead.")
+
+    app = create_app()
+    socketio.run(app, host="127.0.0.1", port=int(PORT), debug=is_debug,
+                 allow_unsafe_werkzeug=True)  # nosec B104 -- bound to loopback only
 
 
 if __name__ == "__main__":

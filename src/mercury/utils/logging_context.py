@@ -257,7 +257,10 @@ def configure_structured_logging(
     )
 
     if log_file:
-        file_handler = logging.FileHandler(log_file)
+        # encoding="utf-8" avoids UnicodeEncodeError on Windows, where
+        # FileHandler otherwise defaults to the system's legacy codepage —
+        # see logging_config.py's configure_logging() for the full story.
+        file_handler = logging.FileHandler(log_file, encoding="utf-8")
         file_handler.setLevel(logging.DEBUG)
 
         if json_logs:

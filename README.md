@@ -51,7 +51,7 @@ the app and sign in:
 ```bash
 source .venv/bin/activate
 set -a; source .env; set +a        # the `mercury` CLI does not auto-read .env
-mercury start server               # → http://127.0.0.1:5000
+mercury start server               # → http://127.0.0.1:5050
 ```
 
 <details>

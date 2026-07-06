@@ -157,7 +157,16 @@ def configure_logging(
     # Add file handler if specified
     if log_file:
         os.makedirs(os.path.dirname(log_file) or ".", exist_ok=True)
-        file_handler = logging.FileHandler(log_file)
+        # encoding="utf-8" is required, not cosmetic: FileHandler otherwise
+        # defaults to locale.getpreferredencoding(), which is a legacy
+        # codepage (e.g. cp1252) on Windows. Several log messages contain
+        # non-ASCII characters (e.g. the "⏰ Triggering periodic..." health
+        # check log), and cp1252 can't encode most of them — the write then
+        # raises UnicodeEncodeError deep inside the stdlib logging module.
+        # The stdout handler above doesn't need this: a real Windows console
+        # gets automatic UTF-8 via PEP 528, but that only applies to console
+        # handles, never to plain file handles.
+        file_handler = logging.FileHandler(log_file, encoding="utf-8")
         file_handler.setFormatter(formatter)
         root_logger.addHandler(file_handler)
 
