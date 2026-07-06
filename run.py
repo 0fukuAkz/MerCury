@@ -36,7 +36,25 @@ if sys.version_info[:2] != (3, 12):
 
 # Constants
 ROOT_DIR = Path(__file__).parent.absolute()
-VENV_DIR = ROOT_DIR / "venv"
+
+
+def _find_venv_dir():
+    """Reuse the installer's virtualenv instead of building a second one.
+
+    install.sh / install.ps1 create `.venv`; older setups used `venv`. Prefer an
+    existing one — so run.py runs the deps the installer already put there rather
+    than re-creating and re-installing an environment — defaulting to `.venv` to
+    match the installer.
+    """
+    bindir = "Scripts" if sys.platform == "win32" else "bin"
+    exe = "python.exe" if sys.platform == "win32" else "python"
+    for name in (".venv", "venv"):
+        if (ROOT_DIR / name / bindir / exe).exists():
+            return ROOT_DIR / name
+    return ROOT_DIR / ".venv"
+
+
+VENV_DIR = _find_venv_dir()
 REQUIREMENTS_FILE = ROOT_DIR / "requirements.txt"
 PID_FILE = ROOT_DIR / "data" / ".mercury.pid"
 
@@ -249,16 +267,18 @@ def main():
     if args.debug:
         os.environ['FLASK_DEBUG'] = '1'
 
-    # Check if we need to switch to venv
+    # Switch into a virtualenv if we aren't in one. Reuse an existing venv (the
+    # installer's .venv, or a legacy venv/) — only build + install when none
+    # exists, so a normal `./install.sh` run isn't duplicated here.
     if not is_venv():
-        if not VENV_DIR.exists():
+        if not get_venv_python().exists():
             create_venv()
             install_dependencies(get_venv_python())
-        
+
         venv_python = get_venv_python()
         if not venv_python.exists():
             print(f"Error: Virtual environment python not found at {venv_python}")
-            print("Please delete the 'venv' folder and try again.")
+            print(f"Please delete {VENV_DIR} and try again.")
             sys.exit(1)
 
         print("Re-launching in virtual environment...")
