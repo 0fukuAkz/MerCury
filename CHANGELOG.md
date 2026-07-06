@@ -10,6 +10,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > documents the lineage on its own terms; future releases should be tagged
 > in git (`v2.0.0`, `v2.1.0`, ...) to match `pyproject.toml`.
 
+## [Unreleased]
+
+`pyproject.toml` / `__init__.py` still read `2.1.1`, matching the latest
+tagged GitHub release — none of this has been version-bumped or tagged
+yet. Documented here per Keep a Changelog so it isn't lost before the
+next release is cut.
+
+### Fixed
+- **`run.py` fails fast on the wrong Python.** Previously a non-3.12
+  interpreter would run the auto-venv bootstrap to completion and only
+  then fail with an opaque `pip install -e .` requires-python error (or,
+  on a uv-managed standalone interpreter, `venv.create()` crashing with
+  "No module named 'encodings'"). Now checked at import time with a clear
+  message, before any bootstrap work happens.
+- **`python run.py` did not run on Windows at all.** Gunicorn's arbiter
+  requires `fcntl` / `os.fork()`, neither of which exist on Windows, so
+  the documented "canonical production runner" crashed immediately there
+  despite docs listing Windows 10+ as supported. Windows now runs the app
+  in-process via Flask-SocketIO's threading async mode instead of
+  shelling out to gunicorn.
+- **Windows shadow-process killer matched the wrong port.** It hardcoded
+  a search for port 5000 while the actual bind defaulted to 5050, so it
+  silently never found the previous instance to kill. Also unified that
+  5000/5050 drift across `mercury start server`, the dev entrypoint, and
+  all docs/configs (including a real `config/nginx.conf` bug pointing at
+  the wrong container port).
+- **`install.ps1` crashed on real Windows PowerShell 5.1** with cascading
+  "Unexpected token" parse errors. The script was UTF-8-without-BOM and
+  used em-dashes; Windows PowerShell 5.1 reads un-BOM'd scripts via the
+  system's legacy codepage, which decodes the em-dash's UTF-8 bytes into
+  a Unicode "smart quote" that PowerShell's tokenizer accepts as a string
+  terminator — silently truncating strings mid-line. Made `install.ps1`
+  and `activate.ps1` fully ASCII.
+- **`run.py` could re-launch into a broken or wrong-version venv.** It
+  only checked that the venv directory existed, never that it was
+  actually Python 3.12 — so a stray venv built against a different Python
+  version (e.g. from an unpinned `python -m venv venv`) would either run
+  silently on the wrong interpreter, or, if that interpreter was later
+  moved/removed, fail with a cryptic Windows launcher error instead of a
+  clear message.
+- **Inconsistent venv directory naming across the repo.** `.vscode/settings.json`,
+  `.envrc`, and `.devcontainer/*` assumed `venv/` (no dot) was canonical
+  with `.venv` as a symlink alias, but no script anywhere ever created
+  that symlink, and the actual installers (`install.sh`/`install.ps1`)
+  already built `.venv` as a real, independent directory. Standardized
+  everything on `.venv`; manual install instructions in
+  `docs/Deployment.md` now pin `python3.12`/`py -3.12` explicitly instead
+  of a bare `python` that can silently resolve to the wrong version.
+- **`UnicodeEncodeError` crash on non-ASCII log messages.** File log
+  handlers had no explicit encoding, defaulting to the system's legacy
+  codepage on Windows (e.g. cp1252) instead of UTF-8 — several log
+  messages contain non-ASCII characters (e.g. the periodic SMTP
+  health-check log), and cp1252 can't represent most of them.
+- **Guaranteed "table already exists" error on first boot.** The web
+  app's boot sequence ran `Base.metadata.create_all()` and then
+  immediately tried `alembic upgrade head` on the same fresh database;
+  since `alembic_version` was never stamped, Alembic tried to replay
+  migration `0001`'s `CREATE TABLE` statements against tables
+  `create_all()` had just built, colliding every time. Worse, this left
+  `alembic_version` permanently unstamped, so any future migration would
+  have silently never applied. Fresh databases are now stamped at head
+  instead of re-migrated; `mercury db migrate` was never affected (it
+  only ever calls `alembic upgrade head` directly).
+
 ## [2.1.1] - 2026-07-04
 
 ### Added
