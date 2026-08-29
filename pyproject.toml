@@ -113,7 +113,7 @@ dev = [
     "ruff==0.1.14",
     "mypy==1.8.0",
     "bandit==1.7.6",
-    "pip-audit>=2.7.0",
+    "pip-audit>=2.10.1",
     # Type stubs
     "types-pyyaml==6.0.12.12",
     "types-aiofiles==25.1.0.20260518",
