@@ -83,7 +83,7 @@ dependencies = [
     "rich==13.7.0",
     # platformdirs is imported unconditionally by utils/app_dirs.py; without
     # it `import mercury` fails on a fresh wheel install.
-    "platformdirs>=4.0.0",
+    "platformdirs>=4.11.4",
 
     # Pure-Python features on core code paths — guarded imports with graceful
     # fallbacks, but required for a fully-functional install:
