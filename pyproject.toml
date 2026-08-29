@@ -132,7 +132,7 @@ pdf = [
     # (macOS: `brew install poppler pango`; Debian: `apt install poppler-utils
     # libpango-1.0-0`). The Python packages install without them; only runtime
     # rendering needs the system libs.
-    "weasyprint>=60.0",
+    "weasyprint>=69.0",
     "pdf2image>=1.17",
 ]
 geo = [
