@@ -29,6 +29,7 @@ updates:
           - "ruff"
           - "mypy"
           - "bandit"
+          - "pip-audit"
         update-types:
           - "minor"
           - "patch"
